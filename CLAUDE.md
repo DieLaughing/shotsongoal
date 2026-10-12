@@ -1,0 +1,73 @@
+# Shots on Goal: notes for Claude
+
+Self-hosted NHL + PWHL hub for a person and their friends: scores, game pages with shot maps, standings, the Wire
+(trades and news), alerts, calendar feeds, ticket links and US where-to-watch. Sibling app of Lights Out (racing).
+Built with Claude Code; these notes are how it works. Personal deployment notes (if any) live in CLAUDE.local.md,
+which is not committed.
+
+## Shipping a feature (do this every time)
+- Add an entry at the top of `sog/data/changes.yaml` (date, kind new|improved|fixed, title, text written for the
+  people who use the app, link to try it). It feeds the What's new page (#/new), the dot on Settings and the home banner.
+- `.venv/bin/python tools/changelog.py` rewrites CHANGELOG.md (a test fails if it's stale).
+- `.venv/bin/python tools/release.py` creates/updates the day's GitHub Release (tag v<YYYY.MM.DD>) from the same
+  entries; publishing a release builds the Docker image (.github/workflows/docker.yml).
+- Tests: `.venv/bin/python -m pytest -q`. Fixtures in tests/fixtures are trimmed real responses from 2026-10-11.
+
+## How it runs
+- One container (Dockerfile), port 8788, all state in /data (SQLite, VAPID key, link secret). Settings come from env
+  vars: see .env.example. compose.yaml runs the published image (+ optional cloudflared).
+- `./deploy.sh` (maintainers) rsyncs the source to a server over SSH, builds there and restarts; settings in deploy.env.
+- web/sw.js caches the shell and shows web/offline.html when the server can't be reached (Cloudflare 502/530).
+- Pages only read the saved copy (sog/feed.py); pollers refresh it on schedules. Live game pages refresh only while
+  viewed.
+
+## Access
+- Cloudflare Access signs people in (one-time PIN) and passes a signed JWT; sog/access.py verifies it against the
+  team's certs (SOG_ACCESS_TEAM / _AUD). Anyone with an email gets that far; the app keeps its own approved list.
+  The admin (SOG_ADMIN_EMAIL) is always approved.
+- "Request access" pushes to ntfy (optional) with Approve/Deny = single-use signed links at /act (24 h). Invite links
+  (/invite/<code>) approve whoever signs in with them. /admin lists people, invites, insiders and wrong-channel reports.
+- Paths that must bypass Access: /act, /cal (per-person calendar token; stops working if revoked), /icons,
+  /manifest.webmanifest, /apple-touch-icon.png, /apple-touch-icon-precomposed.png.
+- SOG_LOCAL_EMAIL (alias SOG_DEV_EMAIL) skips Cloudflare and treats every request as that person; SOG_NO_POLL=1 stops
+  the pollers. Local runs and home-network installs only.
+
+## Features
+- Phase 1: access, Tonight, Game, Standings, Teams, Settings, where-to-watch (service links; ESPN+ also links Hulu,
+  where Disney+ bundle users watch ESPN+ games).
+- Phase 2: the Wire (ESPN transactions + Story/HeadlineNews, Sportsnet RSS, Bluesky insiders editable in /admin),
+  team News & moves, per-person calendar feeds at /cal/<token>/<TEAMS>.ics.
+- Phase 3: web push (VAPID; alerts for favourites: puck drop, goals, finals, trades; per-person toggles), shot map +
+  PP/goalie-pulled banners from play-by-play, written recap for finals, wrong-channel reports (ntfy + /admin list).
+  Alerts record existing events the first time they see a league+date, so restarts never replay goals; yesterday's
+  scoreboard is watched while a late game is still live.
+- PWHL: sog/pwhl.py = HockeyTech client + parsers into the NHL shapes (key/client_code are the public ones thepwhl.com
+  loads inline). Team keys are "PW-<code>" (BOS, MTL, SEA, VAN... exist in both leagues); team dicts carry `code` for
+  display and `league`. One scorebar call (400 days back, 240 ahead) serves days, team schedules and alerts; game page
+  = gamesummary + pxpverbose (shot x/y on a 600x300 rink, away attacking right: flipped so home shoots right).
+  Standings: W = regulation_wins, OTW = non_reg_wins, OTL = non_reg_losses, L = losses (reg_losses/ot_losses don't add
+  up). Before a season starts, standings, roster and stats use last season. Where to watch = the league's page only.
+  Wire: THN women's RSS, The Ice Garden (only stories naming a PWHL nickname or "PWHL"), PWHL Bluesky list
+  (insider.league column). UI: NHL | PWHL | Both pill in the header (per device, `?league=` in a URL sets it); Both =
+  Tonight and Wire in separate sections, Standings/Teams get a one-league picker; PWHL mode uses Boston Fleet colours
+  (#163F36 / #B3DFD7 dark). Every 6 h the app compares the league's team list (teamsbyseason) with teams.PWHL and
+  pushes the admin via ntfy once per change (new nickname, rename, unknown team).
+- Tickets: NHL games carry `tickets` = the feed's ticketsLink (Ticketmaster event); PWHL = the scorebar's TicketUrl,
+  else the league's tickets page for upcoming games. Shown only before puck drop.
+- Ideas not started: playoff bracket, trade-deadline mode, friends in other markets.
+
+## Wire notes
+- NHL.com news RSS answers 403 even to a Chrome fingerprint: not used. ESPN previews/recaps/videos are filtered out.
+- ESPN uses LA/NJ/SJ/TB/UTAH and its own team ids: mapped in sog/wire.py. Free-text posts are tagged by nickname,
+  city (not New York) or "(ABBR)".
+
+## NHL API notes
+- api-web.nhle.com 307-redirects and 403s Python's default client: fetch with curl_cffi impersonate="chrome".
+- tvBroadcasts: market H/A/N + countryCode. A US "N" listing with no US H/A = national exclusive.
+  2026-27 survey: TNT/truTV/HBO MAX 59 exclusive, ESPN+/HULU/Disney+ 47, ESPN 36, ABC 16; NHLN never exclusive.
+- Where-to-watch is US-only; each person picks their services and the teams whose home market they live in (blackouts).
+  Networks/rules in sog/watch.py + sog/data/networks.yaml; recheck every October.
+- Game page = landing + right-rail (linescore, shots, team stats) + boxscore.
+
+## Conventions
+- No league or team logos (trademarks); team marks are coloured squares with the abbreviation.

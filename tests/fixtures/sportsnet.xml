@@ -1,0 +1,152 @@
+<rss version="2.0" 
+xmlns:content="http://purl.org/rss/1.0/modules/content/" 
+xmlns:wfw="http://wellformedweb.org/CommentAPI/" 
+xmlns:dc="http://purl.org/dc/elements/1.1/" 
+xmlns:atom="http://www.w3.org/2005/Atom" 
+xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" 
+xmlns:slash="http://purl.org/rss/1.0/modules/slash/" 
+xmlns:media="http://search.yahoo.com/mrss/" 
+>	<channel>
+	<title>Sportsnet.ca</title>
+	<atom:link href="http://sportsnet.ca/hockey/nhl/feed/" rel="self" type="application/rss+xml" />
+	<link>http://sportsnet.ca/hockey/nhl/feed/</link>
+	<description><![CDATA[Sports News: World and National Sports Headlines, Score Updates, Highlights, Stats &amp; Results]]></description>
+	<lastBuildDate>Sun, 11 Oct 2026 22:03:24 EDT</lastBuildDate>
+	<language>en-US</language>
+	<sy:updatePeriod>hourly</sy:updatePeriod>
+	<sy:updateFrequency>1</sy:updateFrequency>
+
+	<item  importance="normal">
+		<title>NHL Featured</title>
+		<headline><![CDATA[ ]]></headline>
+		<link><![CDATA[ https://www.sportsnet.ca/?sn-collection=nhl-top-collection-july-7 ]]></link>
+		<comments><![CDATA[ https://www.sportsnet.ca/?sn-collection=nhl-top-collection-july-7/#comments ]]></comments>
+		<pubDate>Mon, 07 Jul 2025 12:34:34 EDT</pubDate>
+		<modifiedDate>Mon, 01 Sep 2025 14:47:31 EDT</modifiedDate >
+		<dc:creator>Mike Koreen</dc:creator>
+		<guid isPermaLink="false"><![CDATA[https://www.sportsnet.ca/?post_type=sn-collection&#038;p=6360287&#038;oc=-1]]></guid>
+		<description><![CDATA[]]></description>
+		<sports/>		<leagues/>
+		<teams/>		<contentTags>
+<![CDATA[ |sportsnet.ca|na|na|sports|na|na ]]>		</contentTags>
+<collection id="6360287" /><newsItemLayout>four_cols_meta</newsItemLayout>		<link type="app-deep-link-field"></link>
+				<gameCard/>
+		<post_type>sn-collection</post_type>
+		<sponsorshipMatched></sponsorshipMatched>
+		<blackoutGame></blackoutGame>
+	</item>
+
+	<item  importance="normal">
+
+<media:content medium="image" width="600" height="338" url="https://www.sportsnet.ca/wp-content/uploads/2026/09/brock-boeser.jpg">
+<media:title>brock boeser</media:title>
+<enclosure url="https://www.sportsnet.ca/wp-content/uploads/2026/09/brock-boeser.jpg" length="3490" type="image/jpeg" />
+</media:content>		<title>Canucks on Sportsnet: Vancouver vs. New York Rangers</title>
+		<headline><![CDATA[Canucks on Sportsnet: Vancouver vs. New York Rangers]]></headline>
+		<collectionId>6360287</collectionId>
+		<newsItemLayout>full_width</newsItemLayout>
+		<imageLabel><![CDATA[]]></imageLabel>
+		<link><![CDATA[ https://www.sportsnet.ca/hockey/nhl/games/dc0cd5d4-3848-4564-9648-ae5db1973580 ]]></link>
+		<comments><![CDATA[ https://www.sportsnet.ca/hockey/nhl/games/dc0cd5d4-3848-4564-9648-ae5db1973580/#comments ]]></comments>
+		<pubDate>Sun, 11 Oct 2026 17:46:59 EDT</pubDate>
+		<modifiedDate>Sun, 11 Oct 2026 17:47:07 EDT</modifiedDate >
+		<dc:creator>Sportsnet Staff</dc:creator>
+		<guid isPermaLink="false"><![CDATA[https://www.sportsnet.ca/?post_type=sn-article&#038;p=6721081&#038;oc=-1]]></guid>
+		<description><![CDATA[<p>The Vancouver Canucks look to avoid a fourth straight loss as they take on the New York Rangers on Sunday. Live coverage on Sportsnet and sportsnet+ begins at 6 p.m. ET / 3 p.m. PT, or follow along with our live tracker.</p>
+]]></description>
+		<content:encoded><![CDATA[ The Vancouver Canucks look to avoid a fourth straight loss as they take on the New York Rangers on Sunday. Live coverage on Sportsnet and sportsnet+ begins at 6 p.m. ET / 3 p.m. PT, or follow along with our live tracker. ]]></content:encoded>
+		<sports>
+			<sport id="1247" url="https://www.sportsnet.ca/hockey/">Hockey</sport>
+		</sports>
+		<leagues>
+			<league id="1248" url="https://www.sportsnet.ca/hockey/nhl/">NHL</league>
+		</leagues>
+
+		<teams/>		<contentTags>
+<![CDATA[ |sportsnet.ca|hockey|nhl|sports|na|na ]]>		</contentTags>
+		<link type="app-deep-link-field"></link>
+				<gameCard>
+			<gameId>dc0cd5d4-3848-4564-9648-ae5db1973580</gameId>
+		</gameCard>
+
+		<post_type>sn-article</post_type>
+		<sponsorshipMatched></sponsorshipMatched>
+		<blackoutGame></blackoutGame>
+	</item>
+
+	<item  importance="normal">
+
+<media:content medium="image" width="600" height="338" url="https://www.sportsnet.ca/wp-content/uploads/2026/10/blankenburg.jpg">
+<media:title>blankenburg</media:title>
+<enclosure url="https://www.sportsnet.ca/wp-content/uploads/2026/10/blankenburg.jpg" length="5244" type="image/jpeg" />
+</media:content>		<title>‘Blanky’s the man!’: Blankenburg earns Maple Leafs’ respect the hard way</title>
+		<headline><![CDATA[Blankenburg earns Maple Leafs’ respect the hard way]]></headline>
+		<collectionId>6360287</collectionId>
+		<newsItemLayout>four_cols</newsItemLayout>
+		<imageLabel />
+		<link><![CDATA[ https://www.sportsnet.ca/nhl/article/blankys-the-man-blankenburg-earns-maple-leafs-respect-the-hard-way/ ]]></link>
+		<comments><![CDATA[ https://www.sportsnet.ca/nhl/article/blankys-the-man-blankenburg-earns-maple-leafs-respect-the-hard-way//#comments ]]></comments>
+		<pubDate>Sun, 11 Oct 2026 16:15:01 EDT</pubDate>
+		<modifiedDate>Sun, 11 Oct 2026 16:20:54 EDT</modifiedDate >
+		<dc:creator>Luke Fox</dc:creator>
+		<category><![CDATA[Analysis]]></category>
+		<category><![CDATA[Feature]]></category>
+		<guid isPermaLink="false"><![CDATA[https://www.sportsnet.ca/?post_type=sn-article&#038;p=6721236&#038;oc=-1]]></guid>
+		<description><![CDATA[<p>Nick Blankenburg waited five games for his opportunity with the Maple Leafs, then made an immediate impact with a goal 38 seconds into his first shift against his former team in Colorado. The undersized, undrafted defenceman has spent his career proving doubters wrong, and his relentless work ethic and versatility have helped him earn a place in Toronto’s plans.</p>
+]]></description>
+		<content:encoded><![CDATA[ Nick Blankenburg waited five games for his opportunity with the Maple Leafs, then made an immediate impact with a goal 38 seconds into his first shift against his former team in Colorado. The undersized, undrafted defenceman has spent his career proving doubters wrong, and his relentless work ethic and versatility have helped him earn a place in Toronto’s plans. ]]></content:encoded>
+		<sports>
+			<sport id="1247" url="https://www.sportsnet.ca/hockey/">Hockey</sport>
+		</sports>
+		<leagues>
+			<league id="1248" url="https://www.sportsnet.ca/hockey/nhl/">NHL</league>
+		</leagues>
+		<teams>
+			<team id="1285">TOR</team>
+		</teams>
+		<contentTags>
+<![CDATA[ |sportsnet.ca|hockey|nhl|sports|toronto maple leafs|na ]]>		</contentTags>
+		<link type="app-deep-link-field"></link>
+				<gameCard/>
+		<post_type>sn-article</post_type>
+		<sponsorshipMatched></sponsorshipMatched>
+		<blackoutGame></blackoutGame>
+	</item>
+
+	<item  importance="normal">
+
+<media:content medium="image" width="600" height="338" url="https://www.sportsnet.ca/wp-content/uploads/2026/10/leafs-avs.jpg">
+<media:title>leafs avs</media:title>
+<enclosure url="https://www.sportsnet.ca/wp-content/uploads/2026/10/leafs-avs.jpg" length="5052" type="image/jpeg" />
+</media:content>		<title>&#8216;Tough&#8217; loss of Tanev tempers Maple Leafs&#8217; wild comeback vs. Avalanche</title>
+		<headline><![CDATA['Tough' loss of Tanev tempers Maple Leafs' wild comeback]]></headline>
+		<collectionId>6360287</collectionId>
+		<newsItemLayout>four_cols</newsItemLayout>
+		<imageLabel />
+		<link><![CDATA[ https://www.sportsnet.ca/nhl/article/tough-loss-of-tanev-tempers-maple-leafs-wild-comeback-vs-avalanche/ ]]></link>
+		<comments><![CDATA[ https://www.sportsnet.ca/nhl/article/tough-loss-of-tanev-tempers-maple-leafs-wild-comeback-vs-avalanche//#comments ]]></comments>
+		<pubDate>Sun, 11 Oct 2026 00:15:03 EDT</pubDate>
+		<modifiedDate>Sun, 11 Oct 2026 00:17:39 EDT</modifiedDate >
+		<dc:creator>Luke Fox</dc:creator>
+		<category><![CDATA[Game coverage - recap]]></category>
+		<guid isPermaLink="false"><![CDATA[https://www.sportsnet.ca/?post_type=sn-article&#038;p=6720913&#038;oc=-1]]></guid>
+		<description><![CDATA[<p>Make no mistake: The Maple Leafs stole this game from the Avalanche. Undercutting the emotional win, however, is the loss of Chris Tanev. </p>
+]]></description>
+		<content:encoded><![CDATA[ Make no mistake: The Maple Leafs stole this game from the Avalanche. Undercutting the emotional win, however, is the loss of Chris Tanev.  ]]></content:encoded>
+		<sports>
+			<sport id="1247" url="https://www.sportsnet.ca/hockey/">Hockey</sport>
+		</sports>
+		<leagues>
+			<league id="1248" url="https://www.sportsnet.ca/hockey/nhl/">NHL</league>
+		</leagues>
+		<teams>
+			<team id="1285">TOR</team>
+		</teams>
+		<contentTags>
+<![CDATA[ |sportsnet.ca|hockey|nhl|sports|toronto maple leafs|na ]]>		</contentTags>
+		<link type="app-deep-link-field"></link>
+				<gameCard/>
+		<post_type>sn-article</post_type>
+		<sponsorshipMatched></sponsorshipMatched>
+		<blackoutGame></blackoutGame>
+	</item></channel></rss>

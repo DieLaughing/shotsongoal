@@ -1,0 +1,37 @@
+# US where-to-watch. Recheck every October: TV deals and team streaming deals change most seasons.
+# Built from every 2026-27 regular-season game's tvBroadcasts (surveyed 2026-10-11).
+#
+# services: what a person can tick in Settings. Each network says which service carries it.
+# A network missing from this file still shows, with its raw name and no "you have it" check.
+
+services:
+  espn_plus:
+    label: "ESPN+ (or Hulu / Disney+ bundle)"
+    url: "https://plus.espn.com/nhl"
+    # With the Disney+ bundle, live ESPN+ games also play inside Hulu.
+    also: [{ name: "Hulu", url: "https://www.hulu.com/hub/sports" }]
+  espn:       { label: "ESPN via a TV login",              url: "https://www.espn.com/watch/" }
+  abc:        { label: "ABC (antenna or TV login)",        url: "https://abc.com/watch-live" }
+  tnt:        { label: "TNT / truTV via TV login, or HBO Max", url: "https://www.hbomax.com/sports" }
+  nhln:       { label: "NHL Network via a TV login" }
+  regional:   { label: "My local team's channel (TV login or team app)" }
+
+# National US networks. "exclusive" = when listed with no home/away channels, every US viewer must use it.
+national:
+  ESPN+:      { service: espn_plus, app: "ESPN+" }
+  HULU:       { service: espn_plus, app: "ESPN+" }
+  Disney+:    { service: espn_plus, app: "ESPN+" }
+  ESPN:       { service: espn, app: "ESPN app" }
+  ESPN2:      { service: espn, app: "ESPN app" }
+  ABC:        { service: abc, app: "ABC" }
+  TNT:        { service: tnt, app: "HBO Max / TNT" }
+  truTV:      { service: tnt, app: "HBO Max / TNT" }
+  HBO MAX:    { service: tnt, app: "HBO Max / TNT" }
+  NHLN:       { service: nhln, app: "NHL Network", not_exclusive: true }
+
+# Team channels: the app to use, keyed by network name as the NHL lists it. Anything not listed shows
+# its network name as-is. Only add names and links you've checked (links checked 2026-10-11).
+regional:
+  NESN:        { app: "NESN 360", url: "https://watch.nesn.com/" }
+  Prime Video: { app: "Prime Video", url: "https://www.primevideo.com/" }
+  SCRIPPS:     { app: "Scripps (free, over the air)" }

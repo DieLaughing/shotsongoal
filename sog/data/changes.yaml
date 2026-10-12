@@ -1,0 +1,88 @@
+# What's new in Shots on Goal, newest first. Written for the people using the app, not for developers.
+# Every shipped feature gets an entry (kind: new | improved | fixed). `link` is where "Try it" goes.
+# After editing: `.venv/bin/python tools/changelog.py` rewrites CHANGELOG.md (a test checks they match),
+# and `.venv/bin/python tools/release.py` publishes the day's GitHub Release.
+
+- date: 2026-10-12
+  kind: improved
+  title: Offline page
+  text: If the server Shots on Goal runs on goes down (a power or internet blip at its home), the app shows a short "Shots on Goal is offline" page instead of an error, and reloads by itself once it's back. Your phone picks this up the next time you open the app.
+  link: "#/"
+
+- date: 2026-10-12
+  kind: fixed
+  title: Home screen icon
+  text: Phones showed an "S" instead of the app's icon on the home screen. Remove the app from your home screen and add it again to get the real one (on iPhone, turn alerts back on afterwards in Settings).
+  link: "#/app"
+
+- date: 2026-10-12
+  kind: improved
+  title: App icon in the header
+  text: The crossed sticks and puck now sit at the top left, the same icon as the browser tab and home screen.
+  link: "#/"
+
+- date: 2026-10-12
+  kind: new
+  title: What's new
+  text: This page. A dot on Settings and a banner on Tonight show when something new has been added.
+  link: "#/new"
+
+- date: 2026-10-12
+  kind: new
+  title: Ticket links
+  text: Upcoming games have a Tickets link. NHL games go straight to that game on Ticketmaster; PWHL games to theirs, or the league's tickets page until it lists one.
+  link: "#/"
+
+- date: 2026-10-12
+  kind: new
+  title: The PWHL
+  text: "Scores, game pages with a shot map, standings, team pages, news and alerts for the PWHL. Switch leagues with the NHL | PWHL | Both pill at the top; the PWHL side wears Boston Fleet colors. Add the Fleet as a favorite in Settings."
+  link: "?league=pwhl#/standings"
+
+- date: 2026-10-11
+  kind: improved
+  title: New icon
+  text: Two crossed sticks and a puck. If you added the app to your home screen, remove it and add it again to see it.
+  link: "#/app"
+
+- date: 2026-10-11
+  kind: new
+  title: Get the app guide
+  text: Step-by-step help to put Shots on Goal on your home screen and turn on alerts, for iPhone, Android and computers.
+  link: "#/app"
+
+- date: 2026-10-11
+  kind: new
+  title: Alerts
+  text: Push notifications for your favorite teams - puck drop (with where to watch), every goal, final scores and trades. Pick which in Settings.
+  link: "#/settings"
+
+- date: 2026-10-11
+  kind: new
+  title: Shot maps, banners and recaps
+  text: Game pages show every shot on a rink, live power-play and goalie-pulled banners, and a short written recap after the final horn.
+  link: "#/"
+
+- date: 2026-10-11
+  kind: new
+  title: The Wire
+  text: Trades and roster moves, NHL headlines and insiders from Bluesky in one feed, plus news on each team's page.
+  link: "#/wire"
+
+- date: 2026-10-11
+  kind: new
+  title: Calendar feed
+  text: Every game for your favorite teams in your phone's calendar, with where to watch in each event.
+  link: "#/settings"
+
+- date: 2026-10-11
+  kind: improved
+  title: Tap to watch
+  text: Where-to-watch names (ESPN+, Hulu, NESN 360...) open the service, and game pages have an Open button.
+  link: "#/"
+
+- date: 2026-10-11
+  kind: new
+  title: Shots on Goal opens
+  text: Tonight's games with live scores, game pages, standings and team pages, and where to watch every game for your market and the services you have.
+  link: "#/"
