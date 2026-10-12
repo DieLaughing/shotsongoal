@@ -1,0 +1,24 @@
+# What's new in Shots on Goal
+
+Every update to [Shots on Goal](https://github.com/DieLaughing/shotsongoal), newest first. The same list is on the app's What's new page.
+This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit that file, not this one.
+
+## October 12, 2026
+
+- **Improved: Offline page.** If the server Shots on Goal runs on goes down (a power or internet blip at its home), the app shows a short "Shots on Goal is offline" page instead of an error, and reloads by itself once it's back. Your phone picks this up the next time you open the app.
+- **Fixed: Home screen icon.** Phones showed an "S" instead of the app's icon on the home screen. Remove the app from your home screen and add it again to get the real one (on iPhone, turn alerts back on afterwards in Settings).
+- **Improved: App icon in the header.** The crossed sticks and puck now sit at the top left, the same icon as the browser tab and home screen.
+- **New: What's new.** This page. A dot on Settings and a banner on Tonight show when something new has been added.
+- **New: Ticket links.** Upcoming games have a Tickets link. NHL games go straight to that game on Ticketmaster; PWHL games to theirs, or the league's tickets page until it lists one.
+- **New: The PWHL.** Scores, game pages with a shot map, standings, team pages, news and alerts for the PWHL. Switch leagues with the NHL | PWHL | Both pill at the top; the PWHL side wears Boston Fleet colors. Add the Fleet as a favorite in Settings.
+
+## October 11, 2026
+
+- **Improved: New icon.** Two crossed sticks and a puck. If you added the app to your home screen, remove it and add it again to see it.
+- **New: Get the app guide.** Step-by-step help to put Shots on Goal on your home screen and turn on alerts, for iPhone, Android and computers.
+- **New: Alerts.** Push notifications for your favorite teams - puck drop (with where to watch), every goal, final scores and trades. Pick which in Settings.
+- **New: Shot maps, banners and recaps.** Game pages show every shot on a rink, live power-play and goalie-pulled banners, and a short written recap after the final horn.
+- **New: The Wire.** Trades and roster moves, NHL headlines and insiders from Bluesky in one feed, plus news on each team's page.
+- **New: Calendar feed.** Every game for your favorite teams in your phone's calendar, with where to watch in each event.
+- **Improved: Tap to watch.** Where-to-watch names (ESPN+, Hulu, NESN 360...) open the service, and game pages have an Open button.
+- **New: Shots on Goal opens.** Tonight's games with live scores, game pages, standings and team pages, and where to watch every game for your market and the services you have.

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0e1116"/>
+  <!-- two crossed sticks: shaft, red tape near the knob, blade at the bottom -->
+  <g stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M142 92 L318 340 Q330 356 352 356 L410 356" stroke="#eceff3" stroke-width="30"/>
+    <path d="M370 92 L194 340 Q182 356 160 356 L102 356" stroke="#eceff3" stroke-width="30"/>
+    <path d="M150 103 L172 134" stroke="#d7263d" stroke-width="32"/>
+    <path d="M362 103 L340 134" stroke="#d7263d" stroke-width="32"/>
+  </g>
+  <!-- puck -->
+  <ellipse cx="256" cy="428" rx="74" ry="26" fill="#eceff3"/>
+  <ellipse cx="256" cy="414" rx="74" ry="26" fill="#2a303a" stroke="#eceff3" stroke-width="6"/>
+</svg>
