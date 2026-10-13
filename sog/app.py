@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import access, bugs, alerts, changes, ics, pwhl, teams, watch, wire
+from . import access, bugs, alerts, changes, home, ics, pwhl, teams, watch, wire
 from .db import Store, parse_iso
 from .feed import Feed
 from .push import Pusher
@@ -425,6 +425,35 @@ async def team(abbr: str, request: Request):
     sched = [dict(g) for g in data["schedule"] if g.get("type") in (2, 3)] or [dict(g) for g in data["schedule"]]
     return {**data, "schedule": _with_watch(sched, _settings(request)),
             "wire": [i for i in items if abbr in i["teams"]][:20]}
+
+
+@app.get("/api/myteams")
+async def my_teams(request: Request):
+    """The "your team" cards on Tonight: one summary per favourite, from the cached schedules and standings."""
+    s = _settings(request)
+    picks = [a for a in s["favorites"] if a in teams.ALL]
+    if not picks:
+        return {"teams": []}
+    today = feed.opening_day()
+
+    async def one(abbr: str, rows: list[dict]) -> dict | None:
+        lg = teams.league_of(abbr)
+        try:
+            data = await (feed.pwhl_team(abbr) if lg == "pwhl" else feed.team(abbr))
+        except Exception:
+            return None
+        sched = [dict(g) for g in data["schedule"] if g.get("type") in (2, 3)] or [dict(g) for g in data["schedule"]]
+        card = home.team_summary(abbr, sched, rows, today, lg)
+        if card["next"]:
+            _with_watch([card["next"]], s)
+        return card
+
+    leagues = {teams.league_of(a) for a in picks}
+    rows = dict(zip(leagues, await asyncio.gather(
+        *[(feed.pwhl_standings() if lg == "pwhl" else feed.standings()) for lg in leagues], return_exceptions=True)))
+    rows = {lg: [] if isinstance(r, Exception) else r for lg, r in rows.items()}
+    cards = await asyncio.gather(*[one(a, rows[teams.league_of(a)]) for a in picks])
+    return {"date": today, "teams": [c for c in cards if c]}
 
 
 WIRE_KINDS = {"move", "news", "insider"}

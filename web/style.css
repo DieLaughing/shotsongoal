@@ -80,6 +80,32 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .mark.light { color: #111; }
 .mark.big { width: 52px; height: 34px; font-size: 15px; border-radius: 8px; }
 
+/* "your team" cards at the top of Tonight, tinted in the team's colour (--c); .light = dark text on a light colour */
+.heroes { display: flex; gap: 10px; margin: 12px 0 2px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.heroes::-webkit-scrollbar { display: none; }
+.hero {
+  flex: 0 0 100%; scroll-snap-align: start; border-radius: 16px; padding: 14px 14px 12px; display: grid; gap: 10px;
+  --ink: #fff; --wash: rgba(255, 255, 255, .14); --ring: rgba(255, 255, 255, .6);
+  color: var(--ink); background: linear-gradient(135deg, var(--c) 0%, color-mix(in srgb, var(--c) 62%, #000) 100%);
+}
+.heroes.many .hero { flex-basis: 90%; }
+.hero.light { --ink: #111; --wash: rgba(0, 0, 0, .1); --ring: rgba(0, 0, 0, .4);
+  background: linear-gradient(135deg, var(--c) 0%, color-mix(in srgb, var(--c) 82%, #000) 100%); }
+.hero-top { text-decoration: none; color: inherit; display: grid; gap: 8px; }
+.hero-k { font-size: 11px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; opacity: .85; }
+.hero-m { display: flex; align-items: center; gap: 8px; font-weight: 700; min-width: 0; }
+.hero-m .mark { box-shadow: 0 0 0 1.5px var(--ring); }
+.hero-opp { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.hero-r { margin-left: auto; display: grid; justify-items: end; line-height: 1.15; flex: none; }
+.hero-r span { font-size: 12px; opacity: .85; }
+.hero-sc { font-size: 19px; font-variant-numeric: tabular-nums; }
+.hero-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.hero .chip { font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 7px; background: var(--wash); }
+.hero .chip.strong { background: var(--ink); color: var(--c); }
+.hero.light .chip.strong { color: #fff; background: #111; }
+.hero-lines { display: grid; gap: 2px; font-size: 12.5px; opacity: .92; }
+.hero-lines b { font-weight: 700; margin-right: 4px; }
+
 /* day header */
 .daybar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 4px; }
 .daybar h1 { margin: 0; font-size: 19px; text-align: center; flex: 1; }

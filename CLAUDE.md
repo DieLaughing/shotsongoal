@@ -39,6 +39,9 @@ which is not committed.
   issues (labels from-app + bug|enhancement; @mentions broken; page/device/version table) with SOG_GITHUB_TOKEN
   (fine-grained, Issues read/write); bug_report table keeps who sent what; /api/bugs refreshes state + the
   owner's latest comment every 10 min. 5 a day per person. No token = GitHub's prefilled new-issue link.
+- "Your team" cards (top of Tonight, default slate only): /api/myteams -> sog/home.py team_summary per favourite from
+  the cached team schedule + standings (latest season only: a 60-day gap splits seasons; off-season = last season's
+  place, no streak/week). Cards tinted with the team colour; live/final state comes from the slate. Kept 5 min client-side.
 - Settings (web/app.js settingsView) save on every change (saveSettings: optimistic, queued PUTs of the whole settings
   object, toast). Team pickers group NHL teams by sog/teams.py DIVISIONS. Home market = one team (local is a list server-side).
 - Phase 1: access, Tonight, Game, Standings, Teams, Settings, where-to-watch (service links; ESPN+ also links Hulu,
