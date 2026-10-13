@@ -706,7 +706,7 @@ async function gameView(id, quiet = false, league = "nhl") {
     key = key.slice(0, 82);
     const counts = S.reactions[key] || {}, mine = S.mine[key];
     const chips = Object.entries(counts).map(([e, n]) => `<button class="rxc${mine === e ? " mine" : ""}" data-rx="${e}" data-ev="${esc(key)}">${e} ${n}</button>`).join("");
-    return `<div class="rxs">${chips}<button class="rxc add" data-rxopen="${esc(key)}" aria-label="React">${mine ? "change" : "react"}</button></div>`;
+    return `<div class="rxs">${chips}<button class="rxc add" data-rxopen="${esc(key)}" aria-label="React">${chips ? "＋" : "🙂 React"}</button></div>`;
   };
   const side = (t, abbr) => `<a class="side" href="#/team/${abbr}">${mark(abbr, true)}<span class="nm">${esc(t.name || teamName(abbr))}</span></a>`;
 
