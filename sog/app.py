@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import access, bugs, alerts, changes, home, ics, pwhl, teams, watch, wire
+from . import access, bugs, alerts, changes, home, ics, pwhl, spoilers, teams, watch, wire
 from .db import Store, parse_iso
 from .feed import Feed
 from .push import Pusher
@@ -117,6 +117,7 @@ def _user_settings(user: dict | None, email: str | None) -> dict:
     s.setdefault("favorites", [])
     s.setdefault("local", list(watch.DEFAULT_LOCAL))
     s["notify"] = alerts.prefs(s)
+    s["spoilers"] = spoilers.clean(s.get("spoilers"), teams.ALL)
     return s
 
 
@@ -189,6 +190,7 @@ async def save_settings(request: Request):
         "services": [s for s in body.get("services") or [] if s in watch.services()],
         "notify": {k: bool((body.get("notify") or {}).get(k, True)) for k in alerts.KINDS},
         "seen_changes": str(body.get("seen_changes") or "")[:120],  # newest What's new entry this person has seen
+        "spoilers": spoilers.clean(body.get("spoilers"), teams.ALL),
     }
     store.save_settings(request.state.email, clean)
     return clean

@@ -113,16 +113,69 @@ function watchLine(w, game) {
   return `<div class="watch">${app}<span>${esc(w.why)}</span>${pill}</div>`;
 }
 
+// ---- spoiler-free ------------------------------------------------------------------------------
+// settings.spoilers = {teams: always hidden, games: "watching later", seen: watched since}. Mirrors sog/spoilers.py.
+// Only started games from today or yesterday are hidden, so it switches itself off the day after.
+const spKey = g => `${g.league === "pwhl" ? "pwhl" : "nhl"}:${g.id}`;
+const peeked = new Set();         // "Show it now": for this visit only
+const SPOIL_GAMES = new Map();    // key -> game, for the buttons
+const isoDay = (offset = 0) => { const d = new Date(); d.setDate(d.getDate() + offset); return d.toLocaleDateString("en-CA"); };
+const spoilers = () => ({ teams: [], games: [], seen: [], ...(ME.settings.spoilers || {}) });
+function spoilerMarked(g) {
+  const sp = spoilers(), k = spKey(g);
+  if (!g || sp.seen.includes(k) || (g.date || "") < isoDay(-1)) return false;
+  return sp.games.includes(k) || sp.teams.includes(g.away.abbr) || sp.teams.includes(g.home.abbr);
+}
+const spoilerHidden = g => !!g && ["live", "final"].includes(g.state) && !peeked.has(spKey(g)) && spoilerMarked(g);
+const vsLine = g => `${TEAMS[g.away.abbr]?.code || g.away.abbr} vs ${TEAMS[g.home.abbr]?.code || g.home.abbr}`;
+function spoilButton(action, g, label, primary = false) {
+  SPOIL_GAMES.set(spKey(g), g);
+  return `<button class="btn small${primary ? " primary" : ""}" data-spoil="${action}" data-k="${esc(spKey(g))}">${label}</button>`;
+}
+function spoilerAction(action, k) {
+  const sp = spoilers(), g = SPOIL_GAMES.get(k);
+  const drop = (list, x) => list.filter(y => y !== x);
+  if (action === "peek") { peeked.add(k); return route(); }
+  if (action === "peekall") { (k || "").split(",").forEach(x => peeked.add(x)); return route(); }
+  if (action === "later") saveSettings({ spoilers: { ...sp, games: [...drop(sp.games, k), k], seen: drop(sp.seen, k) } });
+  if (action === "seen") saveSettings({ spoilers: { ...sp, games: drop(sp.games, k), seen: [...drop(sp.seen, k), k] } });
+  if (g && action === "later") toast(`Spoiler-free on for ${vsLine(g)}`);
+  hiddenCache = { at: 0, list: [] };
+  route();
+}
+// Today's hidden games, for pages that don't load the slate themselves (Wire, Standings, team pages).
+let hiddenCache = { at: 0, list: [] };
+async function hiddenToday() {
+  const sp = spoilers();
+  if (!sp.teams.length && !sp.games.length) return [];
+  if (Date.now() - hiddenCache.at < 60000) return hiddenCache.list.filter(spoilerHidden);
+  // Today's slate and the one before it (a game stays hidden through the next day).
+  const slate = async l => {
+    const d = await api(`/api/games?league=${l}`).catch(() => ({ games: [] }));
+    const before = d.prev && d.prev >= isoDay(-1) ? await api(`/api/games?league=${l}&date=${d.prev}`).catch(() => ({ games: [] })) : { games: [] };
+    return [...(d.games || []), ...(before.games || [])];
+  };
+  const days = (await Promise.all(["nhl", "pwhl"].map(slate))).map(games => ({ games }));
+  hiddenCache = { at: Date.now(), list: days.flatMap(d => d.games || []).filter(spoilerMarked) };
+  return hiddenCache.list.filter(spoilerHidden);
+}
+// A whole page that would give a hidden result away (standings, a team's page).
+function spoilCover(games, what, verb = "includes") {
+  return `<div class="card pad spoil-cover"><div class="spoil-eye">🙈</div>
+    <p><b>${esc(what)}</b> ${verb} ${games.length > 1 ? "results" : "the result"} you're hiding: ${esc(games.map(vsLine).join(", "))}.</p>
+    <button class="btn small" data-spoil="peekall" data-k="${esc(games.map(spKey).join(","))}">Show anyway</button></div>`;
+}
+
 function gameCard(g, fav) {
-  const a = g.away, h = g.home, done = g.state === "final";
+  const a = g.away, h = g.home, hide = spoilerHidden(g), done = g.state === "final" && !hide;
   const lost = side => done && a.score != null && h.score != null && side.score < (side === a ? h.score : a.score) ? " lost" : "";
-  const sc = t => g.state === "pre" || g.state === "postponed" ? "" : `<span class="sc">${t.score ?? ""}</span>`;
+  const sc = t => g.state === "pre" || g.state === "postponed" || hide ? "" : `<span class="sc">${t.score ?? ""}</span>`;
   const isFav = fav.has(a.abbr) || fav.has(h.abbr);
   // The watch line sits outside the game link so its own link (ESPN+, NESN 360...) can be tapped.
   return `<div class="game${isFav ? " fav" : ""}">
     <a class="body" href="${gameHref(g)}">
       <div class="team-line${lost(a)}">${mark(a.abbr)}<span class="nm">${esc(a.name || teamName(a.abbr))}</span>${sc(a)}</div>
-      ${statusCell(g)}
+      ${hide ? `<div class="status"><div class="t">🙈 Hidden</div></div>` : statusCell(g)}
       <div class="team-line${lost(h)}">${mark(h.abbr)}<span class="nm">${esc(h.name || teamName(h.abbr))}</span>${sc(h)}</div>
     </a>
     ${watchLine(g.watch, g)}${ticketLink(g)}
@@ -271,10 +324,15 @@ function heroCard(c, live) {
   const g = live || c.next;
   const t = TEAMS[c.abbr] || {};
   const side = g && (g.home.abbr === c.abbr ? { us: g.home, them: g.away, at: "vs" } : { us: g.away, them: g.home, at: "at" });
-  let kicker = "No games scheduled", right = "";
+  let kicker = "No games scheduled", right = "", acts = "";
+  const hide = spoilerHidden(g);
   if (g) {
     const today = g.date === myTeams.data?.date;
-    if (g.state === "live") {
+    if (hide) {
+      kicker = "Spoiler-free";
+      right = `<b class="hero-sc">🙈</b><span>Score hidden</span>`;
+      acts = spoilButton("peek", g, "Show score") + spoilButton("seen", g, "I've seen it");
+    } else if (g.state === "live") {
       kicker = "Live now";
       right = `<b class="hero-sc">${side.us.score ?? 0}–${side.them.score ?? 0}</b><span>${esc(g.intermission ? `${g.period} INT` : `${g.period} ${g.clock || ""}`)}</span>`;
     } else if (g.state === "final") {
@@ -285,17 +343,20 @@ function heroCard(c, live) {
       kicker = today ? "Tonight" : `Next game · ${shortDate(g.date)}`;
       right = `<b class="hero-sc">${g.start ? esc(time(g.start)) : "TBD"}</b>`;
     }
+    if (!hide && today && g.state !== "final" && g.state !== "postponed") {
+      acts = spoilerMarked(g) ? `<span class="chip">🙈 Spoiler-free on</span>` : spoilButton("later", g, "🙈 Watching later");
+    }
   }
   const w = g && g.state !== "final" ? g.watch : null;
   const watch = w && (w.network || w.app) ? `<span class="chip strong">${esc(w.network || w.app)}${w.have === true ? " · you have it" : w.have === false ? " · not in your services" : ""}</span>` : "";
   const st = c.standing;
-  const chips = [watch,
+  const chips = hide ? watch : [watch,
     st?.place ? `<span class="chip">${esc(st.place)}</span>` : "",
     c.record ? `<span class="chip">${esc(c.record)}${st?.pts != null ? ` · ${st.pts} pts` : ""}</span>` : "",
     streakText(c.streak) ? `<span class="chip">${esc(streakText(c.streak))}</span>` : "",
     st?.race ? `<span class="chip">${esc(st.race)}</span>` : ""].join("");
   const lastIsThis = c.last && g && c.last.id === g.id;
-  const lines = [
+  const lines = hide ? "" : [
     c.week && c.week.games ? `<div><b>Last 7 days</b> ${esc(c.week.record)} · ${c.week.gf} goals for, ${c.week.ga} against</div>` : "",
     c.last && !lastIsThis ? `<div><b>Last</b> ${RESULT_WORD[c.last.code]} ${c.last.us}–${c.last.them} ${c.last.home ? "vs" : "at"} ${esc(teamName(c.last.opp))}</div>` : "",
     c.after?.length ? `<div><b>Then</b> ${c.after.map(a => `${a.home ? "vs" : "at"} ${esc(TEAMS[a.opp]?.code || a.opp)} ${esc(shortDate(a.date).split(",")[0])}`).join(" · ")}</div>` : "",
@@ -308,6 +369,7 @@ function heroCard(c, live) {
     </a>
     ${chips ? `<div class="hero-chips">${chips}</div>` : ""}
     ${lines ? `<div class="hero-lines">${lines}</div>` : ""}
+    ${acts ? `<div class="hero-acts">${acts}</div>` : ""}
   </div>`;
 }
 
@@ -360,6 +422,7 @@ async function tonightView(date, quiet = false) {
     ${newBanner()}
     <div id="getapp"></div>
     ${heroes(mineData, leagues, days.flatMap(d => d.games || []))}
+    ${(n => n ? `<div class="spoil-note">🙈 Spoiler-free: ${n} game${n > 1 ? "s" : ""} hidden. Open one to reveal it when you've watched.</div>` : "")(days.flatMap(d => d.games || []).filter(spoilerHidden).length)}
     <div class="daybar">
       ${day.prev ? `<a href="#/day/${day.prev}" aria-label="Previous day">←</a>` : "<span></span>"}
       <h1>${esc(day.date ? dayTitle(day.date) : "Games")}</h1>
@@ -458,6 +521,18 @@ async function gameView(id, quiet = false, league = "nhl") {
   const path = league === "pwhl" ? `/api/pwhl/game/${encodeURIComponent(id)}` : `/api/game/${encodeURIComponent(id)}`;
   try { d = await api(path); } catch (e) { view.innerHTML = failed(e); return; }
   const g = d.game, a = g.away.abbr, h = g.home.abbr;
+  if (league === "pwhl") g.league = "pwhl";
+  if (spoilerHidden(g)) {
+    view.innerHTML = `<div class="card pad spoil-cover" style="margin-top:12px">
+      <div class="spoil-teams">${mark(a, true)}<span>vs</span>${mark(h, true)}</div>
+      <div class="spoil-eye">🙈</div>
+      <p><b>${esc(fullName(a))} vs ${esc(fullName(h))}</b> is hidden. Scores, goals, the shot map and the recap stay
+        out of sight until you've watched it.</p>
+      <div class="links" style="justify-content:center">${spoilButton("peek", g, "Show it now")}${spoilButton("seen", g, "I've seen it", true)}</div>
+      ${g.state === "live" ? `<div style="padding-top:6px">${watchLine(g.watch, g)}</div>` : ""}
+    </div>`;
+    return;
+  }
   const ac = TEAMS[a]?.color || "#888", hc = TEAMS[h]?.color || "#888";
   let state = "";
   if (g.state === "live") state = `<span class="live">LIVE</span> ${esc(g.intermission ? `${g.period} intermission` : `${g.period} · ${g.clock || ""}`)}`;
@@ -478,6 +553,9 @@ async function gameView(id, quiet = false, league = "nhl") {
       `<a class="btn${i ? "" : " primary"}" href="${esc(l.url)}" target="_blank" rel="noopener">Open ${esc(l.name)}</a>`).join("")}</div>` : ""}
     ${g.recap ? `<div class="links"><a class="btn" href="${esc(g.recap)}" target="_blank" rel="noopener">Watch the recap on NHL.com</a></div>` : ""}
     ${g.state === "pre" && g.tickets ? `<div class="links"><a class="btn" href="${esc(g.tickets)}" target="_blank" rel="noopener">Buy tickets ↗</a></div>` : ""}
+    ${g.state !== "final" && g.state !== "postponed" ? `<div class="links">${spoilerMarked(g)
+      ? `<span class="muted small">🙈 Spoiler-free is on for this game.</span>${spoilButton("seen", g, "Turn off")}`
+      : spoilButton("later", g, "🙈 Watching later")}</div>` : ""}
     ${g.state !== "final" && league !== "pwhl" ? `<div class="links"><button class="linkish" id="report">Wrong channel? Tell us</button></div>` : ""}
   </div>
   ${d.situation && g.state === "live" && !g.intermission ? `<div class="banner">${esc(d.situation.text)}</div>` : ""}
@@ -559,8 +637,9 @@ function linkify(text) {
   return esc(text).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u.replace(/^https?:\/\//, "").slice(0, 40)}…</a>`);
 }
 
-function wireItem(i, fav) {
+function wireItem(i, fav, hidden = []) {
   const isFav = i.teams.some(t => fav.has(t));
+  const spoils = hidden.find(g => (i.teams.includes(g.away.abbr) || i.teams.includes(g.home.abbr)) && (i.time || "") >= (g.start || ""));
   const marks = i.teams.slice(0, 4).map(t => mark(t)).join("");
   const kind = i.kind === "move" ? (i.trade ? `<span class="pill need">Trade</span>` : `<span class="pill info">Move</span>`)
     : i.kind === "insider" ? `<span class="pill info">Insider</span>` : "";
@@ -573,6 +652,9 @@ function wireItem(i, fav) {
       <a class="wsub" href="${esc(i.url)}" target="_blank" rel="noopener">View on Bluesky ↗</a>`;
   } else {
     body = `<div class="wtext full">${esc(i.text)}</div>`;
+  }
+  if (spoils) {
+    return `<div class="witem${isFav ? " fav" : ""} spoil">${head}<button class="linkish" data-unspoil>🙈 Hidden: might spoil ${esc(vsLine(spoils))}. Tap to show.</button><div class="spoil-body">${body}</div></div>`;
   }
   return `<div class="witem${isFav ? " fav" : ""}">${head}${body}</div>`;
 }
@@ -587,9 +669,10 @@ async function wireView(quiet = false) {
   try {
     lists = await Promise.all(leagues.map(l => api(`/api/wire?league=${l}&kind=${state.kind}&mine=${state.mine ? 1 : 0}`)));
   } catch (e) { view.innerHTML = failed(e); return; }
+  const hidden = await hiddenToday().catch(() => []);
   const fav = favs();
   const block = (items, l) => (leagues.length > 1 ? `<div class="league-head ${l}">${LEAGUE_NAME[l]}</div>` : "") +
-    (items.length ? `<div class="card">${items.slice(0, leagues.length > 1 ? 40 : 150).map(i => wireItem(i, fav)).join("")}</div>`
+    (items.length ? `<div class="card">${items.slice(0, leagues.length > 1 ? 40 : 150).map(i => wireItem(i, fav, hidden)).join("")}</div>`
       : `<div class="empty">Nothing here yet.${state.mine ? " Try turning off \"Only my teams\"." : ""}</div>`);
   view.innerHTML = `
     <div class="seg">${WIRE_KINDS.map(([k, l]) => `<button data-kind="${k}" class="${k === state.kind ? "on" : ""}">${l}</button>`).join("")}</div>
@@ -670,6 +753,12 @@ async function standingsView(mode = "division") {
   setNav("standings");
   view.innerHTML = `<div class="empty">Loading standings…</div>`;
   const lg = pageLeague();
+  const hid = (await hiddenToday().catch(() => [])).filter(g => g.state === "final" && leagueOf(g.home.abbr) === lg);
+  if (hid.length) {
+    view.innerHTML = leaguePicker(lg) + spoilCover(hid, "These standings", "include");
+    bindLeaguePicker(() => standingsView(mode));
+    return;
+  }
   if (lg === "pwhl") {
     let rows;
     try { rows = await standings("pwhl"); } catch (e) { view.innerHTML = failed(e); return; }
@@ -740,6 +829,9 @@ async function teamView(abbr) {
   let d, rows = [];
   try { [d, rows] = await Promise.all([api(`/api/team/${encodeURIComponent(abbr)}`), standings(leagueOf(abbr)).catch(() => [])]); }
   catch (e) { view.innerHTML = failed(e); return; }
+  const hidden = await hiddenToday().catch(() => []);
+  const hid = hidden.filter(g => g.state === "final" && (g.away.abbr === abbr || g.home.abbr === abbr));
+  if (hid.length) { view.innerHTML = `<div style="margin-top:12px">${spoilCover(hid, `The ${teamName(abbr)} page`)}</div>`; return; }
   const st = rows.find(r => r.abbr === abbr);
   const fav = favs();
   const done = d.schedule.filter(g => g.state === "final").slice(-5).reverse();
@@ -755,7 +847,7 @@ async function teamView(abbr) {
     </div>`;
   if (next.length) html += `<h2>Coming up</h2><div class="card">${next.map(dated).join("")}</div>`;
   if (done.length) html += `<h2>Recent results</h2><div class="card">${done.map(dated).join("")}</div>`;
-  if (d.wire?.length) html += `<h2>News &amp; moves</h2><div class="card">${d.wire.slice(0, 8).map(i => wireItem(i, new Set())).join("")}</div>`;
+  if (d.wire?.length) html += `<h2>News &amp; moves</h2><div class="card">${d.wire.slice(0, 8).map(i => wireItem(i, new Set(), hidden)).join("")}</div>`;
   const sk = d.stats.skaters.slice(0, 10);
   if (sk.length) {
     html += `<h2>Leaders</h2><div class="card scroll"><table><tr><th>Skater</th><th>GP</th><th>G</th><th>A</th><th>P</th><th>+/-</th></tr>
@@ -860,6 +952,13 @@ function settingsView() {
       `<label><input type="checkbox" name="notify" value="${k}" ${s.notify?.[k] !== false ? "checked" : ""}>${l}</label>`).join("")}</div>
     <p class="help">For your teams only. New here? <a href="#/app">How to get the app and alerts on your phone</a>.</p>
 
+    <h2>Spoiler-free</h2>
+    ${fav.length ? `<div class="card checks">${fav.map(a =>
+      `<label><input type="checkbox" name="spoilteams" value="${a}" ${spoilers().teams.includes(a) ? "checked" : ""}>Always hide ${esc(teamName(a))} scores</label>`).join("")}</div>` : ""}
+    <p class="help">Watching on DVR or later? A hidden game's score stays out of sight on every page, along with its goal and final
+      alerts, the standings and Wire stories that could give it away, until you tap "I've seen it". Puck-drop alerts still come.
+      ${fav.length ? "Tick a team above to hide all their games, or" : "To hide one game,"} open any game and tap "🙈 Watching later". It switches off by itself the day after.</p>
+
     <h2>Calendar</h2>
     <div class="card" id="cal"><div class="empty">Loading…</div></div>
     <p class="help">Every game for your teams, with where to watch in each event. Your phone's calendar checks it every few hours. The link is personal; don't share it.</p>
@@ -890,6 +989,10 @@ function settingsView() {
   });
   document.getElementById("useguess")?.addEventListener("click", () => { saveSettings({ local: [guess] }); settingsView(); });
   view.querySelectorAll("input[name=services]").forEach(i => i.addEventListener("change", () => saveSettings({ services: picked("services") })));
+  view.querySelectorAll("input[name=spoilteams]").forEach(i => i.addEventListener("change", () => {
+    saveSettings({ spoilers: { ...spoilers(), teams: picked("spoilteams") } });
+    hiddenCache = { at: 0, list: [] };
+  }));
   view.querySelectorAll("input[name=notify]").forEach(i => i.addEventListener("change", () => {
     const on = new Set(picked("notify"));
     saveSettings({ notify: Object.fromEntries(["start", "goals", "final", "trades"].map(k => [k, on.has(k)])) });
@@ -1189,6 +1292,13 @@ async function start() {
   applyLeague();
   document.querySelectorAll("[data-league]").forEach(b => b.addEventListener("click", () => setLeague(b.dataset.league)));
   window.addEventListener("hashchange", route);
+  // Spoiler-free buttons can sit on any page (cards, game page, covers); one listener handles them all.
+  view.addEventListener("click", e => {
+    const b = e.target.closest("[data-spoil]");
+    if (b) { e.preventDefault(); spoilerAction(b.dataset.spoil, b.dataset.k); return; }
+    const u = e.target.closest("[data-unspoil]");
+    if (u) { u.closest(".witem").classList.remove("spoil"); u.remove(); }
+  });
   // Phones keep the app's last page in memory for days: coming back after a while shows today, not last night.
   let hiddenAt = 0;
   document.addEventListener("visibilitychange", () => {

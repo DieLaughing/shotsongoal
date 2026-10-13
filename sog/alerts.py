@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from . import watch
+from . import spoilers, watch
 from .db import Store
 from .push import Pusher
 
@@ -99,6 +99,8 @@ class Alerts:
             for e in fresh:
                 if not want[e["kind"]] or not fav & set(e["teams"]):
                     continue
+                if e["kind"] in ("goals", "final") and spoilers.hidden(e["game"], settings.get("spoilers")):
+                    continue  # spoiler-free: puck drop still comes, the score never does
                 body = e["body"]
                 if e["kind"] == "start" and e["game"].get("league") == "pwhl":
                     body = "Where to watch: thepwhl.com"
