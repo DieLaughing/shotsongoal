@@ -155,6 +155,7 @@ Everything is in `.env`. `.env.example` explains each line.
 | `SOG_ACCESS_TEAM`, `SOG_ACCESS_AUD` | Cloudflare Access team domain and the app's AUD tag |
 | `SOG_LOCAL_EMAIL` | Home-network mode: no sign-in, everyone is this person |
 | `NTFY_URL`, `NTFY_TOKEN`, `SOG_NTFY_TOPIC` | Approval pushes and reports (optional) |
+| `SOG_GITHUB_TOKEN`, `SOG_GITHUB_REPO` | In-app bug reports filed as GitHub issues (optional; see `.env.example`) |
 | `TUNNEL_TOKEN` | Cloudflare Tunnel token (with `--profile tunnel`) |
 | `TZ` | Server time zone (logs) |
 | `SOG_DEFAULT_LOCAL` | Home-market team(s) new people start with, e.g. `BOS` for a New England group |

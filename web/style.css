@@ -283,3 +283,12 @@ body.league-pwhl { --accent: #163F36; --fav: #163F36; --on-accent: #fff; }
 .change-head .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 .change-text { color: var(--muted); font-size: 14px; margin-top: 4px; }
 .change-link { display: inline-block; margin-top: 6px; font-size: 13px; font-weight: 650; color: var(--info-fg); text-decoration: none; }
+
+/* bug reports */
+.foot { max-width: 760px; margin: 0 auto; padding: 0 16px 24px; text-align: center; font-size: 13px; }
+.foot a { color: var(--muted); }
+.bugtext { width: 100%; box-sizing: border-box; resize: vertical; font-size: 15px; line-height: 1.4; }
+.report-row { display: flex; flex-direction: column; gap: 4px; padding: 11px 14px; border-top: 1px solid var(--border); text-decoration: none; color: inherit; }
+.report-row:first-child { border-top: 0; }
+.report-head { display: flex; gap: 8px; align-items: baseline; }
+.report-reply { padding: 6px 10px; border-left: 3px solid var(--border); color: var(--text); }

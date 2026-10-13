@@ -33,6 +33,10 @@ which is not committed.
   the pollers. Local runs and home-network installs only.
 
 ## Features
+- Bug reports (#/report, footer link on every page, Settings > Your reports): sog/bugs.py files anonymous GitHub
+  issues (labels from-app + bug|enhancement; @mentions broken; page/device/version table) with SOG_GITHUB_TOKEN
+  (fine-grained, Issues read/write); bug_report table keeps who sent what; /api/bugs refreshes state + the
+  owner's latest comment every 10 min. 5 a day per person. No token = GitHub's prefilled new-issue link.
 - Settings (web/app.js settingsView) save on every change (saveSettings: optimistic, queued PUTs of the whole settings
   object, toast). Team pickers group NHL teams by sog/teams.py DIVISIONS. Home market = one team (local is a list server-side).
 - Phase 1: access, Tonight, Game, Standings, Teams, Settings, where-to-watch (service links; ESPN+ also links Hulu,
