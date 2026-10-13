@@ -16,6 +16,8 @@ from .db import Store, parse_iso
 
 log = logging.getLogger("sog.feed")
 
+STALE_OK = timedelta(days=1)          # an expired saved copy this young is shown while a fresh one loads
+GAME_STALE_OK = timedelta(minutes=1)  # game pages: never more than a refresh or two behind
 LIVE_POLL = 10            # seconds between score refreshes while a game is on (or about to start)
 IDLE_POLL = 300           # ... and otherwise
 DETAIL_POLL = 20          # a live game's page, only while someone has looked at it recently
@@ -49,6 +51,7 @@ class Feed:
         self.locks: dict[str, asyncio.Lock] = {}
         self.viewed: dict[int, float] = {}   # game id -> last time someone opened its page
         self.today: str | None = None
+        self.refreshing: dict[str, asyncio.Task] = {}  # background refreshes in flight, one per key
         self.alerts = None                   # set by the app: told about every scoreboard and Wire refresh
 
     async def _fetch(self, key: str, source: str, fetch, ttl) -> dict | list:
@@ -70,11 +73,29 @@ class Feed:
             self.store.record_run(source, True)
             return data
 
-    async def cached(self, key: str, source: str, fetch, ttl) -> dict | list:
+    async def cached(self, key: str, source: str, fetch, ttl, stale_ok: timedelta = STALE_OK) -> dict | list:
+        """The saved copy. An expired copy younger than stale_ok is returned straight away and refreshed in the
+        background, so a page never waits on the leagues unless nothing usable is saved."""
         hit = self.store.get(key)
         if hit and hit["fresh"]:
             return hit["data"]
+        if hit and _age(hit["fetched"]) < stale_ok:
+            self.refresh_later(key, lambda: self._fetch(key, source, fetch, ttl))
+            return hit["data"]
         return await self._fetch(key, source, fetch, ttl)
+
+    def refresh_later(self, key: str, make) -> None:
+        if key in self.refreshing:
+            return
+
+        async def run():
+            try:
+                await make()
+            except Exception as exc:  # _fetch already logged it; keep the saved copy
+                log.debug("background refresh of %s failed: %r", key, exc)
+            finally:
+                self.refreshing.pop(key, None)
+        self.refreshing[key] = asyncio.create_task(run())
 
     # ---- what pages ask for -------------------------------------------------------
     def opening_day(self) -> str:
@@ -107,16 +128,22 @@ class Feed:
                                       None if isinstance(box, Exception) else box)
             plays = {"shots": [], "situation": None} if isinstance(pbp, Exception) else nhl.parse_pbp(pbp)
             return {**detail, "shotmap": plays["shots"], "situation": plays["situation"], "recap": nhl.recap(detail)}
-        return await self.cached(f"game:{game_id}", "game", fetch, _game_ttl)
+        return await self.cached(f"game:{game_id}", "game", fetch, _game_ttl, stale_ok=GAME_STALE_OK)
 
     async def standings(self) -> list:
         async def fetch():
             return nhl.parse_standings(await nhl.get("standings/now"))
         return await self.cached("standings", "standings", fetch, STANDINGS_TTL)
 
-    async def team(self, abbr: str) -> dict:
+    async def team_schedule(self, abbr: str) -> list[dict]:
+        if abbr.startswith(pwhl.PREFIX):
+            return [g for g in await self.pwhl_games() if abbr in (g["away"]["abbr"], g["home"]["abbr"])]
+
         async def schedule():
             return nhl.parse_club_schedule(await nhl.get(f"club-schedule-season/{abbr}/now"))
+        return await self.cached(f"team:{abbr}:schedule", "team", schedule, timedelta(minutes=30))
+
+    async def team(self, abbr: str) -> dict:
 
         async def roster():
             return nhl.parse_roster(await nhl.get(f"roster/{abbr}/current"))
@@ -125,7 +152,7 @@ class Feed:
             return nhl.parse_club_stats(await nhl.get(f"club-stats/{abbr}/now"))
 
         sched, rost, st = await asyncio.gather(
-            self.cached(f"team:{abbr}:schedule", "team", schedule, timedelta(minutes=30)),
+            self.team_schedule(abbr),
             self.cached(f"team:{abbr}:roster", "team", roster, timedelta(hours=12)),
             self.cached(f"team:{abbr}:stats", "team", stats, timedelta(hours=1)),
             return_exceptions=True)
@@ -264,6 +291,16 @@ class Feed:
         return day
 
     # ---- pollers --------------------------------------------------------------------
+    async def today_page(self) -> dict:
+        """Today's scoreboard for a page: the saved copy (the poller keeps it within seconds while games are on),
+        refreshed in the background when it has expired."""
+        hit = self.store.get("score:now")
+        if hit and _age(hit["fetched"]) < STALE_OK:
+            if not hit["fresh"]:
+                self.refresh_later("score:now", self.poll_today)
+            return hit["data"]
+        return await self.poll_today()
+
     async def poll_today(self) -> dict:
         """Refresh today's scoreboard (the NHL's own 'now', in Eastern time)."""
         async def fetch():
@@ -369,6 +406,13 @@ def _day_ttl(day: dict, date: str) -> timedelta | None:
     if any(g["state"] == "live" for g in games):
         return timedelta(seconds=LIVE_POLL * 3)
     return timedelta(minutes=10 if date <= today else 60)
+
+
+def _age(fetched: str | None) -> timedelta:
+    try:
+        return datetime.now(timezone.utc) - parse_iso(fetched)
+    except (TypeError, ValueError):
+        return timedelta.max
 
 
 def _game_ttl(detail: dict) -> timedelta | None:

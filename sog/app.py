@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import secrets
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -28,6 +29,8 @@ ABBR = re.compile(r"^(PW-)?[A-Z]{2,3}$")  # NHL "BOS", PWHL "PW-BOS"
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 REREQUEST_AFTER = timedelta(days=7)    # a denied or revoked person may ask again after this
 RENOTIFY_AFTER = timedelta(hours=12)   # pressing Request twice doesn't ping the phone twice
+SLOW = 0.5                             # seconds: API requests slower than this are logged
+log = logging.getLogger("sog.app")
 
 store = Store(DATA_DIR / "sog.db")
 bugs.init(store.conn)
@@ -100,7 +103,11 @@ async def gate(request: Request, call_next):
             return JSONResponse({"error": "not approved"}, status_code=403)
         if path.startswith("/api/admin") and not access.is_admin(email):
             return JSONResponse({"error": "admin only"}, status_code=403)
+    started = time.perf_counter()
     response = await call_next(request)
+    took = time.perf_counter() - started
+    if path.startswith("/api/") and took > SLOW:
+        log.warning("slow request: %s %s %.0f ms", request.method, path, took * 1000)
     if not path.startswith("/api/"):
         # Without this, Cloudflare caches .js/.css for hours and new versions don't show up.
         response.headers.setdefault("Cache-Control", "no-cache")
@@ -427,7 +434,7 @@ async def games(request: Request, date: str | None = None, league: str = "nhl"):
         return {**day, "games": _with_watchers(_with_watch([dict(g) for g in day["games"]], _settings(request)), request)}
     # No date = today in Eastern time (last night's games until 6 am); see feed.slate_date.
     target = date or feed.opening_day()
-    day = await _upstream(feed.poll_today() if target == feed.today else feed.day(target))
+    day = await _upstream(feed.today_page() if target == feed.today else feed.day(target))
     return {**day, "games": _with_watchers(_with_watch([dict(g) for g in day["games"]], _settings(request)), request)}
 
 
@@ -475,10 +482,10 @@ async def my_teams(request: Request):
     async def one(abbr: str, rows: list[dict]) -> dict | None:
         lg = teams.league_of(abbr)
         try:
-            data = await (feed.pwhl_team(abbr) if lg == "pwhl" else feed.team(abbr))
+            schedule = await feed.team_schedule(abbr)  # schedule only: the card needs no roster or stats
         except Exception:
             return None
-        sched = [dict(g) for g in data["schedule"] if g.get("type") in (2, 3)] or [dict(g) for g in data["schedule"]]
+        sched = [dict(g) for g in schedule if g.get("type") in (2, 3)] or [dict(g) for g in schedule]
         card = home.team_summary(abbr, sched, rows, today, lg)
         if card["next"]:
             _with_watch([card["next"]], s)
@@ -495,7 +502,7 @@ async def my_teams(request: Request):
 async def _slate(league: str, date: str) -> dict:
     if league == "pwhl":
         return await feed.pwhl_day(date)
-    return await (feed.poll_today() if date == feed.today else feed.day(date))
+    return await (feed.today_page() if date == feed.today else feed.day(date))
 
 
 async def _game_from(body: dict) -> dict:
@@ -527,6 +534,31 @@ async def react_save(request: Request):
     except ValueError as exc:
         raise HTTPException(409, str(exc))
     return {"ok": True}
+
+
+@app.get("/api/hidden")
+async def hidden_games(request: Request):
+    """Games spoiler-free is hiding for this person right now (today's and the previous slate, both leagues), so
+    Wire, League and team pages can cover what would give them away. One call instead of four from the page."""
+    sp = _settings(request)["spoilers"]
+    if not sp["teams"] and not sp["games"]:
+        return {"games": []}
+    today = feed.opening_day()
+    found = []
+    for lg in ("nhl", "pwhl"):
+        try:
+            day = await _slate(lg, today)
+            prev = await _slate(lg, day["prev"]) if day.get("prev") and day["prev"] >= _day_before(today) else {"games": []}
+        except Exception:
+            continue
+        found += [dict(g, league=lg) for g in day["games"] + prev["games"] if spoilers.hidden(dict(g, league=lg), sp, today)]
+    keep = ("id", "league", "date", "start", "state")
+    return {"games": [{**{k: g.get(k) for k in keep}, "away": {"abbr": g["away"]["abbr"]}, "home": {"abbr": g["home"]["abbr"]}}
+                      for g in found]}
+
+
+def _day_before(day: str) -> str:
+    return (datetime.fromisoformat(day) - timedelta(days=1)).date().isoformat()
 
 
 @app.get("/api/pickem")
