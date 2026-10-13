@@ -153,7 +153,7 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .rxc { font: inherit; font-size: 12.5px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg);
   color: var(--text); cursor: pointer; font-variant-numeric: tabular-nums; }
 .rxc.mine { border-color: var(--accent); }
-.rxc.add { color: var(--muted); border-color: transparent; background: none; padding: 3px 4px; text-decoration: underline; text-underline-offset: 2px; }
+.rxc.add { color: var(--text); background: var(--surface); font-weight: 600; }
 .rxc.pick { font-size: 15px; padding: 2px 7px; }
 
 /* consolidated layout */
