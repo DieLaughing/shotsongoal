@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from . import nhl, pwhl, wire
+from .teams import TEAMS as NHL_TEAMS
 from .db import Store, parse_iso
 
 log = logging.getLogger("sog.feed")
@@ -20,6 +21,9 @@ STALE_OK = timedelta(days=1)          # an expired saved copy this young is show
 GAME_STALE_OK = timedelta(minutes=1)
 CAREER_TTL = timedelta(hours=20)      # milestone watch: career totals, about once a day
 CAREER_POLL = 1800                    # seconds between checks that careers are saved
+WARM_LIVE_POLL = 90                   # seconds between refreshes of live games nobody is watching or follows
+WARM_PER_PASS = 4                     # background loads per poll pass when no game is on (passes every 30 s)
+WARM_PER_PASS_BUSY = 1                # ... and while games are on (passes every 10 s)
 FIGHT_POLL = 60                       # seconds between fight checks of live games someone wants fight alerts for  # game pages: never more than a refresh or two behind
 LIVE_POLL = 10            # seconds between score refreshes while a game is on (or about to start)
 IDLE_POLL = 300           # ... and otherwise
@@ -119,19 +123,21 @@ class Feed:
         return await self._load_game(game_id)
 
     async def _load_game(self, game_id: int) -> dict:
-        async def fetch():
-            landing, rail, box, pbp = await asyncio.gather(
-                nhl.get(f"gamecenter/{game_id}/landing"),
-                nhl.get(f"gamecenter/{game_id}/right-rail"),
-                nhl.get(f"gamecenter/{game_id}/boxscore"),
-                nhl.get(f"gamecenter/{game_id}/play-by-play"), return_exceptions=True)
-            if isinstance(landing, Exception):
-                raise landing
-            detail = nhl.parse_detail(landing, None if isinstance(rail, Exception) else rail,
-                                      None if isinstance(box, Exception) else box)
-            plays = {"shots": [], "situation": None} if isinstance(pbp, Exception) else nhl.parse_pbp(pbp)
-            return {**detail, "shotmap": plays["shots"], "situation": plays["situation"], "recap": nhl.recap(detail)}
-        return await self.cached(f"game:{game_id}", "game", fetch, _game_ttl, stale_ok=_game_stale_ok)
+        return await self.cached(f"game:{game_id}", "game", lambda: self._game_fetch(game_id), _game_ttl,
+                                 stale_ok=_game_stale_ok)
+
+    async def _game_fetch(self, game_id: int) -> dict:
+        landing, rail, box, pbp = await asyncio.gather(
+            nhl.get(f"gamecenter/{game_id}/landing"),
+            nhl.get(f"gamecenter/{game_id}/right-rail"),
+            nhl.get(f"gamecenter/{game_id}/boxscore"),
+            nhl.get(f"gamecenter/{game_id}/play-by-play"), return_exceptions=True)
+        if isinstance(landing, Exception):
+            raise landing
+        detail = nhl.parse_detail(landing, None if isinstance(rail, Exception) else rail,
+                                  None if isinstance(box, Exception) else box)
+        plays = {"shots": [], "situation": None} if isinstance(pbp, Exception) else nhl.parse_pbp(pbp)
+        return {**detail, "shotmap": plays["shots"], "situation": plays["situation"], "recap": nhl.recap(detail)}
 
     async def standings(self) -> list:
         async def fetch():
@@ -387,11 +393,14 @@ class Feed:
                                     await self.alerts.on_fights(g, nhl.parse_detail(landing, None, None)["penalties"])
                                 except Exception as exc:
                                     log.warning("fight check %s failed: %r", g["id"], exc)
-                    # Live game pages that someone is watching.
+                    # Live game pages are kept warm whether or not anyone is looking: games someone is watching or
+                    # a favourite team plays in every DETAIL_POLL, every other live game every WARM_LIVE_POLL.
+                    favs = self.favourite_teams()
                     for g in day.get("games", []):
                         gid = g["id"]
-                        watched = now - self.viewed.get(gid, 0) < VIEW_WINDOW
-                        if g["state"] == "live" and watched and now - last_detail.get(gid, 0) >= DETAIL_POLL:
+                        hot = now - self.viewed.get(gid, 0) < VIEW_WINDOW or favs & {g["away"]["abbr"], g["home"]["abbr"]}
+                        every = DETAIL_POLL if hot else WARM_LIVE_POLL
+                        if g["state"] == "live" and now - last_detail.get(gid, 0) >= every:
                             last_detail[gid] = now
                             await self._refresh_game(gid)
                 pw = self.store.get("pwhl:games")
@@ -407,6 +416,7 @@ class Feed:
                     items = await self.wire()
                     if self.alerts:
                         await self.alerts.on_wire(items)
+                await self.warm(busy)
                 if now - last_career >= CAREER_POLL:
                     last_career = now
                     favs = {t for u in self.store.users() if u["status"] == "approved"
@@ -418,6 +428,54 @@ class Feed:
             except Exception:
                 log.exception("poll loop error")
             await asyncio.sleep(LIVE_POLL if busy else 30)
+
+    def favourite_teams(self) -> set[str]:
+        return {t for u in self.store.users() if u["status"] == "approved"
+                for t in (u["settings"] or {}).get("favorites") or []}
+
+    async def warm(self, busy: bool) -> None:
+        """A little background loading each pass, so pages never wait on a cold copy: today's and yesterday's game
+        pages that aren't live, then every NHL team's schedule, roster and stats (favourites first). A few items
+        per pass, and only those missing or expired, so the leagues see a slow, steady trickle."""
+        budget = WARM_PER_PASS_BUSY if busy else WARM_PER_PASS
+        favs = self.favourite_teams()
+        games = []
+        if today := self.store.get("score:now"):
+            games += today["data"].get("games", [])
+            prev = today["data"].get("prev")
+            if prev and (before := self.store.get(f"score:{prev}")):
+                games += before["data"].get("games", [])
+        games.sort(key=lambda g: not (favs & {g["away"]["abbr"], g["home"]["abbr"]}))  # favourites first
+        for g in games:
+            if budget <= 0:
+                return
+            if g["state"] in ("pre", "final"):
+                hit = self.store.get(f"game:{g['id']}")
+                if not hit or not hit["fresh"]:
+                    budget -= 1
+                    try:
+                        await self._fetch(f"game:{g['id']}", "game", lambda gid=g["id"]: self._game_fetch(gid), _game_ttl)
+                    except Exception:
+                        pass
+        for abbr in sorted(t for t in favs if t.startswith(pwhl.PREFIX)):  # favourite PWHL teams' pages
+            code = abbr.removeprefix(pwhl.PREFIX)
+            if budget > 0 and any(not (h := self.store.get(f"pwhl:team:{code}:{k}")) or not h["fresh"] for k in ("roster", "stats")):
+                budget -= 1
+                try:
+                    await self.pwhl_team(abbr)
+                except Exception:
+                    pass
+        for abbr in sorted(NHL_TEAMS, key=lambda t: (t not in favs, t)):
+            if budget <= 0:
+                return
+            stale = [k for k in (f"team:{abbr}:schedule", f"team:{abbr}:roster", f"team:{abbr}:stats")
+                     if not (h := self.store.get(k)) or not h["fresh"]]
+            if stale:
+                budget -= 1
+                try:
+                    await self.team(abbr)
+                except Exception:
+                    pass
 
     async def _refresh_game(self, gid: int) -> None:
         key = f"game:{gid}"

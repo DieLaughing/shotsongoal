@@ -49,6 +49,11 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": 
 const PI_DOWN = status => [502, 503, 504, 520, 521, 522, 523, 524, 530].includes(status);
 const goOffline = () => location.replace(`/offline.html?back=${encodeURIComponent(location.href)}`);
 
+// The phone's own copy of every page's data (path -> {at, data}). Tabs open from it instantly and refresh behind
+// the scenes; anything that changes data (a pick, a setting, a reaction) clears it so nothing old shows.
+const GET_CACHE = new Map();
+const SHOW_COPY_FOR = 30 * 60000;   // older copies wait for fresh data instead
+
 async function api(path, opts = {}) {
   const r = await fetch(path, { headers: { Accept: "application/json", "Content-Type": "application/json" }, ...opts });
   if (PI_DOWN(r.status)) goOffline();
@@ -58,7 +63,38 @@ async function api(path, opts = {}) {
     try { err.detail = (await r.json()).detail; } catch { /* not JSON */ }
     throw err;
   }
-  return r.json();
+  const data = await r.json();
+  if (!opts.method || opts.method === "GET") GET_CACHE.set(path, { at: Date.now(), data });
+  else GET_CACHE.clear();
+  return data;
+}
+
+// A page's data, fast: the phone's copy straight away (then `rerender` once if the fresh data differs), or the
+// network when there's no usable copy. `quiet` (the auto-refresh) always waits for fresh data.
+function fast(path, rerender, quiet = false) {
+  const hit = GET_CACHE.get(path), age = hit ? Date.now() - hit.at : Infinity;
+  if (age < 3000) return Promise.resolve(hit.data);            // just fetched (this is the re-render)
+  if (quiet || age > SHOW_COPY_FOR) return api(path);
+  const route = location.hash;
+  api(path).then(d => { if (location.hash === route && JSON.stringify(d) !== JSON.stringify(hit.data)) rerender(); }).catch(() => {});
+  return Promise.resolve(hit.data);
+}
+
+// After the app opens: load the other tabs and your teams' pages in the background, a few at a time, so every
+// tab after the first opens from the phone's copy.
+async function prefetch() {
+  if (ME?.status !== "approved") return;
+  const leagues = LEAGUE === "both" ? ["nhl", "pwhl"] : [LEAGUE];
+  let wire = { kind: "", mine: false };
+  try { wire = { ...wire, ...JSON.parse(localStorage.getItem("wire") || "{}") }; } catch { /* defaults */ }
+  const paths = [`/api/pickem?leagues=${leagues.join(",")}`,
+    ...leagues.map(l => `/api/wire?league=${l}&kind=${wire.kind}&mine=${wire.mine ? 1 : 0}`),
+    ...(ME.settings.favorites || []).map(a => `/api/team/${encodeURIComponent(a)}`)];
+  standings(pageLeague()).catch(() => {});
+  for (const path of paths) {
+    if (document.hidden) return;
+    if (!GET_CACHE.has(path)) await api(path).catch(() => {});
+  }
 }
 
 const favs = () => new Set(ME?.settings?.favorites || []);
@@ -209,9 +245,19 @@ function autoRefresh(fn, seconds) {
 const failed = e => `<div class="notice error">${esc(e.detail || "Couldn't load that. The NHL's data may be down; try again in a minute.")}</div>`;
 
 async function standings(league = "nhl") {
-  // Keeps the request itself, so two callers at once share one fetch; a failure isn't remembered.
-  STANDINGS[league] ||= api(`/api/standings?league=${league}`).catch(e => { delete STANDINGS[league]; throw e; });
-  return STANDINGS[league];
+  // One request shared by everyone asking at once; after 10 minutes the copy refreshes in the background.
+  const hit = STANDINGS[league];
+  const load = () => api(`/api/standings?league=${league}`);
+  if (!hit) {
+    const p = load().catch(e => { delete STANDINGS[league]; throw e; });
+    STANDINGS[league] = { at: Date.now(), p };
+    return p;
+  }
+  if (Date.now() - hit.at > 10 * 60000 && !hit.busy) {
+    hit.busy = true;
+    load().then(d => { STANDINGS[league] = { at: Date.now(), p: Promise.resolve(d) }; }).catch(() => { hit.busy = false; });
+  }
+  return hit.p;
 }
 
 function leaguePicker(current) {
@@ -410,9 +456,10 @@ async function tonightView(date, quiet = false) {
   try {
     // Both leagues: the NHL's date leads, so the PWHL slate is for the same day.
     const mine = date ? null : loadMyTeams();
-    const first = await api(`/api/games?league=${leagues[0]}${date ? `&date=${encodeURIComponent(date)}` : ""}`);
+    const again = () => tonightView(date, true);
+    const first = await fast(`/api/games?league=${leagues[0]}${date ? `&date=${encodeURIComponent(date)}` : ""}`, again, quiet);
     days = [first];
-    if (leagues[1]) days.push(await api(`/api/games?league=${leagues[1]}&date=${encodeURIComponent(date || first.date)}`));
+    if (leagues[1]) days.push(await fast(`/api/games?league=${leagues[1]}&date=${encodeURIComponent(date || first.date)}`, again, quiet));
     mineData = await mine;
   } catch (e) {
     view.innerHTML = failed(e);
@@ -474,7 +521,7 @@ async function pickemView(date, quiet = false) {
   let d, hidden;
   try {
     [d, hidden] = await Promise.all([
-      api(`/api/pickem?leagues=${leagues.join(",")}${date ? `&date=${encodeURIComponent(date)}` : ""}`),
+      fast(`/api/pickem?leagues=${leagues.join(",")}${date ? `&date=${encodeURIComponent(date)}` : ""}`, () => pickemView(date, true), quiet),
       hiddenToday().catch(() => [])]);
   } catch (e) { view.innerHTML = failed(e); return; }
   const code = abbr => TEAMS[abbr]?.code || abbr;
@@ -626,7 +673,7 @@ async function gameView(id, quiet = false, league = "nhl") {
   if (!quiet) showLoading(`Loading game…`);
   let d;
   const path = league === "pwhl" ? `/api/pwhl/game/${encodeURIComponent(id)}` : `/api/game/${encodeURIComponent(id)}`;
-  try { d = await api(path); } catch (e) { view.innerHTML = failed(e); return; }
+  try { d = await fast(path, () => gameView(id, true, league), quiet); } catch (e) { view.innerHTML = failed(e); return; }
   const g = d.game, a = g.away.abbr, h = g.home.abbr;
   if (league === "pwhl") g.league = "pwhl";
   if (spoilerHidden(g)) {
@@ -810,7 +857,7 @@ async function wireView(quiet = false) {
   let lists, hidden;
   try {
     [hidden, ...lists] = await Promise.all([hiddenToday().catch(() => []),
-      ...leagues.map(l => api(`/api/wire?league=${l}&kind=${state.kind}&mine=${state.mine ? 1 : 0}`))]);
+      ...leagues.map(l => fast(`/api/wire?league=${l}&kind=${state.kind}&mine=${state.mine ? 1 : 0}`, () => wireView(true), quiet))]);
   } catch (e) { view.innerHTML = failed(e); return; }
   const fav = favs();
   const block = (items, l) => (leagues.length > 1 ? `<div class="league-head ${l}">${LEAGUE_NAME[l]}</div>` : "") +
@@ -1000,7 +1047,7 @@ async function teamView(abbr) {
   showLoading(`Loading ${esc(fullName(abbr))}…`);
   let d, rows = [];
   let hidden = [];
-  try { [d, rows, hidden] = await Promise.all([api(`/api/team/${encodeURIComponent(abbr)}`), standings(leagueOf(abbr)).catch(() => []), hiddenToday().catch(() => [])]); }
+  try { [d, rows, hidden] = await Promise.all([fast(`/api/team/${encodeURIComponent(abbr)}`, () => teamView(abbr)), standings(leagueOf(abbr)).catch(() => []), hiddenToday().catch(() => [])]); }
   catch (e) { view.innerHTML = failed(e); return; }
   const hid = hidden.filter(g => g.state === "final" && (g.away.abbr === abbr || g.home.abbr === abbr));
   if (hid.length) { view.innerHTML = `<div style="margin-top:12px">${spoilCover(hid, `The ${teamName(abbr)} page`)}</div>`; return; }
@@ -1488,6 +1535,7 @@ async function start() {
     if (hiddenAt && Date.now() - hiddenAt > 5 * 60000) route();
   });
   route();
+  setTimeout(prefetch, 2500);  // the other tabs, quietly, once the first page is up
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
 
