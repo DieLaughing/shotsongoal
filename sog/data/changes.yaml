@@ -4,6 +4,12 @@
 # and `.venv/bin/python tools/release.py` publishes the day's GitHub Release.
 
 - date: 2026-10-13
+  kind: fixed
+  title: Faster tabs again
+  text: Switching tabs had slowed to a second or more, mostly for anyone not on the home network. Pages now show the latest saved data straight away and refresh it behind the scenes, the team cards load less, and spoiler-free checks no longer hold pages up. Most tabs should feel instant again.
+  link: "#/"
+
+- date: 2026-10-13
   kind: improved
   title: A tidier app
   text: Less scrolling, same features. The tabs are now Tonight, Pick'em, Wire and League (standings plus your teams; tap any team for its page). Tonight doesn't list your teams' games twice, game cards are shorter (tickets and the blackout details live on the game page), and only one tip shows at a time. Game pages lead with the scoring and shot map, with team stats, penalties and players under "More stats". Settings is grouped into You, Alerts & spoilers, and More, with What's new right at the top.

@@ -143,20 +143,13 @@ function spoilerAction(action, k) {
   hiddenCache = { at: 0, list: [] };
   route();
 }
-// Today's hidden games, for pages that don't load the slate themselves (Wire, Standings, team pages).
+// Today's hidden games, for pages that don't load the slate themselves (Wire, League, team pages): one request,
+// skipped entirely when spoiler-free isn't in use, and run alongside the page's own request.
 let hiddenCache = { at: 0, list: [] };
 async function hiddenToday() {
   const sp = spoilers();
   if (!sp.teams.length && !sp.games.length) return [];
-  if (Date.now() - hiddenCache.at < 60000) return hiddenCache.list.filter(spoilerHidden);
-  // Today's slate and the one before it (a game stays hidden through the next day).
-  const slate = async l => {
-    const d = await api(`/api/games?league=${l}`).catch(() => ({ games: [] }));
-    const before = d.prev && d.prev >= isoDay(-1) ? await api(`/api/games?league=${l}&date=${d.prev}`).catch(() => ({ games: [] })) : { games: [] };
-    return [...(d.games || []), ...(before.games || [])];
-  };
-  const days = (await Promise.all(["nhl", "pwhl"].map(slate))).map(games => ({ games }));
-  hiddenCache = { at: Date.now(), list: days.flatMap(d => d.games || []).filter(spoilerMarked) };
+  if (Date.now() - hiddenCache.at > 60000) hiddenCache = { at: Date.now(), list: (await api("/api/hidden")).games };
   return hiddenCache.list.filter(spoilerHidden);
 }
 // A whole page that would give a hidden result away (standings, a team's page).
@@ -198,6 +191,12 @@ function cardWatch(w, g) {
   return `<div class="watch">${name}${have}</div>`;
 }
 
+// "Loading…" only when a page takes a moment: fast loads swap straight from the old page to the new one, no flash.
+function showLoading(text) {
+  const before = view.firstElementChild;
+  setTimeout(() => { if (view.firstElementChild === before) view.innerHTML = `<div class="empty">${text}</div>`; }, 350);
+}
+
 function setNav(name) {
   document.querySelectorAll("[data-nav]").forEach(a => a.classList.toggle("active", a.dataset.nav === name));
 }
@@ -210,7 +209,8 @@ function autoRefresh(fn, seconds) {
 const failed = e => `<div class="notice error">${esc(e.detail || "Couldn't load that. The NHL's data may be down; try again in a minute.")}</div>`;
 
 async function standings(league = "nhl") {
-  if (!STANDINGS[league]) STANDINGS[league] = await api(`/api/standings?league=${league}`);
+  // Keeps the request itself, so two callers at once share one fetch; a failure isn't remembered.
+  STANDINGS[league] ||= api(`/api/standings?league=${league}`).catch(e => { delete STANDINGS[league]; throw e; });
   return STANDINGS[league];
 }
 
@@ -403,7 +403,7 @@ function heroes(data, leagues, slateGames) {
 
 async function tonightView(date, quiet = false) {
   setNav("tonight");
-  if (!quiet) view.innerHTML = `<div class="empty">Loading games…</div>`;
+  if (!quiet) showLoading(`Loading games…`);
   const leagues = LEAGUE === "both" ? ["nhl", "pwhl"] : [LEAGUE];
   let days, mineData = null;
   try {
@@ -463,7 +463,7 @@ async function tonightView(date, quiet = false) {
 // Friends' picks show once a game starts. Scores follow spoiler-free like everywhere else.
 async function pickemView(date, quiet = false) {
   setNav("picks");
-  if (!quiet) view.innerHTML = `<div class="empty">Loading Pick'em…</div>`;
+  if (!quiet) showLoading(`Loading Pick'em…`);
   const leagues = LEAGUE === "both" ? ["nhl", "pwhl"] : [LEAGUE];
   let d, hidden;
   try {
@@ -617,7 +617,7 @@ function compareRow(label, a, h, ac, hc) {
 let moreStatsOpen = false;  // stays open across the live refresh
 async function gameView(id, quiet = false, league = "nhl") {
   setNav("tonight");
-  if (!quiet) view.innerHTML = `<div class="empty">Loading game…</div>`;
+  if (!quiet) showLoading(`Loading game…`);
   let d;
   const path = league === "pwhl" ? `/api/pwhl/game/${encodeURIComponent(id)}` : `/api/game/${encodeURIComponent(id)}`;
   try { d = await api(path); } catch (e) { view.innerHTML = failed(e); return; }
@@ -799,13 +799,13 @@ async function wireView(quiet = false) {
   setNav("wire");
   let state = { kind: "", mine: false };
   try { state = { ...state, ...JSON.parse(localStorage.getItem("wire") || "{}") }; } catch { /* defaults */ }
-  if (!quiet) view.innerHTML = `<div class="empty">Loading the Wire…</div>`;
+  if (!quiet) showLoading(`Loading the Wire…`);
   const leagues = LEAGUE === "both" ? ["nhl", "pwhl"] : [LEAGUE];
-  let lists;
+  let lists, hidden;
   try {
-    lists = await Promise.all(leagues.map(l => api(`/api/wire?league=${l}&kind=${state.kind}&mine=${state.mine ? 1 : 0}`)));
+    [hidden, ...lists] = await Promise.all([hiddenToday().catch(() => []),
+      ...leagues.map(l => api(`/api/wire?league=${l}&kind=${state.kind}&mine=${state.mine ? 1 : 0}`))]);
   } catch (e) { view.innerHTML = failed(e); return; }
-  const hidden = await hiddenToday().catch(() => []);
   const fav = favs();
   const block = (items, l) => (leagues.length > 1 ? `<div class="league-head ${l}">${LEAGUE_NAME[l]}</div>` : "") +
     (items.length ? `<div class="card">${items.slice(0, leagues.length > 1 ? 40 : 150).map(i => wireItem(i, fav, hidden)).join("")}</div>`
@@ -893,8 +893,9 @@ function yourTeamTiles(lg) {
 
 async function standingsView(mode = "division") {
   setNav("league");
-  view.innerHTML = `<div class="empty">Loading standings…</div>`;
+  showLoading(`Loading standings…`);
   const lg = pageLeague();
+  standings(lg).catch(() => null);  // start loading the table while the spoiler check runs
   const hid = (await hiddenToday().catch(() => [])).filter(g => g.state === "final" && leagueOf(g.home.abbr) === lg);
   if (hid.length) {
     view.innerHTML = leaguePicker(lg) + spoilCover(hid, "These standings", "include");
@@ -943,11 +944,11 @@ async function standingsView(mode = "division") {
 
 async function teamView(abbr) {
   setNav("league");
-  view.innerHTML = `<div class="empty">Loading ${esc(fullName(abbr))}…</div>`;
+  showLoading(`Loading ${esc(fullName(abbr))}…`);
   let d, rows = [];
-  try { [d, rows] = await Promise.all([api(`/api/team/${encodeURIComponent(abbr)}`), standings(leagueOf(abbr)).catch(() => [])]); }
+  let hidden = [];
+  try { [d, rows, hidden] = await Promise.all([api(`/api/team/${encodeURIComponent(abbr)}`), standings(leagueOf(abbr)).catch(() => []), hiddenToday().catch(() => [])]); }
   catch (e) { view.innerHTML = failed(e); return; }
-  const hidden = await hiddenToday().catch(() => []);
   const hid = hidden.filter(g => g.state === "final" && (g.away.abbr === abbr || g.home.abbr === abbr));
   if (hid.length) { view.innerHTML = `<div style="margin-top:12px">${spoilCover(hid, `The ${teamName(abbr)} page`)}</div>`; return; }
   const st = rows.find(r => r.abbr === abbr);

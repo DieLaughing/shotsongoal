@@ -546,3 +546,28 @@ def test_slate_date_keeps_last_night_until_6am_eastern():
     assert slate_date(datetime(2026, 10, 13, 15, 14, tzinfo=timezone.utc)) == "2026-10-13"  # 11:14 am ET
     assert slate_date(datetime(2026, 10, 14, 5, 30, tzinfo=timezone.utc)) == "2026-10-13"   # 1:30 am ET
     assert slate_date(datetime(2026, 10, 14, 10, 5, tzinfo=timezone.utc)) == "2026-10-14"   # 6:05 am ET
+
+
+def test_expired_copy_is_served_while_it_refreshes(tmp_path):
+    import asyncio
+    from datetime import timedelta
+    from sog.db import Store
+    from sog.feed import Feed
+    feed = Feed(Store(tmp_path / "c.db"))
+    feed.store.put("k", {"v": "old"}, timedelta(seconds=-1))   # expired a moment ago
+    calls = []
+
+    async def fetch():
+        calls.append(1)
+        await asyncio.sleep(0.01)
+        return {"v": "new"}
+
+    async def run():
+        first = await feed.cached("k", "test", fetch, timedelta(minutes=5))
+        again = await feed.cached("k", "test", fetch, timedelta(minutes=5))  # refresh already running: no second fetch
+        await asyncio.sleep(0.05)
+        return first, again, await feed.cached("k", "test", fetch, timedelta(minutes=5))
+    first, again, later = asyncio.run(run())
+    assert first == again == {"v": "old"} and later == {"v": "new"} and calls == [1]
+    # Nothing saved at all: the page has to wait for the fetch.
+    assert asyncio.run(feed.cached("none", "test", fetch, timedelta(minutes=5))) == {"v": "new"}
