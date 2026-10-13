@@ -46,6 +46,11 @@ which is not committed.
   mirrored by spoilerHidden() in web/app.js. Started games from today/yesterday only. Hidden = no score on cards/hero,
   game page cover, Standings/team page covered when a hidden game is final, Wire items about it after puck drop
   blurred; alerts.py skips goal/final pushes (puck drop still sent). hiddenToday() loads today's + previous slate.
+- Pick'em (#/picks, sog/picks.py, pick table): one pick per person per game before its start (server checks the
+  slate's state/start), one lock per date (2 pts if right, 0 if wrong). Results are filled from final games in the
+  slates GET /api/pickem loads (+ up to 10 older pending dates). Friends' picks only after puck drop; names =
+  settings.nickname or the email's local part (friend_names(); emails never sent). Season = Jul-Jun, week = Mon-Sun.
+  The table is covered while a spoiler-free game is hidden.
 - Settings (web/app.js settingsView) save on every change (saveSettings: optimistic, queued PUTs of the whole settings
   object, toast). Team pickers group NHL teams by sog/teams.py DIVISIONS. Home market = one team (local is a list server-side).
 - Phase 1: access, Tonight, Game, Standings, Teams, Settings, where-to-watch (service links; ESPN+ also links Hulu,

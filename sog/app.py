@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import access, bugs, alerts, changes, home, ics, pwhl, spoilers, teams, watch, wire
+from . import access, bugs, alerts, changes, home, ics, picks, pwhl, spoilers, teams, watch, wire
 from .db import Store, parse_iso
 from .feed import Feed
 from .push import Pusher
@@ -31,6 +31,7 @@ RENOTIFY_AFTER = timedelta(hours=12)   # pressing Request twice doesn't ping the
 
 store = Store(DATA_DIR / "sog.db")
 bugs.init(store.conn)
+picks.init(store.conn)
 feed = Feed(store)
 pusher = Pusher(DATA_DIR, access.ADMIN)
 feed.alerts = alerts.Alerts(store, pusher, access.BASE_URL)
@@ -181,6 +182,23 @@ async def request_access(request: Request):
     return {"status": "pending"}
 
 
+def clean_name(raw) -> str:
+    text = "".join(c for c in str(raw or "") if c.isprintable())
+    return " ".join(text.split())[:24]
+
+
+def display_name(email: str, settings: dict | None) -> str:
+    return (settings or {}).get("nickname") or email.split("@")[0]
+
+
+def friend_names() -> dict[str, str]:
+    """Everyone approved, by the name friends see. Emails never leave the server."""
+    names = {u["email"]: display_name(u["email"], u["settings"]) for u in store.users() if u["status"] == "approved"}
+    if access.ADMIN:
+        names.setdefault(access.ADMIN, display_name(access.ADMIN, (store.user(access.ADMIN) or {}).get("settings")))
+    return names
+
+
 @app.put("/api/settings")
 async def save_settings(request: Request):
     body = await request.json()
@@ -191,6 +209,7 @@ async def save_settings(request: Request):
         "notify": {k: bool((body.get("notify") or {}).get(k, True)) for k in alerts.KINDS},
         "seen_changes": str(body.get("seen_changes") or "")[:120],  # newest What's new entry this person has seen
         "spoilers": spoilers.clean(body.get("spoilers"), teams.ALL),
+        "nickname": clean_name(body.get("nickname")),  # what friends see in Pick'em; empty = the email's first part
     }
     store.save_settings(request.state.email, clean)
     return clean
@@ -456,6 +475,56 @@ async def my_teams(request: Request):
     rows = {lg: [] if isinstance(r, Exception) else r for lg, r in rows.items()}
     cards = await asyncio.gather(*[one(a, rows[teams.league_of(a)]) for a in picks])
     return {"date": today, "teams": [c for c in cards if c]}
+
+
+async def _slate(league: str, date: str) -> dict:
+    if league == "pwhl":
+        return await feed.pwhl_day(date)
+    return await (feed.poll_today() if date == feed.today else feed.day(date))
+
+
+@app.get("/api/pickem")
+async def pickem(request: Request, date: str | None = None, leagues: str = "nhl"):
+    if date and not DATE.match(date):
+        raise HTTPException(400)
+    lgs = [lg for lg in ("nhl", "pwhl") if lg in leagues.split(",")] or ["nhl"]
+    today = feed.opening_day()
+    date = date or today
+    days = await asyncio.gather(*[_upstream(_slate(lg, date)) for lg in lgs])
+    games = [dict(g, league=lg) for lg, d in zip(lgs, days) for g in d["games"]]
+    picks.record_results(games)
+    for lg, d in picks.pending(today):  # older picks still waiting for a result (the app was down, say)
+        if (d != date or lg not in lgs) and d < today:
+            try:
+                picks.record_results([dict(g, league=lg) for g in (await _slate(lg, d))["games"]])
+            except Exception:
+                pass
+    games.sort(key=lambda g: (g.get("start") or "", g["id"]))
+    names = friend_names()
+    me = request.state.email
+    return {"date": date, "today": today,
+            "prev": max((d["prev"] for d in days if d.get("prev")), default=None),
+            "next": min((d["next"] for d in days if d.get("next")), default=None),
+            "games": picks.for_games(me, games, names), "board": picks.board(me, names, lgs, today),
+            "name": names.get(me, me.split("@")[0])}
+
+
+@app.post("/api/pickem")
+async def pickem_save(request: Request):
+    body = await request.json()
+    lg = "pwhl" if body.get("league") == "pwhl" else "nhl"
+    date, gid = str(body.get("date") or ""), body.get("id")
+    if not DATE.match(date) or not isinstance(gid, int):
+        raise HTTPException(400)
+    day = await _upstream(_slate(lg, date))
+    g = next((dict(x, league=lg) for x in day["games"] if x["id"] == gid), None)
+    if not g:
+        raise HTTPException(404, "That game isn't on the schedule.")
+    try:
+        picks.set_pick(request.state.email, g, body.get("team") or None, bool(body.get("lock")))
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+    return {"ok": True}
 
 
 WIRE_KINDS = {"move", "news", "insider"}

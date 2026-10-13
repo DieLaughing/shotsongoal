@@ -119,6 +119,33 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .witem.spoil .spoil-body { display: none; }
 .witem.spoil .linkish { text-align: left; padding: 4px 0 0; }
 
+/* Pick'em */
+.pick-row { padding: 10px 12px; }
+.pick-row + .pick-row { border-top: 1px solid var(--border); }
+.pick-line { display: grid; grid-template-columns: 1fr 64px 1fr 40px; gap: 8px; align-items: center; }
+.pk { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 6px; border-radius: 10px; min-width: 0;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-weight: 700; font-size: 13px; cursor: pointer; }
+.pk b { font-variant-numeric: tabular-nums; margin-left: 2px; }
+.pk { justify-content: flex-start; }
+.pk-sc { flex: 1; text-align: right; font-size: 15px; }
+.pk-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; text-align: left; }
+.pk.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.pk.won { background: var(--have-bg); color: var(--have-fg); border-color: transparent; box-shadow: none; }
+.pk.lost { background: var(--need-bg); color: var(--need-fg); border-color: transparent; box-shadow: none; text-decoration: line-through; }
+.pk:disabled { cursor: default; }
+.pk:disabled:not(.on):not(.won):not(.lost) { opacity: .6; }
+.pick-mid { text-align: center; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.lockbtn { height: 36px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: 17px; cursor: pointer; }
+.lockbtn.on { background: #f5b700; border-color: #f5b700; color: #111; }
+.lockbtn:disabled { cursor: default; opacity: .55; }
+.lockbtn.on:disabled { opacity: 1; }
+.pick-friends { font-size: 12px; color: var(--muted); padding-top: 6px; }
+.board { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.board th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 8px 12px; }
+.board td { padding: 9px 12px; border-top: 1px solid var(--border); }
+.board th, .board td { text-align: left; }
+.board tr.me td { background: var(--info-bg); }
+
 /* day header */
 .daybar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 4px; }
 .daybar h1 { margin: 0; font-size: 19px; text-align: center; flex: 1; }
