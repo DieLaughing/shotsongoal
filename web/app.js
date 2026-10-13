@@ -374,6 +374,7 @@ function heroCard(c, live) {
     c.week && c.week.games ? `<div><b>Last 7 days</b> ${esc(c.week.record)} · ${c.week.gf} goals for, ${c.week.ga} against</div>` : "",
     c.last && !lastIsThis ? `<div><b>Last</b> ${RESULT_WORD[c.last.code]} ${c.last.us}–${c.last.them} ${c.last.home ? "vs" : "at"} ${esc(teamName(c.last.opp))}</div>` : "",
     g?.watching?.length && g.state !== "final" ? `<div>👀 ${esc(namesList(g.watching))} watching</div>` : "",
+    c.milestones?.length ? c.milestones.map(m => `<div>🎯 ${esc(m.text)}</div>`).join("") : "",
     c.after?.length ? `<div><b>Then</b> ${c.after.map(a => `${a.home ? "vs" : "at"} ${esc(TEAMS[a.opp]?.code || a.opp)} ${esc(shortDate(a.date).split(",")[0])}`).join(" · ")}</div>` : "",
   ].join("");
   return `<div class="hero${t.light ? " light" : ""}" style="--c:${esc(t.color || "#333")}">
@@ -453,6 +454,11 @@ async function tonightView(date, quiet = false) {
     bindNewBanner();
   });
   const all = days.flatMap(d => d.games || []);
+  // Warm your team cards' game pages on the server, so tapping one opens straight away.
+  if (!quiet) setTimeout(() => (mineData?.teams || []).forEach(c => {
+    const g = all.find(x => x.away.abbr === c.abbr || x.home.abbr === c.abbr);
+    if (g && g.state !== "postponed") fetch(g.league === "pwhl" ? `/api/pwhl/game/${g.id}` : `/api/game/${g.id}`).catch(() => {});
+  }), 1500);
   if (all.some(g => g.state === "live" || (g.state === "pre" && Date.parse(g.start) - Date.now() < 30 * 60000))) {
     autoRefresh(q => tonightView(date, q), 15);
   }
@@ -689,7 +695,7 @@ async function gameView(id, quiet = false, league = "nhl") {
     }).join("")}`).join("")}</div>`;
   }
 
-  if (d.shotmap?.length) html += shotMap(d.shotmap, a, h);
+  if (d.shotmap?.length) html += shotMap(d.shotmap, a, h) + momentumCard(d.shotmap, a, h, ac, hc, league);
 
   if (d.linescore.length) {
     const shots = Object.fromEntries(d.shots.map(s => [s.period, s]));
@@ -821,6 +827,50 @@ async function wireView(quiet = false) {
   autoRefresh(q => wireView(q), 120);
 }
 
+// ---- momentum and shot quality ------------------------------------------------------------------------
+// Both come from the shot map's x/y (home shoots right, nets at x = ±89), so they cost no extra request.
+const PERIOD_ORDER = ["1st", "2nd", "3rd", "OT", "2OT", "3OT", "4OT"];
+function xgOf(s, home) {
+  const net = s.team === home ? 89 : -89;
+  const dx = Math.max(Math.abs(net - s.x), 1), dy = Math.abs(s.y);
+  const dist = Math.hypot(dx, dy), angle = Math.atan2(dy, dx) * 180 / Math.PI;
+  return 1 / (1 + Math.exp(-(-0.69 - 0.058 * dist - 0.012 * angle)));  // ~22% from the slot, ~1.5% from the blue line
+}
+function momentumCard(shots, a, h, ac, hc, league) {
+  const live = shots.filter(s => PERIOD_ORDER.includes(s.period));
+  if (live.length < 4) return "";
+  const periods = PERIOD_ORDER.filter(p => live.some(s => s.period === p));
+  // 5-minute chunks: four per regulation period, one for each overtime.
+  const chunks = periods.flatMap(p => p.endsWith("OT") ? [[p, 0]] : [0, 1, 2, 3].map(i => [p, i]));
+  const idx = s => { const m = parseInt(String(s.time || "0").split(":")[0], 10) || 0;
+    return chunks.findIndex(([p, i]) => p === s.period && (p.endsWith("OT") || i === Math.min(3, Math.floor(m / 5)))); };
+  const count = chunks.map(() => ({ [a]: 0, [h]: 0, ga: 0, gh: 0 }));
+  for (const s of live) { const c = count[idx(s)]; if (!c) continue; c[s.team] = (c[s.team] || 0) + 1; if (s.kind === "goal") c[s.team === h ? "gh" : "ga"]++; }
+  const max = Math.max(1, ...count.map(c => Math.max(c[a], c[h])));
+  const W = 320, mid = 62, scale = 50 / max, bw = (W - 30) / chunks.length;
+  const bars = count.map((c, i) => {
+    const x = 26 + i * bw, w = Math.max(2, bw - 3);
+    const goal = (n, y) => n ? `<circle cx="${(x + w / 2).toFixed(1)}" cy="${y}" r="3.2" fill="var(--text)"/>` : "";
+    return `<rect x="${x.toFixed(1)}" y="${(mid - c[h] * scale).toFixed(1)}" width="${w.toFixed(1)}" height="${(c[h] * scale).toFixed(1)}" rx="1.5" fill="${hc}"/>
+      <rect x="${x.toFixed(1)}" y="${mid}" width="${w.toFixed(1)}" height="${(c[a] * scale).toFixed(1)}" rx="1.5" fill="${ac}"/>
+      ${goal(c.gh, (mid - c[h] * scale - 6).toFixed(1))}${goal(c.ga, (mid + c[a] * scale + 6).toFixed(1))}`;
+  }).join("");
+  const labels = periods.map(p => { const first = chunks.findIndex(([q]) => q === p), n = chunks.filter(([q]) => q === p).length;
+    return `<text x="${(26 + (first + n / 2) * bw).toFixed(1)}" y="134" text-anchor="middle">${esc(p)}</text>`; }).join("");
+  const dividers = periods.slice(1).map(p => { const x = 26 + chunks.findIndex(([q]) => q === p) * bw - 1.5;
+    return `<line x1="${x.toFixed(1)}" y1="6" x2="${x.toFixed(1)}" y2="120" stroke="var(--border)" stroke-dasharray="3 3"/>`; }).join("");
+  const xg = t => live.filter(s => s.team === t).reduce((n, s) => n + xgOf(s, h), 0);
+  return `<h2>Momentum</h2><div class="card pad">
+    <svg class="momentum" viewBox="0 0 ${W} 140" role="img" aria-label="Shot attempts every five minutes: ${esc(teamName(h))} above the line, ${esc(teamName(a))} below">
+      <line x1="24" y1="${mid}" x2="${W}" y2="${mid}" stroke="var(--border)"/>${dividers}${bars}
+      <text x="0" y="30">${esc(TEAMS[h]?.code || h)}</text><text x="0" y="100">${esc(TEAMS[a]?.code || a)}</text>${labels}
+    </svg>
+    <div class="xg"><span>${mark(a)} <b>${xg(a).toFixed(1)}</b></span><span class="muted small">Shot quality (expected goals)</span><span><b>${xg(h).toFixed(1)}</b> ${mark(h)}</span></div>
+    <p class="help" style="margin:8px 0 0">Bars: ${league === "pwhl" ? "shots on goal" : "shots on goal and misses"} every 5 minutes; dots are goals.
+      Expected goals adds up how likely each shot was to go in, from its distance and angle. A rough estimate by this app.</p>
+  </div>`;
+}
+
 // ---- shot map -----------------------------------------------------------------------------
 // NHL rink coordinates: x -100..100 (end boards), y -42.5..42.5. Home shoots right, away shoots left.
 function shotMap(shots, a, h) {
@@ -942,6 +992,9 @@ async function standingsView(mode = "division") {
   }));
 }
 
+const MS_WORD = { goals: ["goal", "goals"], assists: ["assist", "assists"], points: ["point", "points"], gp: ["game", "games"],
+  wins: ["win", "wins"], shutouts: ["shutout", "shutouts"] };
+
 async function teamView(abbr) {
   setNav("league");
   showLoading(`Loading ${esc(fullName(abbr))}…`);
@@ -966,6 +1019,9 @@ async function teamView(abbr) {
     </div>`;
   if (next.length) html += `<h2>Coming up</h2><div class="card">${next.map(dated).join("")}</div>`;
   if (done.length) html += `<h2>Recent results</h2><div class="card">${done.map(dated).join("")}</div>`;
+  if (d.milestones?.length) html += `<h2>Close to a milestone</h2><div class="card">${d.milestones.map(m =>
+    `<div class="ms-row"><div><b>${esc(m.name)}</b><div class="muted small">${m.now.toLocaleString()} career ${MS_WORD[m.stat][1]} · next: ${m.target.toLocaleString()}</div></div>
+      <span class="pill info">${m.left} to go</span></div>`).join("")}</div>`;
   if (d.wire?.length) html += `<h2>News &amp; moves</h2><div class="card">${d.wire.slice(0, 8).map(i => wireItem(i, new Set(), hidden)).join("")}</div>`;
   const sk = d.stats.skaters.slice(0, 10);
   if (sk.length) {
@@ -1074,8 +1130,8 @@ function settingsView() {
     <div class="group-title">Alerts &amp; spoilers</div>
     <h2>Alerts</h2>
     <div class="card" id="notif"><div class="empty">Checking this device…</div></div>
-    <div class="card checks" style="margin-top:10px">${[["start", "Puck drop"], ["goals", "Every goal"], ["final", "Final scores"], ["trades", "Trades"]].map(([k, l]) =>
-      `<label><input type="checkbox" name="notify" value="${k}" ${s.notify?.[k] !== false ? "checked" : ""}>${l}</label>`).join("")}</div>
+    <div class="card checks" style="margin-top:10px">${[["start", "Puck drop"], ["goals", "Every goal (with career milestones)"], ["final", "Final scores"], ["trades", "Trades"], ["fights", "Fights"]].map(([k, l]) =>
+      `<label><input type="checkbox" name="notify" value="${k}" ${s.notify?.[k] ? "checked" : ""}>${l}</label>`).join("")}</div>
     <p class="help">For your teams only. <a href="#/app">Getting the app and alerts on your phone</a>.</p>
 
     <h2>Spoiler-free</h2>
@@ -1122,7 +1178,7 @@ function settingsView() {
   }));
   view.querySelectorAll("input[name=notify]").forEach(i => i.addEventListener("change", () => {
     const on = new Set(picked("notify"));
-    saveSettings({ notify: Object.fromEntries(["start", "goals", "final", "trades"].map(k => [k, on.has(k)])) });
+    saveSettings({ notify: Object.fromEntries(["start", "goals", "final", "trades", "fights"].map(k => [k, on.has(k)])) });
   }));
 }
 

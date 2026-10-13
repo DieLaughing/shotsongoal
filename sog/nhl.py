@@ -258,6 +258,14 @@ def parse_roster(data: dict) -> list[dict]:
     return out
 
 
+def parse_career(data: dict, player: dict) -> dict:
+    """Career regular-season totals from player/<id>/landing, for milestone watch."""
+    c = (data.get("careerTotals") or {}).get("regularSeason") or {}
+    return {"id": player.get("id"), "name": player.get("name") or _player_name(data), "goalie": player.get("group") == "G",
+            "goals": c.get("goals", 0), "assists": c.get("assists", 0), "points": c.get("points", 0),
+            "gp": c.get("gamesPlayed", 0), "wins": c.get("wins", 0), "shutouts": c.get("shutouts", 0)}
+
+
 def parse_club_stats(data: dict) -> dict:
     skaters = [{"name": _player_name(p), "pos": p.get("positionCode"), "gp": p.get("gamesPlayed", 0),
                 "g": p.get("goals", 0), "a": p.get("assists", 0), "p": p.get("points", 0),

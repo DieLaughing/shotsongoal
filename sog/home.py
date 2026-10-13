@@ -118,3 +118,36 @@ def team_summary(abbr: str, schedule: list[dict], rows: list[dict], today: str, 
                  "games": len(week)} if week else None,
         "standing": place,
     }
+
+
+# ---- milestone watch -------------------------------------------------------------------------------
+# stat -> (round number step, how close counts, smallest target worth mentioning, who it applies to)
+MILESTONES = {
+    "goals": (50, 3, 50, "skater"), "assists": (100, 4, 100, "skater"), "points": (100, 4, 100, "skater"),
+    "gp": (100, 3, 100, "all"), "wins": (50, 2, 50, "goalie"), "shutouts": (10, 1, 10, "goalie"),
+}
+WORDS = {"goals": ("goal", "goals"), "assists": ("assist", "assists"), "points": ("point", "points"),
+         "gp": ("game", "games"), "wins": ("win", "wins"), "shutouts": ("shutout", "shutouts")}
+
+
+def near_milestones(players: list[dict]) -> list[dict]:
+    """Players within reach of a round career number, closest first."""
+    out = []
+    for p in players:
+        for stat, (step, within, smallest, who) in MILESTONES.items():
+            if who == "skater" and p.get("goalie") or who == "goalie" and not p.get("goalie"):
+                continue
+            now = p.get(stat) or 0
+            target = (now // step + 1) * step
+            left = target - now
+            if target >= smallest and left <= within:
+                one, many = WORDS[stat]
+                out.append({"id": p.get("id"), "name": p["name"], "stat": stat, "now": now, "target": target, "left": left,
+                            "text": f"{p['name']} is {left} {one if left == 1 else many} from {target:,}"})
+    return sorted(out, key=lambda m: (m["left"] / MILESTONES[m["stat"]][1], -m["target"]))
+
+
+def milestone_goal(career_goals: int, nth_tonight: int) -> int | None:
+    """The round number a goal reaches, if it does: career total before tonight + this player's nth goal tonight."""
+    total = career_goals + nth_tonight
+    return total if total >= 50 and total % 50 == 0 else None
