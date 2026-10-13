@@ -5,6 +5,7 @@ This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit th
 
 ## October 12, 2026
 
+- **Improved: Settings save by themselves.** No more Save button to hunt for. Every change in Settings saves the moment you tap it, with a quick "Saved ✓" at the bottom. Your teams now show at the top as a short list (tap Edit to change them), the team picker is grouped by division, your home market is one dropdown, and the alert switches sit together under Alerts.
 - **Improved: Offline page.** If the server Shots on Goal runs on goes down (a power or internet blip at its home), the app shows a short "Shots on Goal is offline" page instead of an error, and reloads by itself once it's back. Your phone picks this up the next time you open the app.
 - **Fixed: Home screen icon.** Phones showed an "S" instead of the app's icon on the home screen. Remove the app from your home screen and add it again to get the real one (on iPhone, turn alerts back on afterwards in Settings).
 - **Improved: App icon in the header.** The crossed sticks and puck now sit at the top left, the same icon as the browser tab and home screen.

@@ -5,6 +5,12 @@
 
 - date: 2026-10-12
   kind: improved
+  title: Settings save by themselves
+  text: No more Save button to hunt for. Every change in Settings saves the moment you tap it, with a quick "Saved ✓" at the bottom. Your teams now show at the top as a short list (tap Edit to change them), the team picker is grouped by division, your home market is one dropdown, and the alert switches sit together under Alerts.
+  link: "#/settings"
+
+- date: 2026-10-12
+  kind: improved
   title: Offline page
   text: If the server Shots on Goal runs on goes down (a power or internet blip at its home), the app shows a short "Shots on Goal is offline" page instead of an error, and reloads by itself once it's back. Your phone picks this up the next time you open the app.
   link: "#/"

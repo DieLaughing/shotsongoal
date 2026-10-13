@@ -476,3 +476,9 @@ def test_whats_new_api_and_seen_marker(client, monkeypatch):
     assert items[0]["title"] and items[0]["id"]
     out = client.put("/api/settings", json={"favorites": ["BOS"], "seen_changes": items[0]["id"]}).json()
     assert out["seen_changes"] == items[0]["id"]
+
+
+def test_every_nhl_team_has_one_division():
+    from sog import teams
+    placed = [a for d in teams.DIVISIONS.values() for a in d]
+    assert sorted(placed) == sorted(teams.TEAMS) and all(len(d) == 8 for d in teams.DIVISIONS.values())
