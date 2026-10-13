@@ -47,8 +47,8 @@ which is not committed.
   the cached team schedule + standings (latest season only: a 60-day gap splits seasons; off-season = last season's
   place, no streak/week). Cards tinted with the team colour; live/final state comes from the slate. Kept 5 min client-side.
 - Spoiler-free: settings.spoilers {teams, games, seen} (game keys nhl:<id> / pwhl:<id>), rules in sog/spoilers.py,
-  mirrored by spoilerHidden() in web/app.js; /api/hidden lists them for pages. Started games from today/yesterday only. Hidden = no score on cards/hero,
-  game page cover, Standings/team page covered when a hidden game is final, Wire items about it after puck drop
+  mirrored by spoilerHidden() in web/app.js; /api/hidden lists them for pages. Started games from today/yesterday
+  only. Hidden = no score on cards/hero, game page cover, Standings/team page covered when a hidden game is final, Wire items about it after puck drop
   blurred; alerts.py skips goal/final pushes (puck drop still sent).
 - Pick'em (#/picks, sog/picks.py, pick table): one pick per person per game before its start (server checks the
   slate's state/start), one lock per date (2 pts if right, 0 if wrong). Results are filled from final games in the
