@@ -54,6 +54,15 @@ PWHL = {
     "PW-SJ": ("San Jose", "San Jose", "#F09040"),
 }
 
+# NHL divisions (for grouping team pickers; standings carry the live ones). The PWHL has none.
+DIVISIONS = {
+    "Atlantic": ["BOS", "BUF", "DET", "FLA", "MTL", "OTT", "TBL", "TOR"],
+    "Metropolitan": ["CAR", "CBJ", "NJD", "NYI", "NYR", "PHI", "PIT", "WSH"],
+    "Central": ["CHI", "COL", "DAL", "MIN", "NSH", "STL", "UTA", "WPG"],
+    "Pacific": ["ANA", "CGY", "EDM", "LAK", "SEA", "SJS", "VAN", "VGK"],
+}
+DIVISION_OF = {a: d for d, teams in DIVISIONS.items() for a in teams}
+
 # Light colours need dark text on top of them.
 LIGHT = {"BOS", "NSH", "PIT", "SEA", "UTA", "LAK", "VGK", "PW-TOR", "PW-SJ"}
 ALL = {**TEAMS, **PWHL}
@@ -65,4 +74,4 @@ def league_of(key: str) -> str:
 
 def as_list() -> list[dict]:
     return [{"abbr": a, "code": a.removeprefix("PW-"), "league": league_of(a), "place": p, "name": n, "color": c,
-             "light": a in LIGHT} for a, (p, n, c) in ALL.items()]
+             "light": a in LIGHT, "div": DIVISION_OF.get(a)} for a, (p, n, c) in ALL.items()]

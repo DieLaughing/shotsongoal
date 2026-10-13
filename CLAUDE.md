@@ -33,6 +33,8 @@ which is not committed.
   the pollers. Local runs and home-network installs only.
 
 ## Features
+- Settings (web/app.js settingsView) save on every change (saveSettings: optimistic, queued PUTs of the whole settings
+  object, toast). Team pickers group NHL teams by sog/teams.py DIVISIONS. Home market = one team (local is a list server-side).
 - Phase 1: access, Tonight, Game, Standings, Teams, Settings, where-to-watch (service links; ESPN+ also links Hulu,
   where Disney+ bundle users watch ESPN+ games).
 - Phase 2: the Wire (ESPN transactions + Story/HeadlineNews, Sportsnet RSS, Bluesky insiders editable in /admin),

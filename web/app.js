@@ -708,50 +708,109 @@ function ordinal(n) {
 }
 
 // ---- Settings -------------------------------------------------------------------------------
+// Every tap saves straight away (no Save button). Saves queue up so they land in order; a toast says how it went.
+let settingsQueue = Promise.resolve();
+function saveSettings(patch) {
+  ME.settings = { ...ME.settings, ...patch };
+  const body = JSON.stringify(ME.settings);
+  settingsQueue = settingsQueue.then(() => api("/api/settings", { method: "PUT", body }))
+    .then(() => toast("Saved ✓"), () => toast("Couldn't save. Check your connection and try again.", true));
+  return settingsQueue;
+}
+
+let toastTimer = null;
+function toast(text, bad = false) {
+  let el = document.getElementById("toast");
+  if (!el) { el = document.createElement("div"); el.id = "toast"; el.setAttribute("role", "status"); document.body.append(el); }
+  el.textContent = text;
+  el.className = `toast show${bad ? " bad" : ""}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = "toast"; }, bad ? 4000 : 1400);
+}
+
+// NHL teams by division, then the PWHL (no divisions).
+function teamGroups() {
+  const groups = {};
+  for (const [abbr, t] of Object.entries(TEAMS)) {
+    const g = leagueOf(abbr) === "pwhl" ? "PWHL" : t.div || "NHL";
+    (groups[g] ||= []).push(abbr);
+  }
+  const order = ["Atlantic", "Metropolitan", "Central", "Pacific", "NHL", "PWHL"];
+  return order.filter(g => groups[g]).map(g => [g, groups[g].sort((a, b) => teamName(a).localeCompare(teamName(b)))]);
+}
+
+let editingTeams = false;
 function settingsView() {
   setNav("settings");
   const s = ME.settings;
-  const teamChips = (name, chosen, league = "nhl") => `<div class="chips">${Object.keys(TEAMS).filter(a => leagueOf(a) === league).sort().map(abbr =>
-    `<label>${mark(abbr)}<input type="checkbox" name="${name}" value="${abbr}" ${chosen.includes(abbr) ? "checked" : ""}>${esc(TEAMS[abbr].name)}</label>`).join("")}</div>`;
+  const fav = s.favorites || [];
+  const open = editingTeams || !fav.length;
+  const local = (s.local || [])[0] || "";
   const services = s.services || [];
+  const guess = !local && fav.find(a => leagueOf(a) === "nhl");
+  const nhlGroups = teamGroups().filter(([g]) => g !== "PWHL");
+
+  const mine = fav.length ? `<div class="myteams">${fav.map(a =>
+    `<a class="myteam" href="#/team/${a}">${mark(a, true)}<span><b>${esc(fullName(a))}</b><span class="muted small">${leagueOf(a) === "pwhl" ? "PWHL" : esc(TEAMS[a]?.div || "NHL")}</span></span></a>`).join("")}</div>` : "";
+  const picker = `<div class="team-picker">${teamGroups().map(([g, list]) => `<div class="subhead">${esc(g)}</div><div class="chips">${list.map(a =>
+    `<label>${mark(a)}<input type="checkbox" name="favorites" value="${a}" ${fav.includes(a) ? "checked" : ""}>${esc(teamName(a))}</label>`).join("")}</div>`).join("")}</div>`;
+
   view.innerHTML = `
     <h1>Settings</h1>
-    <a class="card pad whatsnew-link" href="#/new"><b>What's new</b>${unseenChanges().length ? ` <span class="pill info">${unseenChanges().length} new</span>` : ""}<span class="muted small">Every update to the app →</span></a>
-    <h2>Favorite teams</h2>
-    <div class="card"><div class="subhead">NHL</div>${teamChips("favorites", s.favorites)}<div class="subhead">PWHL</div>${teamChips("favorites", s.favorites, "pwhl")}</div>
-    <p class="help">Pinned to the top of Tonight and highlighted everywhere.</p>
-    <h2>Your local teams</h2>
-    <div class="card">${teamChips("local", s.local)}</div>
-    <p class="help">Teams whose home market you live in. Their games are blacked out on ESPN+ for you and shown on their local channel instead. In Massachusetts that's the Bruins.</p>
-    <h2>What you can watch with</h2>
-    <div class="card checks">${Object.entries(ME.services).map(([k, v]) =>
-      `<label><input type="checkbox" name="services" value="${k}" ${services.includes(k) ? "checked" : ""}>${esc(v.label)}</label>`).join("")}</div>
-    <p class="help">Each game then says "You have it" or "Not in your services".</p>
-    <div class="savebar"><button class="btn primary" id="save">Save</button><span id="saved" class="muted small"></span></div>
-    <h2>Notifications</h2>
-    <p class="help" style="margin:-2px 2px 8px">New here? <a href="#/app">How to get the app and alerts on your phone</a>.</p>
+    <p class="help" style="margin:-4px 2px 0">Changes save as you make them.</p>
+
+    <div class="section-head"><h2>Your teams</h2>${fav.length ? `<button class="btn small" id="editteams">${open ? "Done" : "Edit"}</button>` : ""}</div>
+    <div class="card">${open ? (fav.length ? "" : `<div class="pad small">Tap your teams. They're pinned to the top of Tonight, highlighted everywhere, and the ones you get alerts for.</div>`) + picker : mine}</div>
+    ${open && fav.length ? `<p class="help">Tap a team again to remove it.</p>` : ""}
+
+    <h2>Watching</h2>
+    <div class="card">
+      <label class="row-field"><span><b>Home market</b><span class="muted small">Whose games are blacked out on ESPN+ for you and shown on local TV instead</span></span>
+        <select id="local" class="field"><option value="">None</option>${nhlGroups.map(([g, list]) => `<optgroup label="${esc(g)}">${list.map(a =>
+          `<option value="${a}" ${a === local ? "selected" : ""}>${esc(fullName(a))}</option>`).join("")}</optgroup>`).join("")}</select></label>
+      ${guess ? `<div class="pad small suggest">Live near ${esc(TEAMS[guess].place)}? <button class="btn small" id="useguess">Use the ${esc(teamName(guess))}</button></div>` : ""}
+      <div class="subhead">What you can watch with</div>
+      <div class="checks">${Object.entries(ME.services).map(([k, v]) =>
+        `<label><input type="checkbox" name="services" value="${k}" ${services.includes(k) ? "checked" : ""}>${esc(v.label)}</label>`).join("")}</div>
+    </div>
+    <p class="help">Each game then says "You have it" or "Not in your services". In Massachusetts the home market is the Bruins.</p>
+
+    <h2>Alerts</h2>
     <div class="card" id="notif"><div class="empty">Checking this device…</div></div>
     <div class="card checks" style="margin-top:10px">${[["start", "Puck drop"], ["goals", "Every goal"], ["final", "Final scores"], ["trades", "Trades"]].map(([k, l]) =>
       `<label><input type="checkbox" name="notify" value="${k}" ${s.notify?.[k] !== false ? "checked" : ""}>${l}</label>`).join("")}</div>
-    <p class="help">Alerts are for your favorite teams only. Press Save after changing these.</p>
+    <p class="help">For your teams only. New here? <a href="#/app">How to get the app and alerts on your phone</a>.</p>
+
     <h2>Calendar</h2>
     <div class="card" id="cal"><div class="empty">Loading…</div></div>
-    <p class="help">Every game for your favorite teams, with where to watch in each event. Your phone's calendar checks it every few hours. The link is personal; don't share it.</p>
-    <p class="help" style="margin-top:28px">Signed in as ${esc(ME.email)}.</p>`;
+    <p class="help">Every game for your teams, with where to watch in each event. Your phone's calendar checks it every few hours. The link is personal; don't share it.</p>
+
+    <a class="card pad whatsnew-link" href="#/new" style="margin-top:28px"><b>What's new</b>${unseenChanges().length ? ` <span class="pill info">${unseenChanges().length} new</span>` : ""}<span class="muted small">Every update to the app →</span></a>
+    <p class="help" style="margin-top:12px">Signed in as ${esc(ME.email)}.</p>`;
   showCalendar();
   showNotifications();
-  document.getElementById("save").addEventListener("click", async e => {
-    const picked = name => [...view.querySelectorAll(`input[name=${name}]:checked`)].map(i => i.value);
-    e.target.disabled = true;
-    try {
-      const on = new Set(picked("notify"));
-      const notify = Object.fromEntries(["start", "goals", "final", "trades"].map(k => [k, on.has(k)]));
-      ME.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify({ favorites: picked("favorites"), local: picked("local"), services: picked("services"), notify }) });
-      document.getElementById("saved").textContent = "Saved.";
-      showCalendar();
-    } catch { document.getElementById("saved").textContent = "Couldn't save. Try again."; }
-    e.target.disabled = false;
+
+  const picked = name => [...view.querySelectorAll(`input[name=${name}]:checked`)].map(i => i.value);
+  document.getElementById("editteams")?.addEventListener("click", () => { editingTeams = !open; settingsView(); });
+  view.querySelectorAll("input[name=favorites]").forEach(i => i.addEventListener("change", () => {
+    // Keep the order people picked them in: existing picks first, new ones on the end.
+    const now = new Set(picked("favorites"));
+    const had = ME.settings.favorites.length;
+    editingTeams = true;
+    saveSettings({ favorites: [...ME.settings.favorites.filter(a => now.has(a)), ...[...now].filter(a => !ME.settings.favorites.includes(a))] })
+      .then(showCalendar);
+    if (!had !== !now.size) settingsView();  // first pick / last removal: the Done button and the home-market hint change
+  }));
+  document.getElementById("local").addEventListener("change", e => {
+    saveSettings({ local: e.target.value ? [e.target.value] : [] });
+    document.querySelector(".suggest")?.remove();
   });
+  document.getElementById("useguess")?.addEventListener("click", () => { saveSettings({ local: [guess] }); settingsView(); });
+  view.querySelectorAll("input[name=services]").forEach(i => i.addEventListener("change", () => saveSettings({ services: picked("services") })));
+  view.querySelectorAll("input[name=notify]").forEach(i => i.addEventListener("change", () => {
+    const on = new Set(picked("notify"));
+    saveSettings({ notify: Object.fromEntries(["start", "goals", "final", "trades"].map(k => [k, on.has(k)])) });
+  }));
 }
 
 function b64ToBytes(b64) {
@@ -922,6 +981,7 @@ function route() {
   document.getElementById("tabs").hidden = false;
   document.getElementById("admin-tab").hidden = !ME.admin;
   const [, page, arg] = (location.hash || "#/").split("/");
+  if (page !== "settings") editingTeams = false;
   window.scrollTo(0, 0);
   if (page === "day" && /^\d{4}-\d{2}-\d{2}$/.test(arg || "")) return tonightView(arg);
   if (page === "game" && /^\d+$/.test(arg || "")) return gameView(arg);
