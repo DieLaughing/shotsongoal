@@ -58,6 +58,9 @@ class Store:
         self.conn = sqlite3.connect(path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
+        # WAL + NORMAL: a save doesn't wait for the disk to confirm it (on a USB drive that's up to ~400 ms, and saves
+        # run on the worker that answers requests). A power cut can lose the last moment of saves; nothing corrupts.
+        self.conn.execute("PRAGMA synchronous=NORMAL")
         self.conn.executescript(SCHEMA)
         if "league" not in [r[1] for r in self.conn.execute("PRAGMA table_info(insider)")]:
             self.conn.execute("ALTER TABLE insider ADD COLUMN league TEXT NOT NULL DEFAULT 'nhl'")
