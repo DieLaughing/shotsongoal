@@ -3,6 +3,10 @@
 Every update to [Shots on Goal](https://github.com/DieLaughing/shotsongoal), newest first. The same list is on the app's What's new page.
 This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit that file, not this one.
 
+## October 13, 2026
+
+- **Fixed: Opens on today's games.** In the morning, Tonight could still show last night's games, because the NHL's own feed doesn't switch to the new day until around midday. The app now switches by itself (last night's games stay up until 6 am Eastern, or until a late game finishes), and it refreshes when you come back to it after a while instead of showing the page you left.
+
 ## October 12, 2026
 
 - **Improved: Settings save by themselves.** No more Save button to hunt for. Every change in Settings saves the moment you tap it, with a quick "Saved ✓" at the bottom. Your teams now show at the top as a short list (tap Edit to change them), the team picker is grouped by division, your home market is one dropdown, and the alert switches sit together under Alerts.

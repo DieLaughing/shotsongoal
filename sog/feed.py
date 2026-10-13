@@ -37,6 +37,12 @@ def eastern_today() -> str:
     return datetime.now(EASTERN).date().isoformat()
 
 
+def slate_date(now: datetime | None = None) -> str:
+    """The day the app opens on: today in Eastern time, except that last night's games stay up until 6 am.
+    (The NHL's own "score/now" can stay on yesterday until midday, so it can't decide this.)"""
+    return ((now or datetime.now(EASTERN)).astimezone(EASTERN) - timedelta(hours=6)).date().isoformat()
+
+
 class Feed:
     def __init__(self, store: Store):
         self.store = store
@@ -71,6 +77,14 @@ class Feed:
         return await self._fetch(key, source, fetch, ttl)
 
     # ---- what pages ask for -------------------------------------------------------
+    def opening_day(self) -> str:
+        """slate_date(), but a game from the NHL's "today" that is still being played keeps that day up."""
+        day = slate_date()
+        hit = self.store.get("score:now")
+        if hit and hit["data"].get("date", day) < day and any(g["state"] == "live" for g in hit["data"]["games"]):
+            return hit["data"]["date"]
+        return day
+
     async def day(self, date: str) -> dict:
         async def fetch():
             return nhl.parse_score(await nhl.get(f"score/{date}"))
@@ -158,7 +172,7 @@ class Feed:
         return await self.cached("pwhl:games", "pwhl", fetch, lambda games: PWHL_LIVE if _busy({"games": games}) else PWHL_IDLE)
 
     async def pwhl_day(self, date: str | None) -> dict:
-        return {**pwhl.day(await self.pwhl_games(), date or eastern_today()), "league": "pwhl"}
+        return {**pwhl.day(await self.pwhl_games(), date or self.opening_day()), "league": "pwhl"}
 
     async def pwhl_game(self, game_id: int) -> dict:
         self.viewed[-game_id] = time.time()  # PWHL ids are small; keep them apart from NHL ids
@@ -283,6 +297,13 @@ class Feed:
                             busy = busy or any(g["state"] == "live" for g in prev_day["games"])
                             if self.alerts:  # a West Coast game can end after the NHL's "today" rolls over
                                 await self.alerts.on_day(prev_day)
+                    # The NHL's "today" can lag ours by half a day: watch our day's games too (alerts, busy).
+                    ours = slate_date()
+                    if day.get("date") and day["date"] < ours:
+                        ours_day = await self.day(ours)
+                        busy = busy or _busy(ours_day)
+                        if self.alerts:
+                            await self.alerts.on_day(ours_day)
                     # Live game pages that someone is watching.
                     for g in day.get("games", []):
                         gid = g["id"]

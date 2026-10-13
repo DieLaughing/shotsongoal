@@ -482,3 +482,11 @@ def test_every_nhl_team_has_one_division():
     from sog import teams
     placed = [a for d in teams.DIVISIONS.values() for a in d]
     assert sorted(placed) == sorted(teams.TEAMS) and all(len(d) == 8 for d in teams.DIVISIONS.values())
+
+
+def test_slate_date_keeps_last_night_until_6am_eastern():
+    from datetime import datetime, timezone
+    from sog.feed import slate_date
+    assert slate_date(datetime(2026, 10, 13, 15, 14, tzinfo=timezone.utc)) == "2026-10-13"  # 11:14 am ET
+    assert slate_date(datetime(2026, 10, 14, 5, 30, tzinfo=timezone.utc)) == "2026-10-13"   # 1:30 am ET
+    assert slate_date(datetime(2026, 10, 14, 10, 5, tzinfo=timezone.utc)) == "2026-10-14"   # 6:05 am ET
