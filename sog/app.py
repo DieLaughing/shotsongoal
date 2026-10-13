@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import access, bugs, alerts, changes, home, ics, picks, pwhl, spoilers, teams, watch, wire
+from . import access, bugs, alerts, changes, home, ics, picks, pwhl, social, spoilers, teams, watch, wire
 from .db import Store, parse_iso
 from .feed import Feed
 from .push import Pusher
@@ -32,6 +32,7 @@ RENOTIFY_AFTER = timedelta(hours=12)   # pressing Request twice doesn't ping the
 store = Store(DATA_DIR / "sog.db")
 bugs.init(store.conn)
 picks.init(store.conn)
+social.init(store.conn)
 feed = Feed(store)
 pusher = Pusher(DATA_DIR, access.ADMIN)
 feed.alerts = alerts.Alerts(store, pusher, access.BASE_URL)
@@ -187,16 +188,16 @@ def clean_name(raw) -> str:
     return " ".join(text.split())[:24]
 
 
-def display_name(email: str, settings: dict | None) -> str:
-    return (settings or {}).get("nickname") or email.split("@")[0]
+def people() -> dict[str, dict]:
+    """Everyone approved: email -> {name friends see, favorites}. Emails never leave the server."""
+    found = social.friends(store.users(), access.ADMIN)
+    if access.ADMIN and access.ADMIN not in found:
+        found[access.ADMIN] = {"name": social.display_name(access.ADMIN, None), "favorites": []}
+    return found
 
 
 def friend_names() -> dict[str, str]:
-    """Everyone approved, by the name friends see. Emails never leave the server."""
-    names = {u["email"]: display_name(u["email"], u["settings"]) for u in store.users() if u["status"] == "approved"}
-    if access.ADMIN:
-        names.setdefault(access.ADMIN, display_name(access.ADMIN, (store.user(access.ADMIN) or {}).get("settings")))
-    return names
+    return {e: p["name"] for e, p in people().items()}
 
 
 @app.put("/api/settings")
@@ -403,17 +404,31 @@ async def _upstream(coro):
         raise HTTPException(502, f"NHL data unavailable right now ({type(exc).__name__})")
 
 
+_cleaned = {"at": datetime.min.replace(tzinfo=timezone.utc)}
+
+
+def _with_watchers(games: list[dict], request: Request) -> list[dict]:
+    now = datetime.now(timezone.utc)
+    if now - _cleaned["at"] > timedelta(hours=1):
+        social.cleanup(feed.opening_day())
+        _cleaned["at"] = now
+    found = social.watchers(games, request.state.email, people())
+    for g in games:
+        g["watching"] = found.get(f"{social.league(g)}:{g['id']}", [])
+    return games
+
+
 @app.get("/api/games")
 async def games(request: Request, date: str | None = None, league: str = "nhl"):
     if date and not DATE.match(date):
         raise HTTPException(400)
     if league == "pwhl":
         day = await _upstream(feed.pwhl_day(date))
-        return {**day, "games": _with_watch([dict(g) for g in day["games"]], _settings(request))}
+        return {**day, "games": _with_watchers(_with_watch([dict(g) for g in day["games"]], _settings(request)), request)}
     # No date = today in Eastern time (last night's games until 6 am); see feed.slate_date.
     target = date or feed.opening_day()
     day = await _upstream(feed.poll_today() if target == feed.today else feed.day(target))
-    return {**day, "games": _with_watch([dict(g) for g in day["games"]], _settings(request))}
+    return {**day, "games": _with_watchers(_with_watch([dict(g) for g in day["games"]], _settings(request)), request)}
 
 
 @app.get("/api/game/{game_id}")
@@ -421,15 +436,15 @@ async def game(game_id: int, request: Request):
     detail = await _upstream(feed.game(game_id))
     detail = {**detail, "game": dict(detail["game"])}
     _with_watch([detail["game"]], _settings(request))
-    return detail
+    return {**detail, "social": social.for_game(request.state.email, detail["game"], people())}
 
 
 @app.get("/api/pwhl/game/{game_id}")
 async def pwhl_game(game_id: int, request: Request):
     detail = await _upstream(feed.pwhl_game(game_id))
-    detail = {**detail, "game": dict(detail["game"])}
+    detail = {**detail, "game": dict(detail["game"], league="pwhl")}
     _with_watch([detail["game"]], _settings(request))
-    return detail
+    return {**detail, "social": social.for_game(request.state.email, detail["game"], people())}
 
 
 @app.get("/api/standings")
@@ -483,6 +498,37 @@ async def _slate(league: str, date: str) -> dict:
     return await (feed.poll_today() if date == feed.today else feed.day(date))
 
 
+async def _game_from(body: dict) -> dict:
+    lg = "pwhl" if body.get("league") == "pwhl" else "nhl"
+    date, gid = str(body.get("date") or ""), body.get("id")
+    if not DATE.match(date) or not isinstance(gid, int):
+        raise HTTPException(400)
+    day = await _upstream(_slate(lg, date))
+    g = next((dict(x, league=lg) for x in day["games"] if x["id"] == gid), None)
+    if not g:
+        raise HTTPException(404, "That game isn't on the schedule.")
+    return g
+
+
+@app.post("/api/watching")
+async def watching_save(request: Request):
+    body = await request.json()
+    g = await _game_from(body)
+    social.set_watching(request.state.email, g, bool(body.get("on")))
+    return {"ok": True}
+
+
+@app.post("/api/react")
+async def react_save(request: Request):
+    body = await request.json()
+    g = await _game_from(body)
+    try:
+        social.react(request.state.email, g, str(body.get("event") or ""), body.get("emoji") or None)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+    return {"ok": True}
+
+
 @app.get("/api/pickem")
 async def pickem(request: Request, date: str | None = None, leagues: str = "nhl"):
     if date and not DATE.match(date):
@@ -512,14 +558,7 @@ async def pickem(request: Request, date: str | None = None, leagues: str = "nhl"
 @app.post("/api/pickem")
 async def pickem_save(request: Request):
     body = await request.json()
-    lg = "pwhl" if body.get("league") == "pwhl" else "nhl"
-    date, gid = str(body.get("date") or ""), body.get("id")
-    if not DATE.match(date) or not isinstance(gid, int):
-        raise HTTPException(400)
-    day = await _upstream(_slate(lg, date))
-    g = next((dict(x, league=lg) for x in day["games"] if x["id"] == gid), None)
-    if not g:
-        raise HTTPException(404, "That game isn't on the schedule.")
+    g = await _game_from(body)
     try:
         picks.set_pick(request.state.email, g, body.get("team") or None, bool(body.get("lock")))
     except ValueError as exc:

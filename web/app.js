@@ -178,9 +178,13 @@ function gameCard(g, fav) {
       ${hide ? `<div class="status"><div class="t">🙈 Hidden</div></div>` : statusCell(g)}
       <div class="team-line${lost(h)}">${mark(h.abbr)}<span class="nm">${esc(h.name || teamName(h.abbr))}</span>${sc(h)}</div>
     </a>
-    ${watchLine(g.watch, g)}${ticketLink(g)}
+    ${watchLine(g.watch, g)}${ticketLink(g)}${watchersLine(g)}
   </div>`;
 }
+
+// "👀 Dave, Mike and you": friends who tapped I'm watching (until the game ends).
+const namesList = list => { const n = list.map(w => w.me ? "you" : w.name); return n.length > 1 ? `${n.slice(0, -1).join(", ")} and ${n.at(-1)}` : n[0] || ""; };
+const watchersLine = g => g.watching?.length && g.state !== "final" ? `<div class="watchers">👀 ${esc(namesList(g.watching))} watching</div>` : "";
 
 // Tickets only make sense before puck drop. NHL links go straight to the game on Ticketmaster.
 const ticketLink = g => g.state === "pre" && g.tickets
@@ -359,6 +363,7 @@ function heroCard(c, live) {
   const lines = hide ? "" : [
     c.week && c.week.games ? `<div><b>Last 7 days</b> ${esc(c.week.record)} · ${c.week.gf} goals for, ${c.week.ga} against</div>` : "",
     c.last && !lastIsThis ? `<div><b>Last</b> ${RESULT_WORD[c.last.code]} ${c.last.us}–${c.last.them} ${c.last.home ? "vs" : "at"} ${esc(teamName(c.last.opp))}</div>` : "",
+    g?.watching?.length && g.state !== "final" ? `<div>👀 ${esc(namesList(g.watching))} watching</div>` : "",
     c.after?.length ? `<div><b>Then</b> ${c.after.map(a => `${a.home ? "vs" : "at"} ${esc(TEAMS[a.opp]?.code || a.opp)} ${esc(shortDate(a.date).split(",")[0])}`).join(" · ")}</div>` : "",
   ].join("");
   return `<div class="hero${t.light ? " light" : ""}" style="--c:${esc(t.color || "#333")}">
@@ -618,6 +623,20 @@ async function gameView(id, quiet = false, league = "nhl") {
   else if (g.state === "postponed") state = "Postponed";
   else state = g.start ? `${esc(shortDate(g.date))} · ${esc(time(g.start))}` : "Time TBD";
   const showScore = g.state === "live" || g.state === "final";
+  // Friends: who's watching, rivalries and reactions (sog/social.py).
+  const S = d.social || { watching: [], reactions: {}, mine: {}, rivals: [], emoji: [] };
+  const others = S.watching.filter(w => !w.me);
+  const friendsLine = [
+    others.length ? `👀 ${esc(namesList(others))} ${g.state === "final" ? "watched" : others.length > 1 ? "are watching" : "is watching"}` : "",
+    S.rivals.length ? `⚔️ Rivalry: ${S.rivals.map(r => `${esc(r.name)}'s ${esc(teamName(r.team))}`).join(", ")}` : ""].filter(Boolean).join(" · ");
+  const canReact = g.state === "live" || g.state === "final";
+  const rx = key => {
+    if (!canReact) return "";
+    key = key.slice(0, 82);
+    const counts = S.reactions[key] || {}, mine = S.mine[key];
+    const chips = Object.entries(counts).map(([e, n]) => `<button class="rxc${mine === e ? " mine" : ""}" data-rx="${e}" data-ev="${esc(key)}">${e} ${n}</button>`).join("");
+    return `<div class="rxs">${chips}<button class="rxc add" data-rxopen="${esc(key)}" aria-label="React">${mine ? "change" : "react"}</button></div>`;
+  };
   const side = (t, abbr) => `<a class="side" href="#/team/${abbr}">${mark(abbr, true)}<span class="nm">${esc(t.name || teamName(abbr))}</span></a>`;
 
   let html = `<div class="card" style="margin-top:12px">
@@ -631,9 +650,10 @@ async function gameView(id, quiet = false, league = "nhl") {
       `<a class="btn${i ? "" : " primary"}" href="${esc(l.url)}" target="_blank" rel="noopener">Open ${esc(l.name)}</a>`).join("")}</div>` : ""}
     ${g.recap ? `<div class="links"><a class="btn" href="${esc(g.recap)}" target="_blank" rel="noopener">Watch the recap on NHL.com</a></div>` : ""}
     ${g.state === "pre" && g.tickets ? `<div class="links"><a class="btn" href="${esc(g.tickets)}" target="_blank" rel="noopener">Buy tickets ↗</a></div>` : ""}
-    ${g.state !== "final" && g.state !== "postponed" ? `<div class="links">${spoilerMarked(g)
-      ? `<span class="muted small">🙈 Spoiler-free is on for this game.</span>${spoilButton("seen", g, "Turn off")}`
-      : spoilButton("later", g, "🙈 Watching later")}</div>` : ""}
+    ${g.state !== "final" && g.state !== "postponed" ? `<div class="links">
+      <button class="btn small${S.me_watching ? " primary" : ""}" id="watching">${S.me_watching ? "👀 You're watching" : "👀 I'm watching"}</button>
+      ${spoilerMarked(g) ? spoilButton("seen", g, "🙈 Spoiler-free on · turn off") : spoilButton("later", g, "🙈 Watching later")}</div>` : ""}
+    ${friendsLine ? `<div class="friends-line">${friendsLine}</div>` : ""}
     ${g.state !== "final" && league !== "pwhl" ? `<div class="links"><button class="linkish" id="report">Wrong channel? Tell us</button></div>` : ""}
   </div>
   ${d.situation && g.state === "live" && !g.intermission ? `<div class="banner">${esc(d.situation.text)}</div>` : ""}
@@ -657,7 +677,7 @@ async function gameView(id, quiet = false, league = "nhl") {
       const assists = x.assists.length ? x.assists.map(y => `${esc(y.name)}${y.total ? ` (${y.total})` : ""}`).join(", ") : "Unassisted";
       return `<div class="event"><span class="when">${esc(x.time)}</span>${mark(x.team)}
         <div><span class="run">${x.away}–${x.home}</span><div class="who">${esc(x.scorer)}${x.total ? ` (${x.total})` : ""}${tags}</div>
-        <div class="detail">${assists}${x.clip ? ` · <a href="${esc(x.clip)}" target="_blank" rel="noopener">clip</a>` : ""}</div></div></div>`;
+        <div class="detail">${assists}${x.clip ? ` · <a href="${esc(x.clip)}" target="_blank" rel="noopener">clip</a>` : ""}</div>${rx(`g:${p.period}-${x.time}-${x.scorer}`)}</div></div>`;
     }).join("")}`).join("")}</div>`;
   }
 
@@ -678,7 +698,7 @@ async function gameView(id, quiet = false, league = "nhl") {
   if (pens.length) {
     html += `<h2>Penalties</h2><div class="card">${pens.map(p => `<div class="subhead">${esc(p.period)}</div>${p.items.map(x =>
       `<div class="event"><span class="when">${esc(x.time)}</span>${mark(x.team)}<div><div class="who">${esc(x.player || "Bench")}</div>
-      <div class="detail">${esc(x.desc)} · ${x.minutes} min</div></div></div>`).join("")}`).join("")}</div>`;
+      <div class="detail">${esc(x.desc)} · ${x.minutes} min</div>${rx(`p:${p.period}-${x.time}-${x.player || "Bench"}`)}</div></div>`).join("")}`).join("")}</div>`;
   }
 
   for (const s of ["away", "home"]) {
@@ -701,6 +721,20 @@ async function gameView(id, quiet = false, league = "nhl") {
     try { await api("/api/report", { method: "POST", body: JSON.stringify({ game_id: g.id, note }) }); e.target.textContent = "Thanks, reported."; }
     catch { e.target.textContent = "Couldn't send that. Try again."; e.target.disabled = false; }
   });
+  const post = async (path, body) => {
+    try { await api(path, { method: "POST", body: JSON.stringify({ league: league === "pwhl" ? "pwhl" : "nhl", id: g.id, date: g.date, ...body }) }); }
+    catch (e) { toast(e.detail || "Couldn't save that. Try again.", true); }
+    gameView(id, true, league);
+  };
+  document.getElementById("watching")?.addEventListener("click", () => post("/api/watching", { on: !S.me_watching }));
+  view.querySelectorAll("[data-rxopen]").forEach(b => b.addEventListener("click", () => {
+    const key = b.dataset.rxopen, mine = S.mine[key];
+    b.parentElement.innerHTML = S.emoji.map(e => `<button class="rxc pick${mine === e ? " mine" : ""}" data-rx="${e}" data-ev="${esc(key)}">${e}</button>`).join("");
+    bindRx();
+  }));
+  const bindRx = () => view.querySelectorAll("[data-rx]").forEach(b => b.onclick = () =>
+    post("/api/react", { event: b.dataset.ev, emoji: S.mine[b.dataset.ev] === b.dataset.rx ? null : b.dataset.rx }));
+  bindRx();
   view.querySelectorAll("[data-shots]").forEach(b => b.addEventListener("click", () => {
     view.querySelectorAll("[data-shots]").forEach(x => x.classList.toggle("on", x === b));
     view.querySelectorAll(".rink [data-p]").forEach(dot => { dot.style.display = b.dataset.shots === "all" || dot.dataset.p === b.dataset.shots ? "" : "none"; });

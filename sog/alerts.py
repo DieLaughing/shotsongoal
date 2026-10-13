@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from . import spoilers, watch
+from . import social, spoilers, watch
 from .db import Store
 from .push import Pusher
 
@@ -21,6 +21,17 @@ TRADE_MAX_AGE = timedelta(days=2)
 def prefs(settings: dict) -> dict:
     p = settings.get("notify") or {}
     return {k: bool(p.get(k, True)) for k in KINDS}
+
+
+def rivalry_line(email: str, g: dict, fav: set, friends: dict) -> str:
+    """" · Tell Dave." when your team beat a friend's, " · Dave will enjoy this one." when it didn't."""
+    rivals = social.rivals(email, g, friends)
+    a, h = g["away"], g["home"]
+    if not rivals or a.get("score") is None or h.get("score") is None:
+        return ""
+    winner = a["abbr"] if a["score"] > h["score"] else h["abbr"]
+    names = " and ".join(r["name"] for r in rivals[:3])
+    return f" · Tell {names}." if winner in fav else f" · {names} will enjoy this one."
 
 
 class Alerts:
@@ -89,6 +100,7 @@ class Alerts:
             return
         self.store.mark_sent([e["key"] for e in fresh])  # before sending: a crash mid-send must not repeat
         subs = self.store.pushes()
+        friends = social.friends(self.store.users()) if any(e["kind"] == "final" for e in fresh) else {}
         people = {}
         for s in subs:
             people.setdefault(s["email"], []).append(s)
@@ -107,6 +119,8 @@ class Alerts:
                 elif e["kind"] == "start":
                     w = watch.watch_for(e["game"], settings.get("local"), settings.get("services"))
                     body = f"Watch: {w['app']}" if w.get("app") else w.get("why")
+                elif e["kind"] == "final":
+                    body = (body or "") + rivalry_line(email, e["game"], fav, friends)
                 await self.send(mine, {"title": e["title"], "body": body or "", "url": e["url"], "tag": e["key"]})
 
     async def send(self, subs: list[dict], payload: dict) -> int:

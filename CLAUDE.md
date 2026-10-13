@@ -51,6 +51,10 @@ which is not committed.
   slates GET /api/pickem loads (+ up to 10 older pending dates). Friends' picks only after puck drop; names =
   settings.nickname or the email's local part (friend_names(); emails never sent). Season = Jul-Jun, week = Mon-Sun.
   The table is covered while a spoiler-free game is hidden.
+- Friends on games (sog/social.py): watching + reaction tables. /api/games adds g.watching, game pages add d.social
+  (watching, reactions per event key g:<period>-<time>-<scorer> / p:...-<player>, mine, rivals). Rival = a friend
+  whose first favourite in that league is the other team; the final alert appends "Tell X." / "X will enjoy this one."
+  Watching rows go a day after the game, reactions at the July 1 season rollover (cleanup hourly from /api/games).
 - Settings (web/app.js settingsView) save on every change (saveSettings: optimistic, queued PUTs of the whole settings
   object, toast). Team pickers group NHL teams by sog/teams.py DIVISIONS. Home market = one team (local is a list server-side).
 - Phase 1: access, Tonight, Game, Standings, Teams, Settings, where-to-watch (service links; ESPN+ also links Hulu,
