@@ -22,6 +22,13 @@ which is not committed.
   viewed. Feed.cached serves an expired copy younger than STALE_OK (1 day; game pages 1 min) at once and refreshes it in
   the background (refresh_later, one task per key); pages use today_page(), never poll_today(). Only a missing copy
   makes a request wait on the leagues. API requests over 0.5 s are logged ("slow request").
+- Warm-up (Feed.warm, every poll pass, a few loads each: 4 idle / 1 busy): today's and yesterday's non-live game
+  pages, favourite PWHL teams, then every NHL team's schedule/roster/stats, favourites first. Live games: favourites'
+  and viewed games every DETAIL_POLL (20 s), the rest every WARM_LIVE_POLL (90 s). /api/game takes score/clock/state
+  from the 10-second scoreboard (_freshen), so a 2-minute-old game copy (GAME_STALE_OK) still shows the live score.
+- Phone side: api() keeps GET_CACHE; fast(path, rerender, quiet) shows the phone's copy (< 30 min) at once and
+  re-renders once if fresh data differs; any POST/PUT/DELETE clears it. prefetch() 2.5 s after start loads Pick'em,
+  Wire, standings and favourite team pages. Test with a slow relay (200 ms per request) before shipping speed changes.
 - Page speed rules: each page makes its requests in parallel (hiddenToday() is one /api/hidden call, skipped without
   spoiler settings); showLoading() only paints "Loading…" after 350 ms.
 

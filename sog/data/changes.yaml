@@ -4,6 +4,12 @@
 # and `.venv/bin/python tools/release.py` publishes the day's GitHub Release.
 
 - date: 2026-10-13
+  kind: improved
+  title: Instant tabs
+  text: After the app opens, it quietly loads your other tabs and your teams' pages, so switching tabs is instant even on a slow connection, and each page updates itself a moment later if anything changed. Behind the scenes, every team page and every game on tonight's slate is kept fresh whether or not anyone is looking, with your favorite teams first, so opening a game you haven't looked at yet doesn't wait either.
+  link: "#/"
+
+- date: 2026-10-13
   kind: new
   title: Milestones, momentum and fight alerts
   text: Your team card and team pages now show players close to a round career number ("Mittelstadt is 2 goals from 100"), and when someone gets there, the goal alert says so. Game pages have a Momentum chart (who's been getting the shots, every 5 minutes) with a shot-quality number for each team. And if you like that sort of thing, Settings → Alerts has a new Fights switch (off unless you turn it on). Pages also download less, so they open quicker on mobile data.

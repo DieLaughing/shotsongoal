@@ -442,10 +442,27 @@ async def games(request: Request, date: str | None = None, league: str = "nhl"):
     return {**day, "games": _with_watchers(_with_watch([dict(g) for g in day["games"]], _settings(request)), request)}
 
 
+LIVE_FIELDS = ("state", "raw_state", "period", "clock", "running", "intermission", "outcome", "situation")
+
+
+def _freshen(g: dict) -> dict:
+    """A game page can be a minute or two old; the scoreboard is refreshed every 10 seconds while games are on.
+    Take the score, clock and state from whichever saved scoreboard has this game."""
+    for key in ("score:now", f"score:{g.get('date')}"):
+        hit = store.get(key)
+        live = next((x for x in (hit["data"]["games"] if hit else []) if x["id"] == g["id"]), None)
+        if live and live["state"] in ("live", "final"):
+            g.update({k: live.get(k) for k in LIVE_FIELDS if k in live})
+            for side in ("away", "home"):
+                g[side] = {**g[side], "score": live[side].get("score"), "sog": live[side].get("sog", g[side].get("sog"))}
+            return g
+    return g
+
+
 @app.get("/api/game/{game_id}")
 async def game(game_id: int, request: Request):
     detail = await _upstream(feed.game(game_id))
-    detail = {**detail, "game": dict(detail["game"])}
+    detail = {**detail, "game": _freshen(dict(detail["game"]))}
     _with_watch([detail["game"]], _settings(request))
     return {**detail, "social": social.for_game(request.state.email, detail["game"], people())}
 
