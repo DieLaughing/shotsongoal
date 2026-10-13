@@ -248,16 +248,94 @@ function gateView() {
 }
 
 // ---- Tonight ----------------------------------------------------------------------
+// ---- "your team" cards ------------------------------------------------------------------------
+// The top of Tonight: one card per favourite (swipe between them), tinted in the team's colour. /api/myteams is
+// built from cached schedules and standings; kept for 5 minutes here so the 15-second refresh doesn't re-ask.
+let myTeams = { at: 0, data: null };
+async function loadMyTeams() {
+  if (!favs().size) return null;
+  if (myTeams.data && Date.now() - myTeams.at < 5 * 60000) return myTeams.data;
+  try { myTeams = { at: Date.now(), data: await api("/api/myteams") }; } catch { /* the card is extra: skip it */ }
+  return myTeams.data;
+}
+
+const RESULT_WORD = { W: "W", L: "L", OT: "OTL" };
+const STREAK_WORD = { W: "won", L: "lost", OT: "lost in OT" };
+function streakText(code) {
+  const m = /^(W|L|OT)(\d+)$/.exec(code || "");
+  if (!m || m[2] === "1") return "";
+  return m[1] === "OT" ? `${m[2]} OT losses in a row` : `${STREAK_WORD[m[1]][0].toUpperCase()}${STREAK_WORD[m[1]].slice(1)} ${m[2]} straight`;
+}
+
+function heroCard(c, live) {
+  const g = live || c.next;
+  const t = TEAMS[c.abbr] || {};
+  const side = g && (g.home.abbr === c.abbr ? { us: g.home, them: g.away, at: "vs" } : { us: g.away, them: g.home, at: "at" });
+  let kicker = "No games scheduled", right = "";
+  if (g) {
+    const today = g.date === myTeams.data?.date;
+    if (g.state === "live") {
+      kicker = "Live now";
+      right = `<b class="hero-sc">${side.us.score ?? 0}–${side.them.score ?? 0}</b><span>${esc(g.intermission ? `${g.period} INT` : `${g.period} ${g.clock || ""}`)}</span>`;
+    } else if (g.state === "final") {
+      const won = side.us.score > side.them.score;
+      kicker = "Final tonight";
+      right = `<b class="hero-sc">${won ? "W" : g.outcome && g.outcome !== "REG" ? "OTL" : "L"} ${side.us.score}–${side.them.score}</b>${g.outcome && g.outcome !== "REG" ? `<span>${esc(g.outcome)}</span>` : ""}`;
+    } else {
+      kicker = today ? "Tonight" : `Next game · ${shortDate(g.date)}`;
+      right = `<b class="hero-sc">${g.start ? esc(time(g.start)) : "TBD"}</b>`;
+    }
+  }
+  const w = g && g.state !== "final" ? g.watch : null;
+  const watch = w && (w.network || w.app) ? `<span class="chip strong">${esc(w.network || w.app)}${w.have === true ? " · you have it" : w.have === false ? " · not in your services" : ""}</span>` : "";
+  const st = c.standing;
+  const chips = [watch,
+    st?.place ? `<span class="chip">${esc(st.place)}</span>` : "",
+    c.record ? `<span class="chip">${esc(c.record)}${st?.pts != null ? ` · ${st.pts} pts` : ""}</span>` : "",
+    streakText(c.streak) ? `<span class="chip">${esc(streakText(c.streak))}</span>` : "",
+    st?.race ? `<span class="chip">${esc(st.race)}</span>` : ""].join("");
+  const lastIsThis = c.last && g && c.last.id === g.id;
+  const lines = [
+    c.week && c.week.games ? `<div><b>Last 7 days</b> ${esc(c.week.record)} · ${c.week.gf} goals for, ${c.week.ga} against</div>` : "",
+    c.last && !lastIsThis ? `<div><b>Last</b> ${RESULT_WORD[c.last.code]} ${c.last.us}–${c.last.them} ${c.last.home ? "vs" : "at"} ${esc(teamName(c.last.opp))}</div>` : "",
+    c.after?.length ? `<div><b>Then</b> ${c.after.map(a => `${a.home ? "vs" : "at"} ${esc(TEAMS[a.opp]?.code || a.opp)} ${esc(shortDate(a.date).split(",")[0])}`).join(" · ")}</div>` : "",
+  ].join("");
+  return `<div class="hero${t.light ? " light" : ""}" style="--c:${esc(t.color || "#333")}">
+    <a class="hero-top" href="${g ? gameHref(g) : `#/team/${encodeURIComponent(c.abbr)}`}">
+      <div class="hero-k">${esc(teamName(c.abbr))} · ${esc(kicker)}</div>
+      <div class="hero-m">${mark(c.abbr)}${side ? `<span>${side.at}</span>${mark(side.them.abbr)}<span class="hero-opp">${esc(teamName(side.them.abbr))}</span>` : ""}
+        <span class="hero-r">${right}</span></div>
+    </a>
+    ${chips ? `<div class="hero-chips">${chips}</div>` : ""}
+    ${lines ? `<div class="hero-lines">${lines}</div>` : ""}
+  </div>`;
+}
+
+function heroes(data, leagues, slateGames) {
+  if (!data?.teams?.length) return "";
+  // Playing now first, then today's games in favourites order, then everyone else by their next game.
+  const order = ME.settings.favorites;
+  const rank = c => { const g = slateGames.find(x => x.away.abbr === c.abbr || x.home.abbr === c.abbr);
+    return g ? [0, g.state === "live" ? 0 : 1, String(order.indexOf(c.abbr)).padStart(3, "0")] : [1, 0, c.next?.start || c.next?.date || "9"]; };
+  const cards = data.teams.filter(c => leagues.includes(c.league))
+    .sort((x, y) => { const a = rank(x), b = rank(y); return a[0] - b[0] || a[1] - b[1] || String(a[2]).localeCompare(String(b[2])); });
+  if (!cards.length) return "";
+  const live = c => slateGames.find(x => x.away.abbr === c.abbr || x.home.abbr === c.abbr);
+  return `<div class="heroes${cards.length > 1 ? " many" : ""}">${cards.map(c => heroCard(c, live(c))).join("")}</div>`;
+}
+
 async function tonightView(date, quiet = false) {
   setNav("tonight");
   if (!quiet) view.innerHTML = `<div class="empty">Loading games…</div>`;
   const leagues = LEAGUE === "both" ? ["nhl", "pwhl"] : [LEAGUE];
-  let days;
+  let days, mineData = null;
   try {
     // Both leagues: the NHL's date leads, so the PWHL slate is for the same day.
+    const mine = date ? null : loadMyTeams();
     const first = await api(`/api/games?league=${leagues[0]}${date ? `&date=${encodeURIComponent(date)}` : ""}`);
     days = [first];
     if (leagues[1]) days.push(await api(`/api/games?league=${leagues[1]}&date=${encodeURIComponent(date || first.date)}`));
+    mineData = await mine;
   } catch (e) {
     view.innerHTML = failed(e);
     return;
@@ -281,6 +359,7 @@ async function tonightView(date, quiet = false) {
   view.innerHTML = `
     ${newBanner()}
     <div id="getapp"></div>
+    ${heroes(mineData, leagues, days.flatMap(d => d.games || []))}
     <div class="daybar">
       ${day.prev ? `<a href="#/day/${day.prev}" aria-label="Previous day">←</a>` : "<span></span>"}
       <h1>${esc(day.date ? dayTitle(day.date) : "Games")}</h1>

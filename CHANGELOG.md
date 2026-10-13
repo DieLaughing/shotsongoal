@@ -5,6 +5,7 @@ This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit th
 
 ## October 13, 2026
 
+- **New: Your team, up top.** Tonight now opens with a card for each of your favorite teams, in their colors. It shows tonight's game (or the next one) and where to watch it, the live score once it starts, where they sit in the standings, how far they are from a playoff spot, any streak, the last 7 days and the next few games. Follow more than one team? Swipe sideways.
 - **New: Report a problem.** Found something off, or have an idea? Tap "Something wrong? Report it" at the bottom of any page (or Settings → Report a problem). It goes straight onto the app's to-do list on GitHub without your name or email, along with which page you were on and what phone you're using, so there's no need to explain that part. Settings → Your reports shows whether it's been fixed, plus any reply.
 - **Fixed: Opens on today's games.** In the morning, Tonight could still show last night's games, because the NHL's own feed doesn't switch to the new day until around midday. The app now switches by itself (last night's games stay up until 6 am Eastern, or until a late game finishes), and it refreshes when you come back to it after a while instead of showing the page you left.
 
