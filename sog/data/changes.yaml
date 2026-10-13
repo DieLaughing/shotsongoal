@@ -5,6 +5,12 @@
 
 - date: 2026-10-13
   kind: new
+  title: Watch with friends
+  text: Open a game and tap "👀 I'm watching" so friends can see you're on it. Who's watching shows on Tonight too. Once the puck drops, react to goals and penalties with 🔥 😭 🤬 🍺 🥅 and see what everyone else thought. When your team plays a friend's, the game page calls out the rivalry, and the final-score alert tells you who to gloat at (or who'll be gloating). Reactions are cleared at the end of each season.
+  link: "#/"
+
+- date: 2026-10-13
+  kind: new
   title: Pick'em
   text: A new Pick'em tab. Tap who you think wins each game, NHL and PWHL, before puck drop. Star one game a night as your lock for 2 points if you're right (nothing if you're wrong). Friends' picks appear once a game starts, and the tables show who's leading this week and this season. Pick the name friends see in Settings → Pick'em.
   link: "#/picks"
