@@ -785,10 +785,14 @@ function settingsView() {
     <div class="card" id="cal"><div class="empty">Loading…</div></div>
     <p class="help">Every game for your teams, with where to watch in each event. Your phone's calendar checks it every few hours. The link is personal; don't share it.</p>
 
-    <a class="card pad whatsnew-link" href="#/new" style="margin-top:28px"><b>What's new</b>${unseenChanges().length ? ` <span class="pill info">${unseenChanges().length} new</span>` : ""}<span class="muted small">Every update to the app →</span></a>
+    <h2>Help</h2>
+    <a class="card pad whatsnew-link" href="#/report"><b>Report a problem or suggest an idea</b><span class="muted small">Goes straight to the to-do list →</span></a>
+    <div id="myreports"></div>
+    <a class="card pad whatsnew-link" href="#/new" style="margin-top:10px"><b>What's new</b>${unseenChanges().length ? ` <span class="pill info">${unseenChanges().length} new</span>` : ""}<span class="muted small">Every update to the app →</span></a>
     <p class="help" style="margin-top:12px">Signed in as ${esc(ME.email)}.</p>`;
   showCalendar();
   showNotifications();
+  showMyReports("myreports");
 
   const picked = name => [...view.querySelectorAll(`input[name=${name}]:checked`)].map(i => i.value);
   document.getElementById("editteams")?.addEventListener("click", () => { editingTeams = !open; settingsView(); });
@@ -811,6 +815,91 @@ function settingsView() {
     const on = new Set(picked("notify"));
     saveSettings({ notify: Object.fromEntries(["start", "goals", "final", "trades"].map(k => [k, on.has(k)])) });
   }));
+}
+
+// ---- Bug reports ------------------------------------------------------------------------------
+// Filed as GitHub issues by the server, without anyone's name or email. "Your reports" shows their state.
+let reportFrom = "#/";   // the page someone was on when they tapped "Report it"
+
+function deviceLabel() {
+  const ua = navigator.userAgent;
+  const os = { ios: /iPad/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ? "iPad" : "iPhone",
+    "ios-other": "iPhone", android: "Android", desktop: /Mac/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "Computer" }[device()];
+  const browser = /EdgiOS|Edg\//.test(ua) ? "Edge" : /CriOS|Chrome\//.test(ua) ? "Chrome" : /FxiOS|Firefox\//.test(ua) ? "Firefox"
+    : /Safari\//.test(ua) ? "Safari" : "browser";
+  return `${os} · ${browser}${isStandalone() ? " · home-screen app" : ""} · ${window.innerWidth}px wide`;
+}
+
+const REPORT_STATE = { open: ["Open", "info"], fixed: ["Fixed", "have"], closed: ["Closed", "need"] };
+function reportList(reports) {
+  if (!reports.length) return "";
+  return `<div class="card">${reports.map(r => {
+    const [label, cls] = REPORT_STATE[r.state] || REPORT_STATE.open;
+    return `<a class="report-row" href="${esc(r.url || "#")}" target="_blank" rel="noopener">
+      <span class="report-head"><span class="pill ${cls}">${label}</span><b>${esc(r.title)}</b></span>
+      <span class="muted small">${r.kind === "idea" ? "Idea" : "Bug"} #${r.issue} · sent ${esc(new Date(r.created).toLocaleDateString(undefined, { month: "short", day: "numeric" }))}</span>
+      ${r.reply ? `<span class="report-reply small"><b>Reply:</b> ${esc(r.reply.length > 280 ? r.reply.slice(0, 279) + "…" : r.reply)}</span>` : ""}
+    </a>`;
+  }).join("")}</div>`;
+}
+
+async function showMyReports(boxId) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  const d = await api("/api/bugs").catch(() => null);
+  if (!d) { box.innerHTML = ""; return; }
+  box.innerHTML = d.reports.length ? `<h2>Your reports</h2>${reportList(d.reports)}<p class="help">Tap one to see it on GitHub. It says Fixed once it's been sorted out.</p>` : "";
+}
+
+function reportView(kind = "bug") {
+  setNav("");
+  const page = reportFrom;
+  view.innerHTML = `
+    <h1>Report a problem</h1>
+    <div class="seg" role="group" aria-label="Kind">
+      <button data-kind="bug" class="${kind === "bug" ? "on" : ""}">Something's wrong</button>
+      <button data-kind="idea" class="${kind === "idea" ? "on" : ""}">I have an idea</button>
+    </div>
+    <div class="card pad">
+      <textarea id="bugtext" class="field bugtext" rows="7" maxlength="4000" placeholder="${kind === "idea"
+        ? "What would make the app better?" : "What happened, and what did you expect instead? Which game or team, if it's about one."}"></textarea>
+      <p class="help" style="margin-top:10px">Sent with it: the page you were on (<code>${esc(page)}</code>), ${esc(deviceLabel())}, and the app version. Not your name or email.</p>
+      <p class="help"><b>Reports are posted publicly on GitHub</b>, so leave out anything private.</p>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">
+        <button class="btn primary" id="bugsend">Send</button><a href="${esc(page)}" class="small">Cancel</a>
+      </div>
+      <p class="help" id="bugmsg" role="status"></p>
+    </div>
+    <div id="myreports"></div>`;
+  view.querySelectorAll("[data-kind]").forEach(b => b.addEventListener("click", () => {
+    const text = document.getElementById("bugtext").value;
+    reportView(b.dataset.kind);
+    document.getElementById("bugtext").value = text;
+  }));
+  const msg = t => { document.getElementById("bugmsg").textContent = t; };
+  document.getElementById("bugsend").addEventListener("click", async e => {
+    const text = document.getElementById("bugtext").value.trim();
+    if (text.length < 10) { msg("Tell us a bit more (at least a sentence)."); return; }
+    e.target.disabled = true;
+    msg("Sending…");
+    try {
+      const r = await api("/api/bug", { method: "POST", body: JSON.stringify({ kind, text, page, device: deviceLabel() }) });
+      if (r.link) {  // this install isn't connected to GitHub: hand over GitHub's own form, filled in
+        window.open(r.link, "_blank", "noopener");
+        msg("Opened GitHub's form in a new tab (you'll need a GitHub account there).");
+        e.target.disabled = false;
+        return;
+      }
+      view.innerHTML = `<h1>Thanks!</h1>
+        <div class="card pad"><p style="margin-top:0">It's in as <a href="${esc(r.url)}" target="_blank" rel="noopener">#${r.issue}: ${esc(r.title)}</a>.</p>
+        <p class="help">You can follow it under <a href="#/settings">Settings → Your reports</a>; it says Fixed once it's been sorted out.</p>
+        <div class="links" style="margin-top:12px"><a class="btn primary" href="${esc(page)}">Back to where I was</a></div></div>`;
+    } catch (err) {
+      msg(err.detail || "Couldn't send it. Check your connection and try again.");
+      e.target.disabled = false;
+    }
+  });
+  showMyReports("myreports");
 }
 
 function b64ToBytes(b64) {
@@ -982,6 +1071,8 @@ function route() {
   document.getElementById("admin-tab").hidden = !ME.admin;
   const [, page, arg] = (location.hash || "#/").split("/");
   if (page !== "settings") editingTeams = false;
+  if (page !== "report") reportFrom = location.hash || "#/";
+  document.getElementById("foot").hidden = page === "report";
   window.scrollTo(0, 0);
   if (page === "day" && /^\d{4}-\d{2}-\d{2}$/.test(arg || "")) return tonightView(arg);
   if (page === "game" && /^\d+$/.test(arg || "")) return gameView(arg);
@@ -997,6 +1088,7 @@ function route() {
   if (page === "settings") return settingsView();
   if (page === "app") return appView();
   if (page === "new") return whatsNewView();
+  if (page === "report") return reportView();
   if (page === "admin") return adminView();
   return tonightView();
 }

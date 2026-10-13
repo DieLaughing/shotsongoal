@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import access, alerts, changes, ics, pwhl, teams, watch, wire
+from . import access, bugs, alerts, changes, ics, pwhl, teams, watch, wire
 from .db import Store, parse_iso
 from .feed import Feed
 from .push import Pusher
@@ -30,6 +30,7 @@ REREQUEST_AFTER = timedelta(days=7)    # a denied or revoked person may ask agai
 RENOTIFY_AFTER = timedelta(hours=12)   # pressing Request twice doesn't ping the phone twice
 
 store = Store(DATA_DIR / "sog.db")
+bugs.init(store.conn)
 feed = Feed(store)
 pusher = Pusher(DATA_DIR, access.ADMIN)
 feed.alerts = alerts.Alerts(store, pusher, access.BASE_URL)
@@ -118,6 +119,37 @@ def _user_settings(user: dict | None, email: str | None) -> dict:
     s["notify"] = alerts.prefs(s)
     return s
 
+
+
+# ---- bug reports (filed as GitHub issues, anonymously; see bugs.py) ------------------------------------
+@app.post("/api/bug")
+async def bug_report(request: Request):
+    body = await request.json()
+    kind = body.get("kind") if body.get("kind") in bugs.KINDS else "bug"
+    text = str(body.get("text") or "").strip()[:4000]
+    if len(text) < 10:
+        raise HTTPException(400, "Tell us a bit more (at least a sentence).")
+    page = str(body.get("page") or "")[:200]
+    device = str(body.get("device") or "")[:120]
+    version = (changes.load() or [{}])[0].get("date", "")
+    email = request.state.email
+    if not bugs.configured():
+        return {"link": bugs.new_issue_link(kind, text, page, device, version)}
+    if not access.is_admin(email) and bugs.sent_today(email) >= bugs.PER_DAY:
+        raise HTTPException(429, "That's a lot of reports for one day. Thanks! Try again tomorrow.")
+    try:
+        out = await bugs.file(email, kind, text, page, device, version)
+    except Exception as exc:
+        logging.getLogger("sog.app").warning("filing a bug report failed: %r", exc)
+        raise HTTPException(502, "Couldn't send it to GitHub just now. Try again in a bit.")
+    await access.notify(f"Shots on Goal: new {bugs.KINDS[kind][0].lower()} #{out['issue']}", out["title"],
+                        tags="bug", click=out["url"])
+    return out
+
+
+@app.get("/api/bugs")
+async def my_bug_reports(request: Request):
+    return {"reports": await bugs.mine(request.state.email), "repo": bugs.REPO, "filing": bugs.configured()}
 
 @app.get("/api/me")
 def me(request: Request):
