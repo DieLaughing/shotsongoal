@@ -506,7 +506,7 @@ async function pickemView(date, quiet = false) {
       <h1>${esc(dayTitle(d.date))}</h1>
       ${d.next ? `<a href="#/picks/${d.next}" aria-label="Next day">→</a>` : "<span></span>"}
     </div>
-    <p class="help">Tap who wins. Picks lock at puck drop. Tap ★ on one game a night to make it your lock: 2 points if it's right, nothing if it's wrong.</p>
+    <p class="help">Tap who wins: <b>1 point</b> for every one you get right. Tap ★ on one game a night to make it your lock, worth <b>2 points</b> instead (nothing if it's wrong). Picks lock at puck drop.</p>
     ${rows ? `<div class="card picks">${rows}</div>` : `<div class="empty">No games this day.</div>`}
     ${hid.length ? `<h2>The table</h2>${spoilCover(hid, "The Pick'em table")}` : `
       ${lastLine ? `<h2>Last results</h2>${lastLine}` : ""}
