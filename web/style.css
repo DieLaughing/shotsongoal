@@ -101,7 +101,7 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .hero-sc { font-size: 19px; font-variant-numeric: tabular-nums; }
 .hero-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .hero .chip { font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 7px; background: var(--wash); }
-.hero .chip.strong { background: var(--ink); color: var(--c); }
+.hero .chip.strong { background: var(--ink); color: var(--c); text-decoration: none; }
 .hero.light .chip.strong { color: #fff; background: #111; }
 .hero-lines { display: grid; gap: 2px; font-size: 12.5px; opacity: .92; }
 .hero-lines b { font-weight: 700; margin-right: 4px; }
@@ -155,6 +155,19 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .rxc.mine { border-color: var(--accent); }
 .rxc.add { color: var(--muted); border-color: transparent; background: none; padding: 3px 4px; text-decoration: underline; text-underline-offset: 2px; }
 .rxc.pick { font-size: 15px; padding: 2px 7px; }
+
+/* consolidated layout */
+.group-title { font-size: 21px; font-weight: 800; margin: 34px 2px 0; padding-top: 14px; border-top: 1px solid var(--border); }
+.group-title + h2, .group-title + .section-head h2 { margin-top: 10px; }
+.watch .ok { color: var(--have-fg); font-weight: 650; }
+.watch .no { color: var(--need-fg); font-weight: 650; }
+.tiles-top { margin: 12px 0 4px; }
+.more-stats { margin-top: 22px; }
+.more-stats > summary { cursor: pointer; list-style: none; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); font-weight: 650; font-size: 14px; }
+.more-stats > summary::-webkit-details-marker { display: none; }
+.more-stats > summary::after { content: "＋"; float: right; color: var(--muted); }
+.more-stats[open] > summary::after { content: "−"; }
 
 /* day header */
 .daybar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 4px; }
@@ -340,8 +353,6 @@ body.league-pwhl { --accent: #163F36; --fav: #163F36; --on-accent: #fff; }
 .btn.primary { color: var(--on-accent); }
 
 /* tickets */
-.tix { display: inline-block; margin-top: 6px; font-size: 12.5px; font-weight: 650; color: var(--info-fg); text-decoration: none; }
-.tix:hover { text-decoration: underline; }
 
 /* What's new */
 .top-link.has-new { position: relative; }

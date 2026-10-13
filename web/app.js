@@ -178,7 +178,7 @@ function gameCard(g, fav) {
       ${hide ? `<div class="status"><div class="t">🙈 Hidden</div></div>` : statusCell(g)}
       <div class="team-line${lost(h)}">${mark(h.abbr)}<span class="nm">${esc(h.name || teamName(h.abbr))}</span>${sc(h)}</div>
     </a>
-    ${watchLine(g.watch, g)}${ticketLink(g)}${watchersLine(g)}
+    ${cardWatch(g.watch, g)}${watchersLine(g)}
   </div>`;
 }
 
@@ -186,9 +186,17 @@ function gameCard(g, fav) {
 const namesList = list => { const n = list.map(w => w.me ? "you" : w.name); return n.length > 1 ? `${n.slice(0, -1).join(", ")} and ${n.at(-1)}` : n[0] || ""; };
 const watchersLine = g => g.watching?.length && g.state !== "final" ? `<div class="watchers">👀 ${esc(namesList(g.watching))} watching</div>` : "";
 
-// Tickets only make sense before puck drop. NHL links go straight to the game on Ticketmaster.
-const ticketLink = g => g.state === "pre" && g.tickets
-  ? `<a class="tix" href="${esc(g.tickets)}" target="_blank" rel="noopener">Tickets ↗</a>` : "";
+// One short line on cards: the app to open and whether you have it. The why (blackouts, markets) and tickets
+// are on the game page.
+function cardWatch(w, g) {
+  if (!w || g.state === "final") return "";
+  const links = w.links || [];
+  const name = links.length ? links.map(l => `<a class="app" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`).join(`<span>or</span>`)
+    : w.app || w.network ? `<span class="app">${esc(w.app || w.network)}</span>` : "";
+  if (!name) return w.why ? `<div class="watch"><span>${esc(w.why)}</span></div>` : "";
+  const have = w.have === true ? `<span class="ok">✓ You have it</span>` : w.have === false ? `<span class="no">Not in your services</span>` : "";
+  return `<div class="watch">${name}${have}</div>`;
+}
 
 function setNav(name) {
   document.querySelectorAll("[data-nav]").forEach(a => a.classList.toggle("active", a.dataset.nav === name));
@@ -352,7 +360,9 @@ function heroCard(c, live) {
     }
   }
   const w = g && g.state !== "final" ? g.watch : null;
-  const watch = w && (w.network || w.app) ? `<span class="chip strong">${esc(w.network || w.app)}${w.have === true ? " · you have it" : w.have === false ? " · not in your services" : ""}</span>` : "";
+  const wl = w?.links?.[0];
+  const wtext = w && (w.network || w.app) ? `${esc(wl ? wl.name : w.network || w.app)}${wl ? " ↗" : ""}${w.have === true ? " · you have it" : w.have === false ? " · not in your services" : ""}` : "";
+  const watch = !wtext ? "" : wl ? `<a class="chip strong" href="${esc(wl.url)}" target="_blank" rel="noopener">${wtext}</a>` : `<span class="chip strong">${wtext}</span>`;
   const st = c.standing;
   const chips = hide ? watch : [watch,
     st?.place ? `<span class="chip">${esc(st.place)}</span>` : "",
@@ -410,13 +420,15 @@ async function tonightView(date, quiet = false) {
   const fav = favs();
   const order = g => ({ live: 0, pre: 1, postponed: 2, final: 3 }[g.state] ?? 1);
   const section = (title, list) => list.length ? `<h2>${title}</h2><div class="card">${list.map(g => gameCard(g, fav)).join("")}</div>` : "";
+  // Games of teams with a card up top aren't listed again below it.
+  const carded = new Set(date ? [] : (mineData?.teams || []).filter(c => leagues.includes(c.league)).map(c => c.abbr));
   const slate = (day, league) => {
-    const games = day.games || [];
+    const games = (day.games || []).filter(g => !carded.has(g.away.abbr) && !carded.has(g.home.abbr));
     const mine = games.filter(g => fav.has(g.away.abbr) || fav.has(g.home.abbr));
     const rest = games.filter(g => !mine.includes(g));
     rest.sort((x, y) => order(x) - order(y) || (x.start || "").localeCompare(y.start || ""));
     const head = leagues.length > 1 ? `<div class="league-head ${league}">${LEAGUE_NAME[league]}</div>` : "";
-    if (!games.length) return head + `<div class="empty">No ${LEAGUE_NAME[league]} games this day.</div>`;
+    if (!(day.games || []).length) return head + `<div class="empty">No ${LEAGUE_NAME[league]} games this day.</div>`;
     return head + section("Your teams", mine) + section(mine.length ? "Around the league" : "All games", rest);
   };
   const dates = days.map(d => d.date).filter(Boolean);
@@ -424,7 +436,6 @@ async function tonightView(date, quiet = false) {
     // Arrows step to the nearest day with a game in any shown league.
     prev: days.map(d => d.prev).filter(Boolean).sort().pop(), next: days.map(d => d.next).filter(Boolean).sort()[0] };
   view.innerHTML = `
-    ${newBanner()}
     <div id="getapp"></div>
     ${heroes(mineData, leagues, days.flatMap(d => d.games || []))}
     ${(n => n ? `<div class="spoil-note">🙈 Spoiler-free: ${n} game${n > 1 ? "s" : ""} hidden. Open one to reveal it when you've watched.</div>` : "")(days.flatMap(d => d.games || []).filter(spoilerHidden).length)}
@@ -434,8 +445,13 @@ async function tonightView(date, quiet = false) {
       ${day.next ? `<a href="#/day/${day.next}" aria-label="Next day">→</a>` : "<span></span>"}
     </div>
     ${days.map((d, i) => slate(d, leagues[i])).join("")}`;
-  getAppBanner();
-  bindNewBanner();
+  // One banner at a time: getting the app / alerts first, otherwise what's new.
+  getAppBanner().then(shown => {
+    const box = document.getElementById("getapp");
+    if (shown || !box) return;
+    box.innerHTML = newBanner();
+    bindNewBanner();
+  });
   const all = days.flatMap(d => d.games || []);
   if (all.some(g => g.state === "live" || (g.state === "pre" && Date.parse(g.start) - Date.now() < 30 * 60000))) {
     autoRefresh(q => tonightView(date, q), 15);
@@ -523,10 +539,10 @@ async function pickemView(date, quiet = false) {
 // ---- getting the app + alerts --------------------------------------------------------------
 async function getAppBanner() {
   const box = document.getElementById("getapp");
-  if (!box) return;
+  if (!box) return false;
   let hidden = false;
   try { hidden = localStorage.getItem("getappHidden") === "1"; } catch { /* fine */ }
-  if (hidden) return;
+  if (hidden) return false;
   let text = null;
   if (!isStandalone() && device() !== "desktop") {
     text = "<b>Put Shots on Goal on your home screen</b> and get alerts when your teams score.";
@@ -535,13 +551,14 @@ async function getAppBanner() {
     const sub = reg ? await reg.pushManager.getSubscription().catch(() => null) : null;
     if (!sub) text = "<b>Turn on alerts</b> for puck drop, goals and finals for your teams.";
   }
-  if (!text) return;
+  if (!text) return false;
   box.innerHTML = `<div class="getapp"><div>${text}</div><a class="btn primary small" href="#/app">Show me how</a>
     <button class="x" aria-label="Hide">×</button></div>`;
   box.querySelector(".x").addEventListener("click", () => {
     try { localStorage.setItem("getappHidden", "1"); } catch { /* fine */ }
     box.innerHTML = "";
   });
+  return true;
 }
 
 function appView() {
@@ -597,6 +614,7 @@ function compareRow(label, a, h, ac, hc) {
     <span class="v">${esc(h)}</span></div>`;
 }
 
+let moreStatsOpen = false;  // stays open across the live refresh
 async function gameView(id, quiet = false, league = "nhl") {
   setNav("tonight");
   if (!quiet) view.innerHTML = `<div class="empty">Loading game…</div>`;
@@ -659,16 +677,6 @@ async function gameView(id, quiet = false, league = "nhl") {
   ${d.situation && g.state === "live" && !g.intermission ? `<div class="banner">${esc(d.situation.text)}</div>` : ""}
   ${d.recap ? `<p class="recap">${esc(d.recap)}</p>` : ""}`;
 
-  if (d.linescore.length) {
-    const shots = Object.fromEntries(d.shots.map(s => [s.period, s]));
-    html += `<h2>By period</h2><div class="card scroll"><table>
-      <tr><th></th>${d.linescore.map(p => `<th>${esc(p.period)}</th>`).join("")}<th>T</th><th>SOG</th></tr>
-      ${["away", "home"].map(s => `<tr><td class="team"><span class="tm">${mark(s === "away" ? a : h)}</span></td>
-        ${d.linescore.map(p => `<td>${p[s] ?? ""}<span class="muted small">${shots[p.period] ? ` · ${shots[p.period][s]}` : ""}</span></td>`).join("")}
-        <td><b>${g[s].score ?? 0}</b></td><td>${g[s].sog ?? ""}</td></tr>`).join("")}
-    </table></div><p class="help">Goals · shots in each period.</p>`;
-  }
-
   const goals = d.scoring.filter(p => p.goals.length);
   if (goals.length) {
     html += `<h2>Scoring</h2><div class="card">${goals.map(p => `<div class="subhead">${esc(p.period)}</div>${p.goals.map(x => {
@@ -683,20 +691,33 @@ async function gameView(id, quiet = false, league = "nhl") {
 
   if (d.shotmap?.length) html += shotMap(d.shotmap, a, h);
 
+  if (d.linescore.length) {
+    const shots = Object.fromEntries(d.shots.map(s => [s.period, s]));
+    html += `<h2>By period</h2><div class="card scroll"><table>
+      <tr><th></th>${d.linescore.map(p => `<th>${esc(p.period)}</th>`).join("")}<th>T</th><th>SOG</th></tr>
+      ${["away", "home"].map(s => `<tr><td class="team"><span class="tm">${mark(s === "away" ? a : h)}</span></td>
+        ${d.linescore.map(p => `<td>${p[s] ?? ""}<span class="muted small">${shots[p.period] ? ` · ${shots[p.period][s]}` : ""}</span></td>`).join("")}
+        <td><b>${g[s].score ?? 0}</b></td><td>${g[s].sog ?? ""}</td></tr>`).join("")}
+    </table></div><p class="help">Goals · shots in each period.</p>`;
+  }
+
+
   if (d.stars.length) {
     html += `<h2>Three stars</h2><div class="card">${d.stars.map(s => `<div class="event"><span class="when">${"★".repeat(s.star)}</span>${mark(s.team)}
       <div><div class="who">${esc(s.name)} <span class="muted small">${esc(s.pos)}</span></div><div class="detail">${esc(s.line)}</div></div></div>`).join("")}</div>`;
   }
 
+  // Team stats, penalties and players: one tap away so the page leads with what happened.
+  let more = "";
   if (d.team_stats.length) {
-    html += `<h2>Team stats</h2><div class="card compare">
+    more += `<h2>Team stats</h2><div class="card compare">
       <div class="cmp"><span>${mark(a)}</span><span></span><span style="text-align:right">${mark(h)}</span></div>
       ${d.team_stats.map(s => compareRow(s.label, s.away, s.home, ac, hc)).join("")}</div>`;
   }
 
   const pens = d.penalties.filter(p => p.items.length);
   if (pens.length) {
-    html += `<h2>Penalties</h2><div class="card">${pens.map(p => `<div class="subhead">${esc(p.period)}</div>${p.items.map(x =>
+    more += `<h2>Penalties</h2><div class="card">${pens.map(p => `<div class="subhead">${esc(p.period)}</div>${p.items.map(x =>
       `<div class="event"><span class="when">${esc(x.time)}</span>${mark(x.team)}<div><div class="who">${esc(x.player || "Bench")}</div>
       <div class="detail">${esc(x.desc)} · ${x.minutes} min</div>${rx(`p:${p.period}-${x.time}-${x.player || "Bench"}`)}</div></div>`).join("")}`).join("")}</div>`;
   }
@@ -705,15 +726,18 @@ async function gameView(id, quiet = false, league = "nhl") {
     const p = d.players[s];
     if (!p || !p.skaters.length) continue;
     const abbr = s === "away" ? a : h;
-    html += `<h2>${esc(teamName(abbr))} players</h2><div class="card scroll"><table>
+    more += `<h2>${esc(teamName(abbr))} players</h2><div class="card scroll"><table>
       <tr><th>Skater</th><th>G</th><th>A</th><th>P</th><th>+/-</th><th>SOG</th><th>Hits</th><th>TOI</th></tr>
       ${p.skaters.map(x => `<tr><td>${esc(x.name)} <span class="muted small">${esc(x.pos)}</span></td><td>${x.g}</td><td>${x.a}</td><td><b>${x.p}</b></td><td>${x.pm > 0 ? "+" : ""}${x.pm}</td><td>${x.sog}</td><td>${x.hits}</td><td>${esc(x.toi || "")}</td></tr>`).join("")}
     </table>${p.goalies.length ? `<table><tr><th>Goalie</th><th>Saves</th><th>GA</th><th>SV%</th><th>TOI</th></tr>
       ${p.goalies.map(x => `<tr><td>${esc(x.name)}</td><td>${x.saves}/${x.sa}</td><td>${x.ga}</td><td>${x.sa ? (x.saves / x.sa).toFixed(3).replace(/^0/, "") : "–"}</td><td>${esc(x.toi || "")}</td></tr>`).join("")}</table>` : ""}</div>`;
   }
 
+  if (more) html += `<details class="more-stats" ${moreStatsOpen ? "open" : ""}><summary>More stats: team, penalties, players</summary>${more}</details>`;
+
   if (g.venue) html += `<p class="help" style="text-align:center;margin-top:18px">${esc(g.venue)}</p>`;
   view.innerHTML = html;
+  view.querySelector(".more-stats")?.addEventListener("toggle", e => { moreStatsOpen = e.target.open; });
   document.getElementById("report")?.addEventListener("click", async e => {
     const note = prompt(`We said: ${g.watch?.app || "no channel"} (${g.watch?.why || ""}).\nWhere is it actually on? (optional)`);
     if (note === null) return;
@@ -861,8 +885,14 @@ function pwhlStandings(rows) {
   </table></div>${season}`;
 }
 
+// Your teams as shortcuts above the standings; every team name in the tables opens its page too.
+function yourTeamTiles(lg) {
+  const mine = [...favs()].filter(a => leagueOf(a) === lg);
+  return mine.length ? `<div class="grid tiles-top">${mine.map(a => `<a class="tile" href="#/team/${a}">${mark(a)}${esc(teamName(a))}</a>`).join("")}</div>` : "";
+}
+
 async function standingsView(mode = "division") {
-  setNav("standings");
+  setNav("league");
   view.innerHTML = `<div class="empty">Loading standings…</div>`;
   const lg = pageLeague();
   const hid = (await hiddenToday().catch(() => [])).filter(g => g.state === "final" && leagueOf(g.home.abbr) === lg);
@@ -874,7 +904,7 @@ async function standingsView(mode = "division") {
   if (lg === "pwhl") {
     let rows;
     try { rows = await standings("pwhl"); } catch (e) { view.innerHTML = failed(e); return; }
-    view.innerHTML = leaguePicker("pwhl") + pwhlStandings(rows);
+    view.innerHTML = leaguePicker("pwhl") + yourTeamTiles("pwhl") + pwhlStandings(rows);
     bindLeaguePicker(() => standingsView(mode));
     return;
   }
@@ -903,7 +933,7 @@ async function standingsView(mode = "division") {
       body += `<h2>${esc(div)}</h2>` + standingsTable(list.sort((x, y) => x.div_rank - y.div_rank));
     }
   }
-  view.innerHTML = `${leaguePicker("nhl")}<div class="seg">${STANDING_MODES.map(([k, l]) => `<button data-mode="${k}" class="${k === mode ? "on" : ""}">${l}</button>`).join("")}</div>${body}`;
+  view.innerHTML = `${leaguePicker("nhl")}${yourTeamTiles("nhl")}<div class="seg">${STANDING_MODES.map(([k, l]) => `<button data-mode="${k}" class="${k === mode ? "on" : ""}">${l}</button>`).join("")}</div>${body}`;
   bindLeaguePicker(() => standingsView(mode));
   view.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", () => {
     try { localStorage.setItem("standingsMode", b.dataset.mode); } catch { /* fine */ }
@@ -911,32 +941,8 @@ async function standingsView(mode = "division") {
   }));
 }
 
-// ---- Teams -------------------------------------------------------------------------------
-async function teamsView() {
-  setNav("teams");
-  const lg = pageLeague();
-  let rows = [];
-  if (lg === "nhl") { try { rows = await standings(); } catch { /* fall back to a flat list */ } }
-  const fav = favs();
-  const tile = abbr => `<a class="tile" href="#/team/${abbr}">${mark(abbr)}${esc(teamName(abbr))}</a>`;
-  let html = leaguePicker(lg);
-  const mineHere = [...fav].filter(a => leagueOf(a) === lg);
-  if (mineHere.length) html += `<h2>Your teams</h2><div class="grid">${mineHere.map(tile).join("")}</div>`;
-  if (lg === "pwhl") {
-    html += `<h2>PWHL</h2><div class="grid">${Object.keys(TEAMS).filter(a => leagueOf(a) === "pwhl").sort().map(tile).join("")}</div>`;
-  } else if (rows.length) {
-    const divs = {};
-    rows.forEach(r => (divs[r.div] ||= []).push(r.abbr));
-    for (const div of Object.keys(divs).sort()) html += `<h2>${esc(div)}</h2><div class="grid">${divs[div].sort().map(tile).join("")}</div>`;
-  } else {
-    html += `<h2>All teams</h2><div class="grid">${Object.keys(TEAMS).filter(a => leagueOf(a) === "nhl").map(tile).join("")}</div>`;
-  }
-  view.innerHTML = html;
-  bindLeaguePicker(teamsView);
-}
-
 async function teamView(abbr) {
-  setNav("teams");
+  setNav("league");
   view.innerHTML = `<div class="empty">Loading ${esc(fullName(abbr))}…</div>`;
   let d, rows = [];
   try { [d, rows] = await Promise.all([api(`/api/team/${encodeURIComponent(abbr)}`), standings(leagueOf(abbr)).catch(() => [])]); }
@@ -1040,13 +1046,19 @@ function settingsView() {
 
   view.innerHTML = `
     <h1>Settings</h1>
-    <p class="help" style="margin:-4px 2px 0">Changes save as you make them.</p>
+    <a class="card pad whatsnew-link" href="#/new"><b>What's new</b>${unseenChanges().length ? ` <span class="pill info">${unseenChanges().length} new</span>` : ""}<span class="muted small">Every update to the app →</span></a>
+    <p class="help">Changes save as you make them.</p>
 
+    <div class="group-title">You</div>
     <div class="section-head"><h2>Your teams</h2>${fav.length ? `<button class="btn small" id="editteams">${open ? "Done" : "Edit"}</button>` : ""}</div>
     <div class="card">${open ? (fav.length ? "" : `<div class="pad small">Tap your teams. They're pinned to the top of Tonight, highlighted everywhere, and the ones you get alerts for.</div>`) + picker : mine}</div>
     ${open && fav.length ? `<p class="help">Tap a team again to remove it.</p>` : ""}
 
-    <h2>Watching</h2>
+    <h2>Your name</h2>
+    <div class="card"><label class="row-field"><span><b>Name friends see</b><span class="muted small">On Pick'em and on games you're watching. Empty = "${esc(ME.email.split("@")[0])}". Your email is never shown.</span></span>
+      <input class="field" id="nickname" maxlength="24" autocomplete="nickname" placeholder="${esc(ME.email.split("@")[0])}" value="${esc(s.nickname || "")}"></label></div>
+
+    <h2>Where you watch</h2>
     <div class="card">
       <label class="row-field"><span><b>Home market</b><span class="muted small">Whose games are blacked out on ESPN+ for you and shown on local TV instead</span></span>
         <select id="local" class="field"><option value="">None</option>${nhlGroups.map(([g, list]) => `<optgroup label="${esc(g)}">${list.map(a =>
@@ -1056,34 +1068,30 @@ function settingsView() {
       <div class="checks">${Object.entries(ME.services).map(([k, v]) =>
         `<label><input type="checkbox" name="services" value="${k}" ${services.includes(k) ? "checked" : ""}>${esc(v.label)}</label>`).join("")}</div>
     </div>
-    <p class="help">Each game then says "You have it" or "Not in your services". In Massachusetts the home market is the Bruins.</p>
+    <p class="help">Each game then says whether you have it. In Massachusetts the home market is the Bruins.</p>
 
+    <div class="group-title">Alerts &amp; spoilers</div>
     <h2>Alerts</h2>
     <div class="card" id="notif"><div class="empty">Checking this device…</div></div>
     <div class="card checks" style="margin-top:10px">${[["start", "Puck drop"], ["goals", "Every goal"], ["final", "Final scores"], ["trades", "Trades"]].map(([k, l]) =>
       `<label><input type="checkbox" name="notify" value="${k}" ${s.notify?.[k] !== false ? "checked" : ""}>${l}</label>`).join("")}</div>
-    <p class="help">For your teams only. New here? <a href="#/app">How to get the app and alerts on your phone</a>.</p>
-
-    <h2>Pick'em</h2>
-    <div class="card"><label class="row-field"><span><b>Your name</b><span class="muted small">What friends see on the Pick'em table</span></span>
-      <input class="field" id="nickname" maxlength="24" autocomplete="nickname" placeholder="${esc(ME.email.split("@")[0])}" value="${esc(s.nickname || "")}"></label></div>
-    <p class="help">Leave it empty to use "${esc(ME.email.split("@")[0])}". Your email is never shown to anyone.</p>
+    <p class="help">For your teams only. <a href="#/app">Getting the app and alerts on your phone</a>.</p>
 
     <h2>Spoiler-free</h2>
     ${fav.length ? `<div class="card checks">${fav.map(a =>
       `<label><input type="checkbox" name="spoilteams" value="${a}" ${spoilers().teams.includes(a) ? "checked" : ""}>Always hide ${esc(teamName(a))} scores</label>`).join("")}</div>` : ""}
-    <p class="help">Watching on DVR or later? A hidden game's score stays out of sight on every page, along with its goal and final
-      alerts, the standings and Wire stories that could give it away, until you tap "I've seen it". Puck-drop alerts still come.
-      ${fav.length ? "Tick a team above to hide all their games, or" : "To hide one game,"} open any game and tap "🙈 Watching later". It switches off by itself the day after.</p>
+    <p class="help">A hidden game stays out of sight everywhere (scores, goal and final alerts, standings, the Wire) until you tap
+      "I've seen it". ${fav.length ? "Tick a team to hide all their games, or open" : "Open"} any game and tap "🙈 Watching later" to hide just that one. It switches off by itself the day after.</p>
 
+    <div class="group-title">More</div>
     <h2>Calendar</h2>
     <div class="card" id="cal"><div class="empty">Loading…</div></div>
-    <p class="help">Every game for your teams, with where to watch in each event. Your phone's calendar checks it every few hours. The link is personal; don't share it.</p>
+    <p class="help">Every game for your teams, with where to watch. Your phone checks it every few hours. The link is personal; don't share it.</p>
 
     <h2>Help</h2>
     <a class="card pad whatsnew-link" href="#/report"><b>Report a problem or suggest an idea</b><span class="muted small">Goes straight to the to-do list →</span></a>
     <div id="myreports"></div>
-    <a class="card pad whatsnew-link" href="#/new" style="margin-top:10px"><b>What's new</b>${unseenChanges().length ? ` <span class="pill info">${unseenChanges().length} new</span>` : ""}<span class="muted small">Every update to the app →</span></a>
+    ${ME.admin ? `<a class="card pad whatsnew-link" href="#/admin" style="margin-top:10px"><b>Admin</b><span class="muted small">People, invites, insiders, sources →</span></a>` : ""}
     <p class="help" style="margin-top:12px">Signed in as ${esc(ME.email)}.</p>`;
   showCalendar();
   showNotifications();
@@ -1284,7 +1292,7 @@ const ago = iso => {
 };
 
 async function adminView() {
-  setNav("admin");
+  setNav("settings");
   if (!ME.admin) { view.innerHTML = `<div class="empty">Admin only.</div>`; return; }
   let d;
   try { d = await api("/api/admin"); } catch (e) { view.innerHTML = failed(e); return; }
@@ -1370,7 +1378,6 @@ function route() {
   clearTimeout(refreshTimer);
   if (ME.status !== "approved") return gateView();
   document.getElementById("tabs").hidden = false;
-  document.getElementById("admin-tab").hidden = !ME.admin;
   const [, page, arg] = (location.hash || "#/").split("/");
   if (page !== "settings") editingTeams = false;
   if (page !== "report") reportFrom = location.hash || "#/";
@@ -1381,12 +1388,11 @@ function route() {
   if (page === "pgame" && /^\d+$/.test(arg || "")) return gameView(arg, false, "pwhl");
   if (page === "picks") return pickemView(/^\d{4}-\d{2}-\d{2}$/.test(arg || "") ? arg : undefined);
   if (page === "wire") return wireView();
-  if (page === "standings") {
+  if (page === "standings" || page === "league" || page === "teams") {  // Standings and Teams became one League tab
     let mode = "division";
     try { mode = localStorage.getItem("standingsMode") || mode; } catch { /* fine */ }
     return standingsView(mode);
   }
-  if (page === "teams") return teamsView();
   if (page === "team" && /^(PW-)?[A-Z]{2,3}$/.test(arg || "")) return teamView(arg);
   if (page === "settings") return settingsView();
   if (page === "app") return appView();

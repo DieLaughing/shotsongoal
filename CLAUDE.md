@@ -55,6 +55,10 @@ which is not committed.
   (watching, reactions per event key g:<period>-<time>-<scorer> / p:...-<player>, mine, rivals). Rival = a friend
   whose first favourite in that league is the other team; the final alert appends "Tell X." / "X will enjoy this one."
   Watching rows go a day after the game, reactions at the July 1 season rollover (cleanup hourly from /api/games).
+- Layout (2026-10-13 tidy-up): tabs Tonight / Pick'em / Wire / League (#/league = standings + your-team tiles;
+  #/standings and #/teams route there). Admin is a link in Settings. Tonight: team cards replace the "Your teams"
+  list; one banner slot (get-app/alerts first, else What's new). Cards use cardWatch() (app + have it); the full
+  watchLine (why, tickets) is on the game page. Game page: scoring, shot map, by period, stars, then "More stats".
 - Settings (web/app.js settingsView) save on every change (saveSettings: optimistic, queued PUTs of the whole settings
   object, toast). Team pickers group NHL teams by sog/teams.py DIVISIONS. Home market = one team (local is a list server-side).
 - Phase 1: access, Tonight, Game, Standings, Teams, Settings, where-to-watch (service links; ESPN+ also links Hulu,
