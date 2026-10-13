@@ -354,6 +354,30 @@ def test_alerts_respect_favorites_and_prefs(tmp_path):
     assert all("SEA" in t or "Kraken" in t for t in titles)  # Canucks-Rangers isn't a favourite
 
 
+def test_spoiler_free_holds_goal_and_final_alerts(tmp_path):
+    import asyncio
+    store, pusher, al, day = _alert_setup(tmp_path)
+    asyncio.run(al.on_day({"date": day["date"], "games": []}))
+    store.save_settings("fan@x.com", {"favorites": ["SEA"], "spoilers": {"teams": ["SEA"], "games": [], "seen": []}})
+    asyncio.run(al.on_day(day))
+    titles = [p["title"] for _, p in pusher.sent]
+    assert titles and all(t.startswith("Puck drop") for t in titles)  # the score never arrives
+
+
+def test_spoiler_rules():
+    from sog import spoilers
+    g = {"id": 7, "date": "2026-10-13", "state": "final", "away": {"abbr": "TOR"}, "home": {"abbr": "BOS"}}
+    sp = {"teams": [], "games": ["nhl:7"], "seen": []}
+    assert spoilers.hidden(g, sp, "2026-10-13") and spoilers.hidden(g, sp, "2026-10-14")
+    assert not spoilers.hidden(g, sp, "2026-10-15")                       # off by itself the day after
+    assert not spoilers.hidden({**g, "state": "pre"}, sp)                 # nothing to hide before puck drop
+    assert not spoilers.hidden({**g, "league": "pwhl"}, sp)               # pwhl:7 is a different game
+    assert spoilers.hidden(g, {"teams": ["BOS"], "games": [], "seen": []})
+    assert not spoilers.hidden(g, {"teams": ["BOS"], "games": [], "seen": ["nhl:7"]})
+    clean = spoilers.clean({"teams": ["BOS", "XXX"], "games": ["nhl:7", "nhl:7", "bad", 5], "seen": None}, {"BOS"})
+    assert clean == {"teams": ["BOS"], "games": ["nhl:7"], "seen": []}
+
+
 def test_pbp_shot_map_orientation():
     import json
     from sog import nhl

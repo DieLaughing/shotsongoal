@@ -5,6 +5,12 @@
 
 - date: 2026-10-13
   kind: new
+  title: Spoiler-free mode
+  text: Watching on DVR or catching the game later? Open any game and tap "🙈 Watching later", or switch it on for a whole team in Settings → Spoiler-free. The score stays hidden on every page, goal and final alerts hold off, and the standings and Wire stories that could give it away are covered too, until you tap "I've seen it". Puck-drop alerts still come, and it switches off by itself the day after.
+  link: "#/settings"
+
+- date: 2026-10-13
+  kind: new
   title: Your team, up top
   text: Tonight now opens with a card for each of your favorite teams, in their colors. It shows tonight's game (or the next one) and where to watch it, the live score once it starts, where they sit in the standings, how far they are from a playoff spot, any streak, the last 7 days and the next few games. Follow more than one team? Swipe sideways.
   link: "#/"

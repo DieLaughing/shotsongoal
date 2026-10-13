@@ -42,6 +42,10 @@ which is not committed.
 - "Your team" cards (top of Tonight, default slate only): /api/myteams -> sog/home.py team_summary per favourite from
   the cached team schedule + standings (latest season only: a 60-day gap splits seasons; off-season = last season's
   place, no streak/week). Cards tinted with the team colour; live/final state comes from the slate. Kept 5 min client-side.
+- Spoiler-free: settings.spoilers {teams, games, seen} (game keys nhl:<id> / pwhl:<id>), rules in sog/spoilers.py,
+  mirrored by spoilerHidden() in web/app.js. Started games from today/yesterday only. Hidden = no score on cards/hero,
+  game page cover, Standings/team page covered when a hidden game is final, Wire items about it after puck drop
+  blurred; alerts.py skips goal/final pushes (puck drop still sent). hiddenToday() loads today's + previous slate.
 - Settings (web/app.js settingsView) save on every change (saveSettings: optimistic, queued PUTs of the whole settings
   object, toast). Team pickers group NHL teams by sog/teams.py DIVISIONS. Home market = one team (local is a list server-side).
 - Phase 1: access, Tonight, Game, Standings, Teams, Settings, where-to-watch (service links; ESPN+ also links Hulu,
