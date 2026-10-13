@@ -14,6 +14,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import access, bugs, alerts, changes, home, ics, picks, pwhl, social, spoilers, teams, watch, wire
@@ -84,6 +85,9 @@ app = FastAPI(title="Shots on Goal", lifespan=lifespan, docs_url=None, redoc_url
 
 # Paths anyone signed in may reach before approval. /act is reached without Cloudflare at all.
 OPEN_API = {"/api/me", "/api/request"}
+
+
+app.add_middleware(GZipMiddleware, minimum_size=1500)  # JSON and app.js shrink ~5x on the way out
 
 
 @app.middleware("http")
@@ -214,7 +218,7 @@ async def save_settings(request: Request):
         "favorites": [t for t in body.get("favorites") or [] if t in teams.ALL][:44],
         "local": [t for t in body.get("local") or [] if t in teams.TEAMS][:8],  # blackouts are an NHL thing
         "services": [s for s in body.get("services") or [] if s in watch.services()],
-        "notify": {k: bool((body.get("notify") or {}).get(k, True)) for k in alerts.KINDS},
+        "notify": alerts.prefs(body),
         "seen_changes": str(body.get("seen_changes") or "")[:120],  # newest What's new entry this person has seen
         "spoilers": spoilers.clean(body.get("spoilers"), teams.ALL),
         "nickname": clean_name(body.get("nickname")),  # what friends see in Pick'em; empty = the email's first part
@@ -466,8 +470,13 @@ async def team(abbr: str, request: Request):
         raise HTTPException(404)
     data, items = await asyncio.gather(feed.pwhl_team(abbr) if abbr.startswith("PW-") else feed.team(abbr), feed.wire())
     sched = [dict(g) for g in data["schedule"] if g.get("type") in (2, 3)] or [dict(g) for g in data["schedule"]]
+    # The page shows recent results and what's coming up: send those, not the whole season (or two, for the PWHL).
+    done = [g for g in sched if g.get("state") == "final"]
+    sched = done[-10:] + [g for g in sched if g.get("state") != "final"][:10]
+    career = feed.careers(abbr) if not abbr.startswith("PW-") else None
     return {**data, "schedule": _with_watch(sched, _settings(request)),
-            "wire": [i for i in items if abbr in i["teams"]][:20]}
+            "wire": [i for i in items if abbr in i["teams"]][:20],
+            "milestones": home.near_milestones(career["players"]) if career else []}
 
 
 @app.get("/api/myteams")
@@ -487,6 +496,8 @@ async def my_teams(request: Request):
             return None
         sched = [dict(g) for g in schedule if g.get("type") in (2, 3)] or [dict(g) for g in schedule]
         card = home.team_summary(abbr, sched, rows, today, lg)
+        career = feed.careers(abbr) if lg == "nhl" else None  # saved copy only: never waits on 25 player pages
+        card["milestones"] = home.near_milestones(career["players"])[:1] if career else []
         if card["next"]:
             _with_watch([card["next"]], s)
         return card

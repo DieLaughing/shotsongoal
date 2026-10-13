@@ -63,6 +63,16 @@ which is not committed.
   #/standings and #/teams route there). Admin is a link in Settings. Tonight: team cards replace the "Your teams"
   list; one banner slot (get-app/alerts first, else What's new). Cards use cardWatch() (app + have it); the full
   watchLine (why, tickets) is on the game page. Game page: scoring, shot map, by period, stars, then "More stats".
+- Milestones: the poller saves career totals (player/<id>/landing, 3 at a time) as career:<TEAM> for favourite NHL
+  teams, ~daily, only for teams that haven't started playing today. Pages only peek (feed.careers). home.near_milestones
+  -> one line on the team card, a list on team pages; alerts._milestone adds "🎉 Nth career goal" to goal alerts
+  (saved total + this player's goals tonight; only when the copy was saved before puck drop).
+- Momentum + shot quality: web/app.js momentumCard/xgOf from d.shotmap (no extra request). xG = logistic on distance
+  and angle (~22% slot, ~1.5% blue line), labelled as the app's estimate.
+- Fight alerts (notify.fights, opt-in): while busy, once a minute per live NHL game a fan wants them for, the poller
+  reads gamecenter/<id>/landing penalties ("Fighting"); first look per game only records.
+- Speed: GZip on responses; /api/team sends the last 10 results + next 10 games; non-live game pages refresh in the
+  background (_game_stale_ok); Tonight warms the team cards' game pages after it renders.
 - Settings (web/app.js settingsView) save on every change (saveSettings: optimistic, queued PUTs of the whole settings
   object, toast). Team pickers group NHL teams by sog/teams.py DIVISIONS. Home market = one team (local is a list server-side).
 - Phase 1: access, Tonight, Game, Standings, Teams, Settings, where-to-watch (service links; ESPN+ also links Hulu,

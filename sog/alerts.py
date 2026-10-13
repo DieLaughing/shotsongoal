@@ -8,19 +8,20 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from . import social, spoilers, watch
+from . import home, social, spoilers, watch
 from .db import Store
 from .push import Pusher
 
 log = logging.getLogger("sog.alerts")
 
-KINDS = ("start", "goals", "final", "trades")
+KINDS = ("start", "goals", "final", "trades", "fights")
+OFF_BY_DEFAULT = {"fights"}  # opt-in
 TRADE_MAX_AGE = timedelta(days=2)
 
 
 def prefs(settings: dict) -> dict:
     p = settings.get("notify") or {}
-    return {k: bool(p.get(k, True)) for k in KINDS}
+    return {k: bool(p.get(k, k not in OFF_BY_DEFAULT)) for k in KINDS}
 
 
 def rivalry_line(email: str, g: dict, fav: set, friends: dict) -> str:
@@ -39,6 +40,7 @@ class Alerts:
         self.store, self.pusher, self.base = store, pusher, base_url
         self.primed_days: set[str] = set()   # scoreboard dates whose existing events are already recorded
         self.primed_trades = False
+        self.primed_fights: set[int] = set()  # games whose existing fights are already recorded
 
     # ---- what happened -------------------------------------------------------------------
     def game_events(self, day: dict) -> list[dict]:
@@ -57,6 +59,8 @@ class Alerts:
                             "title": f"Puck drop: {matchup}", "body": None})
             for x in g.get("goals") or []:
                 tags = [t for t in (x["strength"] if x["strength"] != "EV" else "", "EN" if x["empty_net"] else "") if t]
+                if not pw:
+                    tags += [m for m in [self._milestone(g, x)] if m]
                 out.append({"key": f"goal:{gkey}:{x['key']}", "kind": "goals", "teams": teams, "game": g, "url": url,
                             "scorer_team": x["team"],
                             "title": f"{x['team'].removeprefix('PW-')} goal · {code(a)} {x['away']}-{x['home']} {code(h)}",
@@ -68,6 +72,52 @@ class Alerts:
                             "title": f"Final{extra}: {code(a)} {a['score']}, {code(h)} {h['score']}",
                             "body": f"{matchup}"})
         return out
+
+    def _milestone(self, g: dict, x: dict) -> str | None:
+        """"🎉 400th career goal" when this goal is one. Career totals are saved before the team plays."""
+        saved = self.store.get(f"career:{x['team']}")
+        pid = str(x.get("key", "")).rsplit("-", 1)[-1]
+        if not saved or not g.get("start") or saved["fetched"] >= g["start"]:
+            return None
+        player = next((p for p in saved["data"] if str(p.get("id")) == pid), None)
+        if not player:
+            return None
+        goals = [y for y in g.get("goals") or [] if str(y.get("key", "")).rsplit("-", 1)[-1] == pid]
+        nth = next((i + 1 for i, y in enumerate(goals) if y["key"] == x["key"]), 0)
+        reached = home.milestone_goal(player["goals"], nth)
+        return f"🎉 {home.ordinal(reached)} career goal" if reached else None
+
+    def fight_events(self, g: dict, penalties: list[dict]) -> list[dict]:
+        """One alert per fight (both players' majors share a period and time)."""
+        fights: dict[tuple, list] = {}
+        for per in penalties:
+            for x in per["items"]:
+                if "fight" in (x.get("desc") or "").lower():
+                    fights.setdefault((per["period"], x["time"]), []).append(x)
+        a, h = g["away"], g["home"]
+        code = lambda t: t.get("code") or t["abbr"]
+        return [{"key": f"fight:{g['id']}:{period}-{t}", "kind": "fights", "teams": [a["abbr"], h["abbr"]], "game": g,
+                 "url": f"{self.base}/#/game/{g['id']}", "title": f"Fight! {code(a)} at {code(h)}",
+                 "body": f"{' and '.join(x['player'] or x['team'] for x in xs)} · {period} {t}"}
+                for (period, t), xs in fights.items()]
+
+    async def on_fights(self, g: dict, penalties: list[dict]) -> None:
+        events = self.fight_events(g, penalties)
+        if g["id"] not in self.primed_fights:  # first look after startup: old fights aren't news
+            self.store.mark_sent([e["key"] for e in events])
+            self.primed_fights.add(g["id"])
+            return
+        await self._deliver(events)
+
+    def fight_fans(self) -> set[str]:
+        """Teams that someone with a phone signed up for alerts wants fight alerts for."""
+        emails = {s["email"] for s in self.store.pushes()}
+        teams = set()
+        for email in emails:
+            settings = (self.store.user(email) or {}).get("settings") or {}
+            if prefs(settings)["fights"]:
+                teams |= set(settings.get("favorites") or [])
+        return teams
 
     def trade_events(self, items: list[dict]) -> list[dict]:
         cutoff = (datetime.now(timezone.utc) - TRADE_MAX_AGE).strftime("%Y-%m-%dT%H:%M:%SZ")

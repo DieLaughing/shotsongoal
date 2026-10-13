@@ -17,7 +17,10 @@ from .db import Store, parse_iso
 log = logging.getLogger("sog.feed")
 
 STALE_OK = timedelta(days=1)          # an expired saved copy this young is shown while a fresh one loads
-GAME_STALE_OK = timedelta(minutes=1)  # game pages: never more than a refresh or two behind
+GAME_STALE_OK = timedelta(minutes=1)
+CAREER_TTL = timedelta(hours=20)      # milestone watch: career totals, about once a day
+CAREER_POLL = 1800                    # seconds between checks that careers are saved
+FIGHT_POLL = 60                       # seconds between fight checks of live games someone wants fight alerts for  # game pages: never more than a refresh or two behind
 LIVE_POLL = 10            # seconds between score refreshes while a game is on (or about to start)
 IDLE_POLL = 300           # ... and otherwise
 DETAIL_POLL = 20          # a live game's page, only while someone has looked at it recently
@@ -73,13 +76,13 @@ class Feed:
             self.store.record_run(source, True)
             return data
 
-    async def cached(self, key: str, source: str, fetch, ttl, stale_ok: timedelta = STALE_OK) -> dict | list:
+    async def cached(self, key: str, source: str, fetch, ttl, stale_ok=STALE_OK) -> dict | list:
         """The saved copy. An expired copy younger than stale_ok is returned straight away and refreshed in the
         background, so a page never waits on the leagues unless nothing usable is saved."""
         hit = self.store.get(key)
         if hit and hit["fresh"]:
             return hit["data"]
-        if hit and _age(hit["fetched"]) < stale_ok:
+        if hit and _age(hit["fetched"]) < (stale_ok(hit["data"]) if callable(stale_ok) else stale_ok):
             self.refresh_later(key, lambda: self._fetch(key, source, fetch, ttl))
             return hit["data"]
         return await self._fetch(key, source, fetch, ttl)
@@ -128,7 +131,7 @@ class Feed:
                                       None if isinstance(box, Exception) else box)
             plays = {"shots": [], "situation": None} if isinstance(pbp, Exception) else nhl.parse_pbp(pbp)
             return {**detail, "shotmap": plays["shots"], "situation": plays["situation"], "recap": nhl.recap(detail)}
-        return await self.cached(f"game:{game_id}", "game", fetch, _game_ttl, stale_ok=GAME_STALE_OK)
+        return await self.cached(f"game:{game_id}", "game", fetch, _game_ttl, stale_ok=_game_stale_ok)
 
     async def standings(self) -> list:
         async def fetch():
@@ -143,17 +146,49 @@ class Feed:
             return nhl.parse_club_schedule(await nhl.get(f"club-schedule-season/{abbr}/now"))
         return await self.cached(f"team:{abbr}:schedule", "team", schedule, timedelta(minutes=30))
 
-    async def team(self, abbr: str) -> dict:
-
+    async def team_roster(self, abbr: str) -> list[dict]:
         async def roster():
             return nhl.parse_roster(await nhl.get(f"roster/{abbr}/current"))
+        return await self.cached(f"team:{abbr}:roster", "team", roster, timedelta(hours=12))
+
+    # ---- milestone watch: career totals, fetched by the poller before a team plays, never by a page ----------
+    def careers(self, abbr: str) -> dict | None:
+        """The saved career totals for a team ({fetched, players}), or None. Pages only ever peek."""
+        hit = self.store.get(f"career:{abbr}")
+        return {"fetched": hit["fetched"], "players": hit["data"]} if hit else None
+
+    async def refresh_careers(self, abbrs: set[str]) -> None:
+        """Only for teams that haven't started playing today, so a saved total never includes tonight's goals
+        (goal alerts add tonight's goals on top of it)."""
+        today = self.store.get("score:now")
+        playing = {t for g in (today["data"]["games"] if today else []) if g["state"] in ("live", "final")
+                   for t in (g["away"]["abbr"], g["home"]["abbr"])}
+        sem = asyncio.Semaphore(3)  # be polite: a few player pages at a time
+
+        async def one(p: dict):
+            async with sem:
+                return nhl.parse_career(await nhl.get(f"player/{p['id']}/landing"), p)
+        for abbr in sorted(abbrs - playing):
+            hit = self.store.get(f"career:{abbr}")
+            if hit and _age(hit["fetched"]) < CAREER_TTL:
+                continue
+
+            async def fetch(abbr=abbr):
+                rows = await asyncio.gather(*[one(p) for p in await self.team_roster(abbr)], return_exceptions=True)
+                return [r for r in rows if isinstance(r, dict)]
+            try:
+                await self._fetch(f"career:{abbr}", "career", fetch, CAREER_TTL)
+            except Exception:
+                pass
+
+    async def team(self, abbr: str) -> dict:
 
         async def stats():
             return nhl.parse_club_stats(await nhl.get(f"club-stats/{abbr}/now"))
 
         sched, rost, st = await asyncio.gather(
             self.team_schedule(abbr),
-            self.cached(f"team:{abbr}:roster", "team", roster, timedelta(hours=12)),
+            self.team_roster(abbr),
             self.cached(f"team:{abbr}:stats", "team", stats, timedelta(hours=1)),
             return_exceptions=True)
         return {"schedule": [] if isinstance(sched, Exception) else sched,
@@ -312,7 +347,7 @@ class Feed:
         return data
 
     async def loop(self) -> None:
-        last_idle = last_standings = last_wire = last_pwhl = 0.0
+        last_idle = last_standings = last_wire = last_pwhl = last_career = last_fights = 0.0
         last_detail: dict[int, float] = {}
         while True:
             try:
@@ -341,6 +376,17 @@ class Feed:
                         busy = busy or _busy(ours_day)
                         if self.alerts:
                             await self.alerts.on_day(ours_day)
+                    # Fight alerts: one light request (the game summary) a minute per live game a fan wants them for.
+                    if self.alerts and now - last_fights >= FIGHT_POLL:
+                        last_fights = now
+                        fans = self.alerts.fight_fans()
+                        for g in day.get("games", []):
+                            if g["state"] == "live" and fans & {g["away"]["abbr"], g["home"]["abbr"]}:
+                                try:
+                                    landing = await nhl.get(f"gamecenter/{g['id']}/landing")
+                                    await self.alerts.on_fights(g, nhl.parse_detail(landing, None, None)["penalties"])
+                                except Exception as exc:
+                                    log.warning("fight check %s failed: %r", g["id"], exc)
                     # Live game pages that someone is watching.
                     for g in day.get("games", []):
                         gid = g["id"]
@@ -361,6 +407,11 @@ class Feed:
                     items = await self.wire()
                     if self.alerts:
                         await self.alerts.on_wire(items)
+                if now - last_career >= CAREER_POLL:
+                    last_career = now
+                    favs = {t for u in self.store.users() if u["status"] == "approved"
+                            for t in (u["settings"] or {}).get("favorites") or [] if not t.startswith(pwhl.PREFIX)}
+                    await self.refresh_careers(favs)
                 if now - last_standings >= STANDINGS_TTL.total_seconds():
                     last_standings = now
                     await self._fetch("standings", "standings", _get_standings, STANDINGS_TTL)
@@ -413,6 +464,11 @@ def _age(fetched: str | None) -> timedelta:
         return datetime.now(timezone.utc) - parse_iso(fetched)
     except (TypeError, ValueError):
         return timedelta.max
+
+
+def _game_stale_ok(detail: dict) -> timedelta:
+    """Live games are never shown more than a minute old; upcoming and finished ones refresh in the background."""
+    return GAME_STALE_OK if detail["game"]["state"] == "live" else STALE_OK
 
 
 def _game_ttl(detail: dict) -> timedelta | None:

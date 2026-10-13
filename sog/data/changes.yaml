@@ -4,6 +4,12 @@
 # and `.venv/bin/python tools/release.py` publishes the day's GitHub Release.
 
 - date: 2026-10-13
+  kind: new
+  title: Milestones, momentum and fight alerts
+  text: Your team card and team pages now show players close to a round career number ("Mittelstadt is 2 goals from 100"), and when someone gets there, the goal alert says so. Game pages have a Momentum chart (who's been getting the shots, every 5 minutes) with a shot-quality number for each team. And if you like that sort of thing, Settings → Alerts has a new Fights switch (off unless you turn it on). Pages also download less, so they open quicker on mobile data.
+  link: "#/"
+
+- date: 2026-10-13
   kind: fixed
   title: Faster tabs again
   text: Switching tabs had slowed to a second or more, mostly for anyone not on the home network. Pages now show the latest saved data straight away and refresh it behind the scenes, the team cards load less, and spoiler-free checks no longer hold pages up. Most tabs should feel instant again.

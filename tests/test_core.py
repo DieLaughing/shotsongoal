@@ -211,7 +211,7 @@ def test_settings_are_cleaned(client, monkeypatch):
     out = client.put("/api/settings", json={"favorites": ["BOS", "XXX"], "local": ["BOS"],
                                             "services": ["espn_plus", "bogus"]}).json()
     assert out["favorites"] == ["BOS"] and out["local"] == ["BOS"] and out["services"] == ["espn_plus"]
-    assert out["notify"] == {"start": True, "goals": True, "final": True, "trades": True}
+    assert out["notify"] == {"start": True, "goals": True, "final": True, "trades": True, "fights": False}  # fights: opt-in
 
 
 # ---- the Wire ---------------------------------------------------------------------------
@@ -571,3 +571,44 @@ def test_expired_copy_is_served_while_it_refreshes(tmp_path):
     assert first == again == {"v": "old"} and later == {"v": "new"} and calls == [1]
     # Nothing saved at all: the page has to wait for the fetch.
     assert asyncio.run(feed.cached("none", "test", fetch, timedelta(minutes=5))) == {"v": "new"}
+
+
+def test_milestones_and_milestone_goal_alert(tmp_path):
+    import asyncio
+    from datetime import timedelta
+    from sog import home
+    near = home.near_milestones([
+        {"id": 1, "name": "D. Pastrnak", "goalie": False, "goals": 398, "assists": 518, "points": 916, "gp": 839},
+        {"id": 2, "name": "J. Swayman", "goalie": True, "goals": 0, "gp": 250, "wins": 149, "shutouts": 19},
+        {"id": 3, "name": "Rookie", "goalie": False, "goals": 9, "assists": 9, "points": 18, "gp": 40}])
+    assert [m["text"] for m in near] == ["J. Swayman is 1 win from 150", "D. Pastrnak is 2 goals from 400",
+                                         "J. Swayman is 1 shutout from 20"]  # closest for its kind of stat first
+    store, pusher, al, day = _alert_setup(tmp_path)
+    sea = day["games"][0]
+    last = sea["goals"][-1]
+    pid = last["key"].rsplit("-", 1)[-1]
+    mine = [x for x in sea["goals"] if x["key"].endswith(f"-{pid}")]
+    store.put(f"career:{last['team']}", [{"id": int(pid), "goals": 100 - len(mine), "name": "x"}], timedelta(hours=20))
+    store.conn.execute("UPDATE cache SET fetched='2000-01-01T00:00:00Z' WHERE key LIKE 'career:%'")  # saved before the game
+    asyncio.run(al.on_day({"date": day["date"], "games": []}))
+    asyncio.run(al.on_day(day))
+    hit = [p["body"] for _, p in pusher.sent if "career goal" in p["body"]]
+    assert len(hit) == 1 and "100th career goal" in hit[0]  # only the goal that reaches it
+
+
+def test_fight_alerts_are_opt_in_and_not_replayed(tmp_path):
+    import asyncio
+    store, pusher, al, day = _alert_setup(tmp_path)
+    g = day["games"][0]
+    fight = [{"period": "1st", "items": [{"time": "16:40", "team": "SEA", "player": "A. Brawler", "desc": "Fighting"},
+                                         {"time": "16:40", "team": g["home"]["abbr"], "player": "B. Brawler", "desc": "Fighting"},
+                                         {"time": "17:00", "team": "SEA", "player": "C", "desc": "Tripping"}]}]
+    assert al.fight_fans() == set()  # nobody opted in yet
+    store.save_settings("fan@x.com", {"favorites": ["SEA"], "notify": {"fights": True}})
+    assert "SEA" in al.fight_fans()
+    asyncio.run(al.on_fights(g, fight))                 # first look: recorded, not sent
+    assert pusher.sent == []
+    fight[0]["items"].append({"time": "19:02", "team": "SEA", "player": "D", "desc": "Fighting"})
+    asyncio.run(al.on_fights(g, fight))
+    (_, p), = pusher.sent
+    assert p["title"].startswith("Fight!") and p["body"] == "D · 1st 19:02"
