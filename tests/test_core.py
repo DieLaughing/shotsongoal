@@ -173,6 +173,38 @@ def test_signed_out_and_admin_only(client, monkeypatch):
     assert client.get(f"/invite/{inv['code']}", follow_redirects=False).status_code == 410
 
 
+def test_group_invite(client, monkeypatch):
+    as_user(monkeypatch, "owner@x.com")
+    code = client.post("/api/admin/invites", json={"note": "Group chat", "uses": 2}).json()["code"]
+    client.post("/api/admin/users", json={"email": "gone@x.com", "status": "revoked"})
+    as_user(monkeypatch, "gone@x.com")
+    assert client.get(f"/invite/{code}", follow_redirects=False).status_code == 410  # a group link can't undo a revoke
+    for email in ("a@x.com", "b@x.com"):
+        as_user(monkeypatch, email)
+        assert client.get(f"/invite/{code}", follow_redirects=False).status_code == 307
+        assert client.mod.store.user(email)["status"] == "approved"
+    as_user(monkeypatch, "c@x.com")
+    assert client.get(f"/invite/{code}", follow_redirects=False).status_code == 410  # full
+    as_user(monkeypatch, "owner@x.com")
+    inv, = [i for i in client.get("/api/admin").json()["invites"] if i["code"] == code]
+    assert [u["email"] for u in inv["uses"]] == ["a@x.com", "b@x.com"] and inv["max_uses"] == 2
+    client.delete(f"/api/admin/invites/{code}")
+    assert client.mod.store.invite(code)["max_uses"] == 2  # used invites close, they don't vanish
+
+
+def test_old_single_use_invites_migrate(tmp_path):
+    import sqlite3
+    from sog.db import Store
+    db = sqlite3.connect(tmp_path / "old.db")
+    db.executescript("CREATE TABLE invite (code TEXT PRIMARY KEY, created TEXT NOT NULL, note TEXT, used_by TEXT, used_at TEXT);"
+                     "INSERT INTO invite VALUES ('used', '2026-10-01T00:00:00Z', 'Sam', 'sam@x.com', '2026-10-02T00:00:00Z');"
+                     "INSERT INTO invite VALUES ('free', '2026-10-01T00:00:00Z', NULL, NULL, NULL);")
+    db.close()
+    store = Store(tmp_path / "old.db")
+    assert store.invite("used")["uses"] == [{"email": "sam@x.com", "used_at": "2026-10-02T00:00:00Z"}]
+    assert not store.use_invite("used", "other@x.com") and store.use_invite("free", "new@x.com")
+
+
 def test_settings_are_cleaned(client, monkeypatch):
     as_user(monkeypatch, "owner@x.com")
     client.get("/api/me")

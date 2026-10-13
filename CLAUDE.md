@@ -26,7 +26,9 @@ which is not committed.
   team's certs (SOG_ACCESS_TEAM / _AUD). Anyone with an email gets that far; the app keeps its own approved list.
   The admin (SOG_ADMIN_EMAIL) is always approved.
 - "Request access" pushes to ntfy (optional) with Approve/Deny = single-use signed links at /act (24 h). Invite links
-  (/invite/<code>) approve whoever signs in with them. /admin lists people, invites, insiders and wrong-channel reports.
+  (/invite/<code>) approve whoever signs in with them, up to the link's max_uses (invite_use table; a group link
+  can't re-admit someone denied or revoked; closing a used link sets max_uses to its use count). /admin lists people,
+  invites, insiders and wrong-channel reports.
 - Paths that must bypass Access: /act, /cal (per-person calendar token; stops working if revoked), /icons,
   /manifest.webmanifest, /apple-touch-icon.png, /apple-touch-icon-precomposed.png.
 - SOG_LOCAL_EMAIL (alias SOG_DEV_EMAIL) skips Cloudflare and treats every request as that person; SOG_NO_POLL=1 stops
