@@ -1016,6 +1016,12 @@ async function start() {
   applyLeague();
   document.querySelectorAll("[data-league]").forEach(b => b.addEventListener("click", () => setLeague(b.dataset.league)));
   window.addEventListener("hashchange", route);
+  // Phones keep the app's last page in memory for days: coming back after a while shows today, not last night.
+  let hiddenAt = 0;
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (hiddenAt && Date.now() - hiddenAt > 5 * 60000) route();
+  });
   route();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 }

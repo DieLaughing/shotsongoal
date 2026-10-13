@@ -346,9 +346,9 @@ async def games(request: Request, date: str | None = None, league: str = "nhl"):
     if league == "pwhl":
         day = await _upstream(feed.pwhl_day(date))
         return {**day, "games": _with_watch([dict(g) for g in day["games"]], _settings(request))}
-    # No date = the NHL's own "today" (Eastern), kept fresh by the poller.
-    target = date or feed.today
-    day = await _upstream(feed.day(target) if target else feed.poll_today())
+    # No date = today in Eastern time (last night's games until 6 am); see feed.slate_date.
+    target = date or feed.opening_day()
+    day = await _upstream(feed.poll_today() if target == feed.today else feed.day(target))
     return {**day, "games": _with_watch([dict(g) for g in day["games"]], _settings(request))}
 
 
