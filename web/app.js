@@ -437,6 +437,84 @@ async function tonightView(date, quiet = false) {
   }
 }
 
+// ---- Pick'em -----------------------------------------------------------------------------------
+// Pick a winner for every game before puck drop. ★ = lock of the night: 2 points if right, nothing if wrong.
+// Friends' picks show once a game starts. Scores follow spoiler-free like everywhere else.
+async function pickemView(date, quiet = false) {
+  setNav("picks");
+  if (!quiet) view.innerHTML = `<div class="empty">Loading Pick'em…</div>`;
+  const leagues = LEAGUE === "both" ? ["nhl", "pwhl"] : [LEAGUE];
+  let d, hidden;
+  try {
+    [d, hidden] = await Promise.all([
+      api(`/api/pickem?leagues=${leagues.join(",")}${date ? `&date=${encodeURIComponent(date)}` : ""}`),
+      hiddenToday().catch(() => [])]);
+  } catch (e) { view.innerHTML = failed(e); return; }
+  const code = abbr => TEAMS[abbr]?.code || abbr;
+  const now = new Date().toISOString();
+  const begun = g => g.state !== "pre" || (g.start && g.start <= now);
+  const rows = d.games.map(g => {
+    const hide = spoilerHidden(g), k = spKey(g), started = begun(g);
+    SPOIL_GAMES.set(k, g);
+    const done = g.state === "final" && !hide;
+    const side = t => {
+      const on = g.mine === t.abbr;
+      const res = on && done && g.won != null ? (g.won ? " won" : " lost") : "";
+      return `<button class="pk${on ? " on" : ""}${res}" data-pick="${t.abbr}" data-k="${esc(k)}" ${started ? "disabled" : ""}>${mark(t.abbr)}${!hide && g.state !== "pre" && t.score != null ? `<b class="pk-sc">${t.score}</b>` : `<span class="pk-nm">${esc(teamName(t.abbr))}</span>`}</button>`;
+    };
+    const mid = hide ? "🙈" : g.state === "live" ? `<span class="live">LIVE</span>` : g.state === "final" ? "Final"
+      : g.state === "postponed" ? "Postponed" : g.start ? esc(time(g.start)) : "TBD";
+    const friends = (g.picks || []).filter(p => !p.me);
+    return `<div class="pick-row">
+      <div class="pick-line">${side(g.away)}<div class="pick-mid">${mid}</div>${side(g.home)}
+        <button class="lockbtn${g.lock ? " on" : ""}" data-lockk="${esc(k)}" ${started ? "disabled" : ""} aria-pressed="${g.lock}" title="Lock of the night">★</button></div>
+      ${started && friends.length ? `<div class="pick-friends">${friends.map(p => `${esc(p.name)} ${esc(code(p.team))}${p.lock ? " ★" : ""}`).join(" · ")}</div>`
+        : !started && g.count > (g.mine ? 1 : 0) ? `<div class="pick-friends">${g.count - (g.mine ? 1 : 0)} friend${g.count - (g.mine ? 1 : 0) > 1 ? "s have" : " has"} picked</div>` : ""}
+    </div>`;
+  }).join("");
+  const table = list => list.length ? `<div class="card"><table class="board"><tr><th></th><th>Name</th><th>Pts</th><th>Right–wrong</th></tr>
+    ${list.map((r, i) => `<tr class="${r.me ? "me" : ""}"><td class="muted">${i + 1}</td><td>${esc(r.name)}${r.me ? " (you)" : ""}</td><td><b>${r.pts}</b></td><td>${r.w}–${r.l}</td></tr>`).join("")}</table></div>`
+    : `<div class="card"><div class="empty">No results yet. Make some picks!</div></div>`;
+  const b = d.board, last = b.last?.table || [];
+  const best = last[0], meLast = last.find(r => r.me);
+  const lastLine = best ? `<div class="card pad small"><b>${esc(shortDate(b.last.date))}</b>: ${esc(best.name)} went ${best.w} for ${best.w + best.l}${meLast && meLast !== best ? `, you went ${meLast.w} for ${meLast.w + meLast.l}` : ""}.</div>` : "";
+  const hid = hidden.filter(g => g.state === "final" && leagues.includes(g.league === "pwhl" ? "pwhl" : leagueOf(g.home.abbr)));
+  view.innerHTML = `
+    <div class="daybar">
+      ${d.prev ? `<a href="#/picks/${d.prev}" aria-label="Previous day">←</a>` : "<span></span>"}
+      <h1>${esc(dayTitle(d.date))}</h1>
+      ${d.next ? `<a href="#/picks/${d.next}" aria-label="Next day">→</a>` : "<span></span>"}
+    </div>
+    <p class="help">Tap who wins. Picks lock at puck drop. Tap ★ on one game a night to make it your lock: 2 points if it's right, nothing if it's wrong.</p>
+    ${rows ? `<div class="card picks">${rows}</div>` : `<div class="empty">No games this day.</div>`}
+    ${hid.length ? `<h2>The table</h2>${spoilCover(hid, "The Pick'em table")}` : `
+      ${lastLine ? `<h2>Last results</h2>${lastLine}` : ""}
+      <h2>This week</h2>${table(b.week)}
+      <h2>Season ${esc(b.season)}${leagues.length > 1 ? "" : ` · ${LEAGUE_NAME[leagues[0]]}`}</h2>${table(b.table)}`}
+    <p class="help">You show up as <b>${esc(d.name)}</b>. <a href="#/settings">Change your name in Settings</a>.</p>`;
+  const send = async (g, team, lock) => {
+    try {
+      await api("/api/pickem", { method: "POST", body: JSON.stringify({ league: g.league === "pwhl" ? "pwhl" : "nhl", id: g.id, date: g.date, team, lock }) });
+    } catch (e) { toast(e.detail || "Couldn't save that pick. Try again.", true); }
+    pickemView(date, true);
+  };
+  view.querySelectorAll("[data-pick]").forEach(btn => btn.addEventListener("click", () => {
+    const g = SPOIL_GAMES.get(btn.dataset.k);
+    const team = g.mine === btn.dataset.pick ? null : btn.dataset.pick;  // tap your pick again to clear it
+    btn.closest(".pick-line").querySelectorAll(".pk").forEach(x => x.classList.toggle("on", x === btn && !!team));
+    send(g, team, team ? g.lock : false);
+  }));
+  view.querySelectorAll("[data-lockk]").forEach(btn => btn.addEventListener("click", () => {
+    const g = SPOIL_GAMES.get(btn.dataset.lockk);
+    if (!g.mine) { toast("Pick a team for this game first", true); return; }
+    view.querySelectorAll(".lockbtn").forEach(x => x.classList.toggle("on", x === btn && !g.lock));
+    send(g, g.mine, !g.lock);
+  }));
+  if (d.games.some(g => g.state === "live" || (g.state === "pre" && Date.parse(g.start) - Date.now() < 30 * 60000))) {
+    autoRefresh(q => pickemView(date, q), 30);
+  }
+}
+
 // ---- getting the app + alerts --------------------------------------------------------------
 async function getAppBanner() {
   const box = document.getElementById("getapp");
@@ -952,6 +1030,11 @@ function settingsView() {
       `<label><input type="checkbox" name="notify" value="${k}" ${s.notify?.[k] !== false ? "checked" : ""}>${l}</label>`).join("")}</div>
     <p class="help">For your teams only. New here? <a href="#/app">How to get the app and alerts on your phone</a>.</p>
 
+    <h2>Pick'em</h2>
+    <div class="card"><label class="row-field"><span><b>Your name</b><span class="muted small">What friends see on the Pick'em table</span></span>
+      <input class="field" id="nickname" maxlength="24" autocomplete="nickname" placeholder="${esc(ME.email.split("@")[0])}" value="${esc(s.nickname || "")}"></label></div>
+    <p class="help">Leave it empty to use "${esc(ME.email.split("@")[0])}". Your email is never shown to anyone.</p>
+
     <h2>Spoiler-free</h2>
     ${fav.length ? `<div class="card checks">${fav.map(a =>
       `<label><input type="checkbox" name="spoilteams" value="${a}" ${spoilers().teams.includes(a) ? "checked" : ""}>Always hide ${esc(teamName(a))} scores</label>`).join("")}</div>` : ""}
@@ -989,6 +1072,7 @@ function settingsView() {
   });
   document.getElementById("useguess")?.addEventListener("click", () => { saveSettings({ local: [guess] }); settingsView(); });
   view.querySelectorAll("input[name=services]").forEach(i => i.addEventListener("change", () => saveSettings({ services: picked("services") })));
+  document.getElementById("nickname").addEventListener("change", e => saveSettings({ nickname: e.target.value.trim().slice(0, 24) }));
   view.querySelectorAll("input[name=spoilteams]").forEach(i => i.addEventListener("change", () => {
     saveSettings({ spoilers: { ...spoilers(), teams: picked("spoilteams") } });
     hiddenCache = { at: 0, list: [] };
@@ -1261,6 +1345,7 @@ function route() {
   if (page === "day" && /^\d{4}-\d{2}-\d{2}$/.test(arg || "")) return tonightView(arg);
   if (page === "game" && /^\d+$/.test(arg || "")) return gameView(arg);
   if (page === "pgame" && /^\d+$/.test(arg || "")) return gameView(arg, false, "pwhl");
+  if (page === "picks") return pickemView(/^\d{4}-\d{2}-\d{2}$/.test(arg || "") ? arg : undefined);
   if (page === "wire") return wireView();
   if (page === "standings") {
     let mode = "division";
