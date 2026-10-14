@@ -398,6 +398,9 @@ body.league-pwhl { --accent: #163F36; --fav: #163F36; --on-accent: #fff; }
 .report-head { display: flex; gap: 8px; align-items: baseline; }
 .report-reply { padding: 6px 10px; border-left: 3px solid var(--border); color: var(--text); }
 
+/* The slapshot (web/app.js) starts a page off to one side: never let that show a sideways scrollbar. */
+html, body { overflow-x: clip; }
+
 /* ---- tab pill (web/app.js movePill): slides to the active tab; page morph is done in JS (islandEnter) ---- */
 .tabs { isolation: isolate; }
 .tabs a.active { background: transparent; }
