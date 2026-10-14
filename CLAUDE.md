@@ -26,6 +26,9 @@ which is not committed.
   each poll pass runs a PASSIVE checkpoint on its own connection in a thread (Store.checkpoint), so no request waits
   on a checkpoint. Background saves in a pass share one commit (Store.batch). The Wire merge is kept until a source's
   copy changes (Feed._wire_memo); /api/wire and /api/standings send finished gzipped bytes (_finished).
+- Poller = two loops (Feed.loop): _scoreboard_loop (NHL score/now + yesterday/our day + PWHL, alerts; every LIVE_POLL
+  while busy, nothing else in it; passes over SLOW_PASS logged) and _background_loop (fights, live game pages, Wire,
+  warm-up, careers, standings, checkpoint). The NHL caches score/now ~19 s; live pages re-ask every LIVE_REFRESH (10 s).
 - Warm-up (Feed.warm, every poll pass, a few loads each: 4 idle / 1 busy): today's and yesterday's non-live game
   pages, favourite PWHL teams, then every NHL team's schedule/roster/stats, favourites first. Live games: favourites'
   and viewed games every DETAIL_POLL (20 s), the rest every WARM_LIVE_POLL (90 s). /api/game takes score/clock/state

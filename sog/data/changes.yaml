@@ -3,6 +3,12 @@
 # After editing: `.venv/bin/python tools/changelog.py` rewrites CHANGELOG.md (a test checks they match),
 # and `.venv/bin/python tools/release.py` publishes the day's GitHub Release.
 
+- date: 2026-10-14
+  kind: fixed
+  title: Livelier game clock
+  text: Left a game or Tonight open during play and the clock seemed stuck? On busy nights the scoreboard was waiting behind other background work. It now updates on its own steady beat, and open live pages check every 10 seconds, so the clock and score keep up with the NHL's own scoreboard (which itself moves about every 20 seconds).
+  link: "#/"
+
 - date: 2026-10-13
   kind: improved
   title: Clearer buttons and a Back button

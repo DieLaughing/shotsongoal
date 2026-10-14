@@ -3,6 +3,10 @@
 Every update to [Shots on Goal](https://github.com/DieLaughing/shotsongoal), newest first. The same list is on the app's What's new page.
 This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit that file, not this one.
 
+## October 14, 2026
+
+- **Fixed: Livelier game clock.** Left a game or Tonight open during play and the clock seemed stuck? On busy nights the scoreboard was waiting behind other background work. It now updates on its own steady beat, and open live pages check every 10 seconds, so the clock and score keep up with the NHL's own scoreboard (which itself moves about every 20 seconds).
+
 ## October 13, 2026
 
 - **Improved: Clearer buttons and a Back button.** The tabs at the bottom now have icons so they look like the buttons they are (they tuck away while you scroll down, along with the top bar, so the page gets the whole screen, and come back as soon as you scroll up), Settings is a proper button with a gear, and the NHL / PWHL / Both switch shows which one is on more clearly. Game, team and other pages now have a Back button at the top that takes you to wherever you just were.
