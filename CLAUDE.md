@@ -30,9 +30,11 @@ which is not committed.
   pages, favourite PWHL teams, then every NHL team's schedule/roster/stats, favourites first. Live games: favourites'
   and viewed games every DETAIL_POLL (20 s), the rest every WARM_LIVE_POLL (90 s). /api/game takes score/clock/state
   from the 10-second scoreboard (_freshen), so a 2-minute-old game copy (GAME_STALE_OK) still shows the live score.
-- Phone side: api() keeps GET_CACHE; fast(path, rerender, quiet) shows the phone's copy (< 30 min) at once and
-  re-renders once if fresh data differs; any POST/PUT/DELETE clears it. prefetch() 2.5 s after start loads Pick'em,
-  Wire, standings and favourite team pages. Test with a slow relay (200 ms per request) before shipping speed changes.
+- Phone side: api() keeps GET_CACHE; fast(path, rerender, quiet) waits up to FRESH_WAIT (150 ms) for fresh data and
+  draws once; only a slower answer draws the phone's copy (< 30 min) and re-renders once after any running animation
+  if the data differs. Any POST/PUT/DELETE clears it. prefetch() 2.5 s after start and every 90 s while visible keeps
+  Pick'em, Wire, standings and favourite team pages under ~90 s old. Tonight's banner slot keeps its last HTML
+  (BANNER) across re-renders so the page doesn't shift while it's re-checked. Test with a slow relay (200 ms per request) before shipping speed changes.
 - Page speed rules: each page makes its requests in parallel (hiddenToday() is one /api/hidden call, skipped without
   spoiler settings); showLoading() only paints "Loading…" after 350 ms.
 
