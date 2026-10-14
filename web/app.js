@@ -344,7 +344,7 @@ function whatsNewView() {
   setNav("settings");
   const fresh = new Set(unseenChanges().map(c => c.id));
   const days = CHANGES.reduce((m, c) => ((m[c.date] ||= []).push(c), m), {});
-  view.innerHTML = `<h1>What's new</h1>
+  view.innerHTML = `${backLink("#/settings", "Settings")}<h1>What's new</h1>
     <p class="muted">Every update to Shots on Goal, newest first.</p>
     ${Object.entries(days).map(([d, list]) => `<h2>${esc(new Date(d + "T12:00").toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }))}</h2>
       <div class="card">${list.map(c => `<div class="change${fresh.has(c.id) ? " fresh" : ""}">
@@ -681,7 +681,7 @@ function appView() {
   } else {
     step1 = `<p>On a computer this is optional; alerts work in the browser too. In Chrome or Edge, click the install icon at the right end of the address bar, or the menu ${DOTS_ICON} → <b>Install Shots on Goal</b>.</p>`;
   }
-  view.innerHTML = `
+  view.innerHTML = `${backLink("#/settings", "Settings")}
     <h1>Get the app</h1>
     <p class="muted">Shots on Goal works like an app once it's on your home screen: its own icon, full screen, and alerts for your teams.</p>
     <h2>1. Add it to your home screen</h2>
@@ -720,7 +720,7 @@ async function gameView(id, quiet = false, league = "nhl") {
   const g = d.game, a = g.away.abbr, h = g.home.abbr;
   if (league === "pwhl") g.league = "pwhl";
   if (spoilerHidden(g)) {
-    view.innerHTML = `<div class="card pad spoil-cover" style="margin-top:12px">
+    view.innerHTML = `${backLink("#/")}<div class="card pad spoil-cover">
       <div class="spoil-teams">${mark(a, true)}<span>vs</span>${mark(h, true)}</div>
       <div class="spoil-eye">🙈</div>
       <p><b>${esc(fullName(a))} vs ${esc(fullName(h))}</b> is hidden. Scores, goals, the shot map and the recap stay
@@ -753,7 +753,7 @@ async function gameView(id, quiet = false, league = "nhl") {
   };
   const side = (t, abbr) => `<a class="side" href="#/team/${abbr}">${mark(abbr, true)}<span class="nm">${esc(t.name || teamName(abbr))}</span></a>`;
 
-  let html = `<div class="card" style="margin-top:12px">
+  let html = `${backLink("#/")}<div class="card">
     <div class="scorebug">
       ${side(g.away, a)}
       <div><div class="score">${showScore ? `${g.away.score ?? 0} – ${g.home.score ?? 0}` : "vs"}</div><div class="state">${state}</div></div>
@@ -1100,7 +1100,7 @@ async function teamView(abbr) {
   const next = d.schedule.filter(g => g.state !== "final").slice(0, 6);
   const dated = g => `<div class="subhead">${esc(shortDate(g.date))}</div>${gameCard(g, fav)}`;
   const isFav = fav.has(abbr);
-  let html = `<div class="card pad" style="margin-top:12px;display:flex;align-items:center;gap:14px">
+  let html = `${backLink("#/league", "League")}<div class="card pad" style="display:flex;align-items:center;gap:14px">
       ${mark(abbr, true)}
       <div style="flex:1"><h1 style="margin:0">${esc(fullName(abbr))}</h1>
       ${st && leagueOf(abbr) === "pwhl" ? `<div class="muted small">${st.w}-${st.otw}-${st.otl}-${st.l} · ${st.pts} pts · ${esc(ordinal(st.league_rank))} in the PWHL${st.season ? ` (${esc(st.season)})` : ""}</div>`
@@ -1314,7 +1314,7 @@ async function showMyReports(boxId) {
 function reportView(kind = "bug") {
   setNav("");
   const page = reportFrom;
-  view.innerHTML = `
+  view.innerHTML = `${backLink(reportFrom || "#/")}
     <h1>Report a problem</h1>
     <div class="seg" role="group" aria-label="Kind">
       <button data-kind="bug" class="${kind === "bug" ? "on" : ""}">Something's wrong</button>
@@ -1453,7 +1453,7 @@ async function adminView() {
   const btn = (email, status, label, primary) => `<button class="btn small${primary ? " primary" : ""}" data-email="${esc(email)}" data-status="${status}">${label}</button>`;
   const pending = people("pending"), approved = people("approved"), other = d.users.filter(u => ["denied", "revoked"].includes(u.status));
   const openInvites = d.invites.filter(i => i.uses.length < i.max_uses);
-  view.innerHTML = `
+  view.innerHTML = `${backLink("#/settings", "Settings")}
     <h1>Admin</h1>
     <h2>Waiting for approval</h2>
     <div class="card">${pending.length ? pending.map(u => row(u, btn(u.email, "approved", "Approve", true) + btn(u.email, "denied", "Deny"))).join("") : `<div class="empty">Nobody waiting.</div>`}</div>
@@ -1534,8 +1534,12 @@ async function adminView() {
 // Display or the phone's Reduce Motion.
 const NAV_ORDER = { "": 0, day: 0, picks: 1, wire: 2, league: 3, standings: 3, teams: 3, settings: 4, new: 5, app: 5, report: 5, admin: 5 };
 const DETAIL = new Set(["game", "pgame", "team"]);
-let lastHash = null, lastPage = null, pendingShot = 0;   // pendingShot: +1 from the right, -1 from the left
+let lastHash = null, lastPage = null, pendingShot = 0, cameFromApp = false;   // pendingShot: +1 from the right, -1 from the left
 const motionOn = () => ME?.settings?.animations !== false && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// "← Back" on sub-pages: the page you came from when you got here inside the app, otherwise a sensible parent.
+const backLink = (fallback, label = "Back") => `<a class="back" href="${fallback}" data-back>${BACK_ICON}<span>${esc(label)}</span></a>`;
+const BACK_ICON = `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 function shotFrom(prev, next) {
   if (DETAIL.has(next)) return 1;
@@ -1547,6 +1551,7 @@ function route() {
   const page = (location.hash || "#/").split("/")[1] || "";
   const changed = lastHash !== null && location.hash !== lastHash;
   pendingShot = changed && motionOn() && ME?.status === "approved" ? shotFrom(lastPage, page) : 0;
+  if (changed) cameFromApp = true; else if (lastHash === null) cameFromApp = false;
   lastHash = location.hash; lastPage = page;
   return renderRoute();
 }
@@ -1617,6 +1622,7 @@ async function start() {
   window.addEventListener("hashchange", route);
   // Spoiler-free buttons can sit on any page (cards, game page, covers); one listener handles them all.
   view.addEventListener("click", e => {
+    if (e.target.closest("[data-back]") && cameFromApp) { e.preventDefault(); history.back(); return; }
     const b = e.target.closest("[data-spoil]");
     if (b) { e.preventDefault(); spoilerAction(b.dataset.spoil, b.dataset.k); return; }
     const u = e.target.closest("[data-unspoil]");

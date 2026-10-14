@@ -92,6 +92,9 @@ which is not committed.
   (~280 ms). Whole-pixel translate only: scale/skew made text re-render and jump when the animation ended.
   Same address re-shown and quiet refreshes never animate; off with settings.animations =
   false or prefers-reduced-motion. The tab highlight is one .tab-pill moved by movePill() (CSS spring transition).
+- Navigation chrome: tab bar = icon + label (web/index.html inline SVGs), Settings = outlined button with a gear,
+  league switch shows the selected league filled. Sub-pages start with backLink(fallback): history.back() when the
+  page was reached inside the app (cameFromApp), else the fallback (games -> #/, teams -> #/league, others -> #/settings).
 - Settings (web/app.js settingsView) save on every change (saveSettings: optimistic, queued PUTs of the whole settings
   object, toast). Team pickers group NHL teams by sog/teams.py DIVISIONS. Home market = one team (local is a list server-side).
 - Phase 1: access, Tonight, Game, Standings, Teams, Settings, where-to-watch (service links; ESPN+ also links Hulu,
