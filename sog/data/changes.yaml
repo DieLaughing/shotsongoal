@@ -4,6 +4,12 @@
 # and `.venv/bin/python tools/release.py` publishes the day's GitHub Release.
 
 - date: 2026-10-13
+  kind: fixed
+  title: Team cards side by side
+  text: Following more than one team on a computer or tablet? Their cards now sit side by side instead of the second one hiding off the edge. On a phone you still swipe between them, with dots underneath showing there's more than one. Behind the scenes the app also does less work per page, so the Wire and League tabs load a little lighter.
+  link: "#/"
+
+- date: 2026-10-13
   kind: improved
   title: Instant tabs
   text: After the app opens, it quietly loads your other tabs and your teams' pages, so switching tabs is instant even on a slow connection, and each page updates itself a moment later if anything changed. Behind the scenes, every team page and every game on tonight's slate is kept fresh whether or not anyone is looking, with your favorite teams first, so opening a game you haven't looked at yet doesn't wait either.
