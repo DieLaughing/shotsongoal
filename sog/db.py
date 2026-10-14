@@ -75,6 +75,8 @@ class Store:
                                   "SELECT code, used_by, used_at FROM invite WHERE used_by IS NOT NULL")
         self.lock = threading.Lock()
         self._held = 0  # open batch() blocks: saves wait for one commit at the end
+        self.path = path
+        self._ckpt: sqlite3.Connection | None = None
 
     # ---- saved copy ---------------------------------------------------------
     def get(self, key: str) -> dict | None:
@@ -95,6 +97,18 @@ class Store:
         expires = (datetime.now(timezone.utc) + ttl).strftime("%Y-%m-%dT%H:%M:%SZ") if ttl else None
         text = json.dumps(data, separators=(",", ":"))
         self._write(lambda: self.conn.execute("INSERT OR REPLACE INTO cache VALUES (?,?,?,?)", (key, text, now_iso(), expires)))
+
+    # ---- checkpoints off the request path ------------------------------------------------------
+    def manual_checkpoints(self) -> None:
+        """Stop SQLite folding the WAL back into the database inside whichever save happens to trigger it (on a USB
+        drive that save could wait hundreds of ms). The poller calls checkpoint() between passes instead."""
+        self.conn.execute("PRAGMA wal_autocheckpoint=0")
+
+    def checkpoint(self) -> tuple[int, int, int]:
+        """A PASSIVE checkpoint on its own connection: never blocks readers or writers. Run it in a thread."""
+        if self._ckpt is None:
+            self._ckpt = sqlite3.connect(self.path, check_same_thread=False)
+        return tuple(self._ckpt.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone())
 
     # ---- group commit ------------------------------------------------------------------------
     @contextmanager

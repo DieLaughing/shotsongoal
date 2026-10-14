@@ -366,6 +366,7 @@ class Feed:
         return data
 
     async def loop(self) -> None:
+        self.store.manual_checkpoints()  # from now on checkpoints happen between passes, below
         last_idle = last_standings = last_wire = last_pwhl = last_career = last_fights = 0.0
         last_detail: dict[int, float] = {}
         while True:
@@ -441,6 +442,13 @@ class Feed:
                     await self._fetch("standings", "standings", _get_standings, STANDINGS_TTL)
             except Exception:
                 log.exception("poll loop error")
+            try:  # fold the WAL into the database while nobody's request is waiting on it
+                started = time.time()
+                busy_ckpt, frames, done = await asyncio.to_thread(self.store.checkpoint)
+                if time.time() - started > 0.25:
+                    log.info("checkpoint: %d of %d WAL frames in %.0f ms", done, frames, (time.time() - started) * 1000)
+            except Exception as exc:
+                log.warning("checkpoint failed: %r", exc)
             await asyncio.sleep(LIVE_POLL if busy else 30)
 
     def favourite_teams(self) -> set[str]:

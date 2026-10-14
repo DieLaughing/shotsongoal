@@ -637,3 +637,15 @@ def test_finished_responses_are_gzipped_once(client, monkeypatch):
     r2 = client.get("/api/standings", headers={"Accept-Encoding": "identity"})
     assert r1.headers["content-encoding"] == "gzip" and r1.json()[0]["abbr"] == "BOS"
     assert "content-encoding" not in r2.headers and r2.json() == r1.json()
+
+
+def test_checkpoint_runs_on_its_own_connection(tmp_path):
+    from datetime import timedelta
+    from sog.db import Store
+    store = Store(tmp_path / "c.db")
+    store.manual_checkpoints()
+    for i in range(50):
+        store.put(f"k{i}", {"i": i, "pad": "x" * 2000}, timedelta(minutes=5))
+    busy, frames, done = store.checkpoint()
+    assert busy == 0 and frames > 0 and done == frames   # everything folded in, nothing in the way
+    assert store.get("k49")["data"]["i"] == 49
