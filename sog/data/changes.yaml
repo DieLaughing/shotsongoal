@@ -6,7 +6,7 @@
 - date: 2026-10-13
   kind: improved
   title: Clearer buttons and a Back button
-  text: The tabs at the bottom now have icons so they look like the buttons they are, Settings is a proper button with a gear, and the NHL / PWHL / Both switch shows which one is on more clearly. Game, team and other pages now have a Back button at the top that takes you to wherever you just were.
+  text: The tabs at the bottom now have icons so they look like the buttons they are (they tuck away while you scroll down and come back as soon as you scroll up), Settings is a proper button with a gear, and the NHL / PWHL / Both switch shows which one is on more clearly. Game, team and other pages now have a Back button at the top that takes you to wherever you just were.
   link: "#/"
 
 - date: 2026-10-13

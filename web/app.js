@@ -250,6 +250,26 @@ function setNav(name) {
   movePill();
 }
 
+// Scrolling down folds the tab bar's icons away; any scroll up (or the top of the page, or a new page) brings them
+// back. One passive listener, read once per frame.
+let lastScrollY = 0, scrollQueued = false;
+function setCompact(on) {
+  const bar = document.getElementById("tabs");
+  if (bar && bar.classList.contains("compact") !== on) { bar.classList.toggle("compact", on); requestAnimationFrame(movePill); }
+}
+window.addEventListener("scroll", () => {
+  if (scrollQueued) return;
+  scrollQueued = true;
+  requestAnimationFrame(() => {
+    scrollQueued = false;
+    const y = window.scrollY, dy = y - lastScrollY;
+    if (y < 40) setCompact(false);
+    else if (dy > 6) setCompact(true);
+    else if (dy < -2) setCompact(false);
+    lastScrollY = y;
+  });
+}, { passive: true });
+
 // The tab bar's highlight is one pill that slides (with a little spring) to the active tab.
 function movePill() {
   const bar = document.getElementById("tabs"), on = bar?.querySelector("a.active");
@@ -1579,6 +1599,7 @@ new MutationObserver(() => {
 
 function renderRoute() {
   clearTimeout(refreshTimer);
+  setCompact(false);
   if (ME.status !== "approved") return gateView();
   document.getElementById("tabs").hidden = false;
   const [, page, arg] = (location.hash || "#/").split("/");
