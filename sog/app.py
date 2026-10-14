@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import gzip
 import hashlib
+import json
 import logging
 import os
 import re
@@ -221,7 +223,8 @@ async def save_settings(request: Request):
         "notify": alerts.prefs(body),
         "seen_changes": str(body.get("seen_changes") or "")[:120],  # newest What's new entry this person has seen
         "spoilers": spoilers.clean(body.get("spoilers"), teams.ALL),
-        "nickname": clean_name(body.get("nickname")),  # what friends see in Pick'em; empty = the email's first part
+        "nickname": clean_name(body.get("nickname")),
+        "animations": body.get("animations") is not False,  # page transitions (Settings > Display); on unless turned off  # what friends see in Pick'em; empty = the email's first part
     }
     store.save_settings(request.state.email, clean)
     return clean
@@ -475,9 +478,31 @@ async def pwhl_game(game_id: int, request: Request):
     return {**detail, "social": social.for_game(request.state.email, detail["game"], people())}
 
 
+# ---- finished responses ------------------------------------------------------------------------
+# The biggest shared answers (the Wire, standings) are turned into JSON and compressed once per change of the data,
+# then sent as they are. Keyed by what they depend on; a handful of entries, so no eviction policy beyond a cap.
+_ready: dict[tuple, tuple] = {}
+
+
+def _finished(request: Request, key: tuple, version, build) -> Response:
+    hit = _ready.get(key)
+    if not hit or hit[0] != version:
+        raw = json.dumps(build(), separators=(",", ":"), ensure_ascii=False).encode()
+        hit = (version, raw, gzip.compress(raw, 6) if len(raw) > 1500 else None)
+        if len(_ready) > 200:
+            _ready.clear()
+        _ready[key] = hit
+    if hit[2] and "gzip" in request.headers.get("accept-encoding", ""):
+        return Response(hit[2], media_type="application/json", headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"})
+    return Response(hit[1], media_type="application/json")
+
+
 @app.get("/api/standings")
-async def standings(league: str = "nhl"):
-    return await _upstream(feed.pwhl_standings() if league == "pwhl" else feed.standings())
+async def standings(request: Request, league: str = "nhl"):
+    key = "pwhl:standings" if league == "pwhl" else "standings"
+    rows = await _upstream(feed.pwhl_standings() if league == "pwhl" else feed.standings())
+    meta = store.meta(key)
+    return _finished(request, ("standings", key), meta[:2] if meta else None, lambda: rows)
 
 
 @app.get("/api/team/{abbr}")
@@ -633,16 +658,20 @@ WIRE_KINDS = {"move", "news", "insider"}
 async def wire_feed(request: Request, kind: str | None = None, team: str | None = None, mine: bool = False,
                     league: str | None = None):
     items = await feed.wire()
-    if league in ("nhl", "pwhl"):
-        items = [i for i in items if i.get("league", "nhl") == league]
-    if kind in WIRE_KINDS:
-        items = [i for i in items if i["kind"] == kind]
-    if team:
-        items = [i for i in items if team.upper() in i["teams"]]
-    if mine:
-        fav = set(_settings(request)["favorites"])
-        items = [i for i in items if fav & set(i["teams"])]
-    return items[:150]
+    fav = frozenset(_settings(request)["favorites"]) if mine else frozenset()
+
+    def build():
+        out = items
+        if league in ("nhl", "pwhl"):
+            out = [i for i in out if i.get("league", "nhl") == league]
+        if kind in WIRE_KINDS:
+            out = [i for i in out if i["kind"] == kind]
+        if team:
+            out = [i for i in out if team.upper() in i["teams"]]
+        if mine:
+            out = [i for i in out if fav & set(i["teams"])]
+        return out[:150]
+    return _finished(request, ("wire", league, kind, (team or "").upper(), fav), feed._wire_memo[0] if feed._wire_memo else None, build)
 
 
 # ---- calendar feeds ---------------------------------------------------------------------

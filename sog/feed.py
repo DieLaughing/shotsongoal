@@ -59,6 +59,7 @@ class Feed:
         self.viewed: dict[int, float] = {}   # game id -> last time someone opened its page
         self.today: str | None = None
         self.refreshing: dict[str, asyncio.Task] = {}  # background refreshes in flight, one per key
+        self._wire_memo: tuple | None = None            # (sources' versions, merged Wire)
         self.alerts = None                   # set by the app: told about every scoreboard and Wire refresh
 
     async def _fetch(self, key: str, source: str, fetch, ttl) -> dict | list:
@@ -202,7 +203,19 @@ class Feed:
                 "stats": {"skaters": [], "goalies": []} if isinstance(st, Exception) else st}
 
     async def wire(self) -> list[dict]:
-        """Every source merged, newest first. A failing source just drops out until it's back."""
+        """Every source merged, newest first. A failing source just drops out until it's back. The merged list is
+        kept until one of its sources is saved again, so a page doesn't re-read ~25 copies each time."""
+        keys = ["wire:moves", "wire:espn", "wire:sportsnet", "wire:pwhl-news"] + \
+               [f"wire:bsky:{i['handle']}" for i in self.store.insiders(INSIDER_DEFAULTS)]
+        metas = [self.store.meta(k) for k in keys]
+        version = tuple(m[:2] if m else None for m in metas)
+        if self._wire_memo and self._wire_memo[0] == version and all(m and m[2] for m in metas):
+            return self._wire_memo[1]
+        items = await self._wire_merge()
+        self._wire_memo = (tuple(m[:2] if (m := self.store.meta(k)) else None for k in keys), items)
+        return items
+
+    async def _wire_merge(self) -> list[dict]:
         jobs = [self.cached("wire:moves", "wire:espn-moves", wire.fetch_moves, NEWS_TTL),
                 self.cached("wire:espn", "wire:espn-news", wire.fetch_espn_news, NEWS_TTL),
                 self.cached("wire:sportsnet", "wire:sportsnet", wire.fetch_sportsnet, NEWS_TTL),
@@ -353,6 +366,7 @@ class Feed:
         return data
 
     async def loop(self) -> None:
+        self.store.manual_checkpoints()  # from now on checkpoints happen between passes, below
         last_idle = last_standings = last_wire = last_pwhl = last_career = last_fights = 0.0
         last_detail: dict[int, float] = {}
         while True:
@@ -416,7 +430,8 @@ class Feed:
                     items = await self.wire()
                     if self.alerts:
                         await self.alerts.on_wire(items)
-                await self.warm(busy)
+                with self.store.batch():  # the warm-up's saves share one commit
+                    await self.warm(busy)
                 if now - last_career >= CAREER_POLL:
                     last_career = now
                     favs = {t for u in self.store.users() if u["status"] == "approved"
@@ -427,6 +442,13 @@ class Feed:
                     await self._fetch("standings", "standings", _get_standings, STANDINGS_TTL)
             except Exception:
                 log.exception("poll loop error")
+            try:  # fold the WAL into the database while nobody's request is waiting on it
+                started = time.time()
+                busy_ckpt, frames, done = await asyncio.to_thread(self.store.checkpoint)
+                if time.time() - started > 0.25:
+                    log.info("checkpoint: %d of %d WAL frames in %.0f ms", done, frames, (time.time() - started) * 1000)
+            except Exception as exc:
+                log.warning("checkpoint failed: %r", exc)
             await asyncio.sleep(LIVE_POLL if busy else 30)
 
     def favourite_teams(self) -> set[str]:
