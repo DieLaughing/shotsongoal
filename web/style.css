@@ -58,7 +58,7 @@ button { font: inherit; }
   flex: 1; max-width: 160px; text-align: center; text-decoration: none; font-weight: 600; font-size: 13px;
   color: var(--muted); padding: 9px 4px; border-radius: 10px;
 }
-.tabs a.active { color: var(--text); background: var(--bg); view-transition-name: tabpill; }
+.tabs a.active { color: var(--text); background: var(--bg); }
 
 main { max-width: 760px; margin: 0 auto; padding: 8px 16px 32px; }
 h1 { font-size: 20px; margin: 18px 0 8px; }
@@ -398,26 +398,9 @@ body.league-pwhl { --accent: #163F36; --fav: #163F36; --on-accent: #fff; }
 .report-head { display: flex; gap: 8px; align-items: baseline; }
 .report-reply { padding: 6px 10px; border-left: 3px solid var(--border); color: var(--text); }
 
-/* ---- page transitions (web/app.js route): only the page and the tab highlight move ---- */
-#view { view-transition-name: page; }
-.top { view-transition-name: topbar; }
-.tabs { view-transition-name: tabbar; }
-/* The header and tab bar stay put, above the sliding page; the tab highlight glides above the bar. */
-::view-transition-group(topbar), ::view-transition-group(tabbar) { z-index: 2; animation: none; }
-::view-transition-old(topbar), ::view-transition-new(topbar), ::view-transition-old(tabbar) { animation: none; }
-::view-transition-new(tabbar) { animation: none; }
-::view-transition-group(tabpill) { z-index: 3; }
-::view-transition-old(root), ::view-transition-new(root) { animation: none; }
-:root { --vt-in: 0px; --vt-out: 0px; --vt-scale: .985; }
-:root[data-nav="left"] { --vt-in: 34px; --vt-out: -18px; }
-:root[data-nav="right"] { --vt-in: -34px; --vt-out: 18px; }
-:root[data-nav="forward"] { --vt-in: 44px; --vt-out: -12px; --vt-scale: .97; }
-:root[data-nav="back"] { --vt-in: -30px; --vt-out: 26px; --vt-scale: .97; }
-::view-transition-old(page) { animation: vt-out 150ms ease-in both; }
-::view-transition-new(page) { animation: vt-in 260ms cubic-bezier(.22, 1.35, .42, 1) both; }  /* a little bounce */
-::view-transition-group(tabpill) { animation-duration: 280ms; animation-timing-function: cubic-bezier(.25, 1.4, .45, 1); }
-@keyframes vt-in { from { opacity: 0; transform: translateX(var(--vt-in)) scale(var(--vt-scale)); } }
-@keyframes vt-out { to { opacity: 0; transform: translateX(var(--vt-out)) scale(var(--vt-scale)); } }
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
-}
+/* ---- tab pill (web/app.js movePill): slides to the active tab; page morph is done in JS (islandEnter) ---- */
+.tabs { isolation: isolate; }
+.tabs a.active { background: transparent; }
+.tab-pill { position: absolute; left: 0; top: 6px; height: calc(100% - 12px - env(safe-area-inset-bottom)); border-radius: 10px;
+  background: var(--bg); z-index: -1; transition: transform 300ms cubic-bezier(.25, 1.35, .45, 1), width 300ms cubic-bezier(.25, 1.35, .45, 1); }
+.tab-pill.still { transition: none; }

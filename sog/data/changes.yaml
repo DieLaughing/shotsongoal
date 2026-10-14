@@ -6,7 +6,7 @@
 - date: 2026-10-13
   kind: new
   title: Page animations
-  text: Moving around the app now has a quick, slightly bouncy slide. Tabs glide left and right in order, games and team pages slide in from the side, and the highlight in the tab bar follows your tap. It's over in about a quarter of a second and never waits for a page. Prefer instant? Settings → Display → Animations between pages turns it off (it's also off when your phone's Reduce Motion setting is on).
+  text: Moving around the app now has a quick, springy touch. A new page opens out of whatever you tapped, the way the iPhone's Dynamic Island opens, and the highlight in the tab bar slides to the tab you picked. It's over in about a third of a second and only starts once the page is ready. Prefer instant? Settings → Display → Animations between pages turns it off (it's also off when your phone's Reduce Motion setting is on).
   link: "#/settings"
 
 - date: 2026-10-13
