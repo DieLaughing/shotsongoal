@@ -89,6 +89,16 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
   color: var(--ink); background: linear-gradient(135deg, var(--c) 0%, color-mix(in srgb, var(--c) 62%, #000) 100%);
 }
 .heroes.many .hero { flex-basis: 90%; }
+/* Phones: dots under the swipeable cards, so a second card is never a secret. */
+.hero-dots { display: flex; justify-content: center; gap: 6px; margin-top: 8px; }
+.hero-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--border); transition: background .2s, transform .2s; }
+.hero-dots span.on { background: var(--text); transform: scale(1.25); }
+/* Wide screens: no swiping, so the cards share the width (and wrap) instead of hiding off the edge. */
+@media (min-width: 700px) {
+  .heroes.many { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); overflow: visible; }
+  .heroes.many .hero { min-width: 0; align-content: start; }
+  .hero-dots { display: none; }
+}
 .hero.light { --ink: #111; --wash: rgba(0, 0, 0, .1); --ring: rgba(0, 0, 0, .4);
   background: linear-gradient(135deg, var(--c) 0%, color-mix(in srgb, var(--c) 82%, #000) 100%); }
 .hero-top { text-decoration: none; color: inherit; display: grid; gap: 8px; }
@@ -99,7 +109,7 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .hero-r { margin-left: auto; display: grid; justify-items: end; line-height: 1.15; flex: none; }
 .hero-r span { font-size: 12px; opacity: .85; }
 .hero-sc { font-size: 19px; font-variant-numeric: tabular-nums; }
-.hero-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.hero-chips { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; }
 .hero .chip { font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 7px; background: var(--wash); }
 .hero .chip.strong { background: var(--ink); color: var(--c); text-decoration: none; }
 .hero.light .chip.strong { color: #fff; background: #111; }

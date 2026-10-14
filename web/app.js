@@ -445,7 +445,8 @@ function heroes(data, leagues, slateGames) {
     .sort((x, y) => { const a = rank(x), b = rank(y); return a[0] - b[0] || a[1] - b[1] || String(a[2]).localeCompare(String(b[2])); });
   if (!cards.length) return "";
   const live = c => slateGames.find(x => x.away.abbr === c.abbr || x.home.abbr === c.abbr);
-  return `<div class="heroes${cards.length > 1 ? " many" : ""}">${cards.map(c => heroCard(c, live(c))).join("")}</div>`;
+  return `<div class="heroes${cards.length > 1 ? " many" : ""}">${cards.map(c => heroCard(c, live(c))).join("")}</div>`
+    + (cards.length > 1 ? `<div class="hero-dots" aria-hidden="true">${cards.map((_, i) => `<span${i ? "" : ' class="on"'}></span>`).join("")}</div>` : "");
 }
 
 async function tonightView(date, quiet = false) {
@@ -493,6 +494,12 @@ async function tonightView(date, quiet = false) {
       ${day.next ? `<a href="#/day/${day.next}" aria-label="Next day">→</a>` : "<span></span>"}
     </div>
     ${days.map((d, i) => slate(d, leagues[i])).join("")}`;
+  // The dots under swipeable team cards follow the card in view.
+  const strip = view.querySelector(".heroes.many");
+  if (strip) strip.addEventListener("scroll", () => {
+    const i = Math.round(strip.scrollLeft / (strip.firstElementChild.offsetWidth + 10));
+    view.querySelectorAll(".hero-dots span").forEach((d, j) => d.classList.toggle("on", i === j));
+  }, { passive: true });
   // One banner at a time: getting the app / alerts first, otherwise what's new.
   getAppBanner().then(shown => {
     const box = document.getElementById("getapp");
