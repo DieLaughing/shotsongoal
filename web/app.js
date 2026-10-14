@@ -53,6 +53,7 @@ const goOffline = () => location.replace(`/offline.html?back=${encodeURIComponen
 // the scenes; anything that changes data (a pick, a setting, a reaction) clears it so nothing old shows.
 const GET_CACHE = new Map();
 const SHOW_COPY_FOR = 30 * 60000;   // older copies wait for fresh data instead
+const FRESH_WAIT = 150;             // ms a page waits for fresh data before drawing the phone's copy
 
 async function api(path, opts = {}) {
   const r = await fetch(path, { headers: { Accept: "application/json", "Content-Type": "application/json" }, ...opts });
@@ -71,13 +72,21 @@ async function api(path, opts = {}) {
 
 // A page's data, fast: the phone's copy straight away (then `rerender` once if the fresh data differs), or the
 // network when there's no usable copy. `quiet` (the auto-refresh) always waits for fresh data.
-function fast(path, rerender, quiet = false) {
+async function fast(path, rerender, quiet = false) {
   const hit = GET_CACHE.get(path), age = hit ? Date.now() - hit.at : Infinity;
-  if (age < 3000) return Promise.resolve(hit.data);            // just fetched (this is the re-render)
+  if (age < 3000) return hit.data;                              // just fetched (this is the re-render)
   if (quiet || age > SHOW_COPY_FOR) return api(path);
-  const route = location.hash;
-  api(path).then(d => { if (location.hash === route && JSON.stringify(d) !== JSON.stringify(hit.data)) rerender(); }).catch(() => {});
-  return Promise.resolve(hit.data);
+  // Give fresh data a head start: on a decent connection it lands within 150 ms, so the page draws once, already
+  // current, and nothing changes after the animation. Only a slow answer falls back to the phone's copy.
+  const route = location.hash, fresh = api(path);
+  const first = await Promise.race([fresh.then(d => ({ d }), () => null), new Promise(r => setTimeout(() => r(null), FRESH_WAIT))]);
+  if (first) return first.d;
+  fresh.then(async d => {
+    if (location.hash !== route || JSON.stringify(d) === JSON.stringify(hit.data)) return;
+    await Promise.all(view.getAnimations().map(a => a.finished.catch(() => {})));  // never redraw mid-animation
+    if (location.hash === route) rerender();
+  }).catch(() => {});
+  return hit.data;
 }
 
 // After the app opens: load the other tabs and your teams' pages in the background, a few at a time, so every
@@ -93,9 +102,12 @@ async function prefetch() {
   standings(pageLeague()).catch(() => {});
   for (const path of paths) {
     if (document.hidden) return;
-    if (!GET_CACHE.has(path)) await api(path).catch(() => {});
+    const hit = GET_CACHE.get(path);
+    if (!hit || Date.now() - hit.at > 60000) await api(path).catch(() => {});
   }
 }
+// While the app is open and visible, keep those copies under ~90 s old, so a tab rarely has to catch up after opening.
+setInterval(() => { if (!document.hidden) prefetch(); }, 90000);
 
 const favs = () => new Set(ME?.settings?.favorites || []);
 
@@ -321,6 +333,7 @@ function newBanner() {
 function bindNewBanner() {
   document.getElementById("newbar-x")?.addEventListener("click", async e => {
     e.target.closest(".newbar")?.remove();
+    BANNER = "";
     await markChangesSeen();
   });
 }
@@ -501,7 +514,7 @@ async function tonightView(date, quiet = false) {
     // Arrows step to the nearest day with a game in any shown league.
     prev: days.map(d => d.prev).filter(Boolean).sort().pop(), next: days.map(d => d.next).filter(Boolean).sort()[0] };
   view.innerHTML = `
-    <div id="getapp"></div>
+    <div id="getapp">${BANNER}</div>
     ${heroes(mineData, leagues, days.flatMap(d => d.games || []))}
     ${(n => n ? `<div class="spoil-note">🙈 Spoiler-free: ${n} game${n > 1 ? "s" : ""} hidden. Open one to reveal it when you've watched.</div>` : "")(days.flatMap(d => d.games || []).filter(spoilerHidden).length)}
     <div class="daybar">
@@ -517,11 +530,13 @@ async function tonightView(date, quiet = false) {
     view.querySelectorAll(".hero-dots span").forEach((d, j) => d.classList.toggle("on", i === j));
   }, { passive: true });
   // One banner at a time: getting the app / alerts first, otherwise what's new.
-  getAppBanner().then(shown => {
-    const box = document.getElementById("getapp");
-    if (shown || !box) return;
-    box.innerHTML = newBanner();
-    bindNewBanner();
+  bindBanner();
+  getAppBanner().then(html => {
+    const next = html || newBanner(), box = document.getElementById("getapp");
+    if (!box || next === BANNER) return;
+    BANNER = next;
+    box.innerHTML = next;
+    bindBanner();
   });
   const all = days.flatMap(d => d.games || []);
   // Warm your team cards' game pages on the server, so tapping one opens straight away.
@@ -613,12 +628,23 @@ async function pickemView(date, quiet = false) {
 }
 
 // ---- getting the app + alerts --------------------------------------------------------------
-async function getAppBanner() {
+// Tonight's one banner slot: getting the app / alerts first, otherwise what's new. BANNER is the last one shown, so a
+// re-render paints it straight away instead of blanking the slot and shifting the page while it's re-checked.
+let BANNER = "";
+function bindBanner() {
   const box = document.getElementById("getapp");
-  if (!box) return false;
+  box?.querySelector(".getapp .x")?.addEventListener("click", () => {
+    try { localStorage.setItem("getappHidden", "1"); } catch { /* fine */ }
+    BANNER = "";
+    box.innerHTML = "";
+  });
+  bindNewBanner();
+}
+
+async function getAppBanner() {
   let hidden = false;
   try { hidden = localStorage.getItem("getappHidden") === "1"; } catch { /* fine */ }
-  if (hidden) return false;
+  if (hidden) return "";
   let text = null;
   if (!isStandalone() && device() !== "desktop") {
     text = "<b>Put Shots on Goal on your home screen</b> and get alerts when your teams score.";
@@ -627,14 +653,8 @@ async function getAppBanner() {
     const sub = reg ? await reg.pushManager.getSubscription().catch(() => null) : null;
     if (!sub) text = "<b>Turn on alerts</b> for puck drop, goals and finals for your teams.";
   }
-  if (!text) return false;
-  box.innerHTML = `<div class="getapp"><div>${text}</div><a class="btn primary small" href="#/app">Show me how</a>
-    <button class="x" aria-label="Hide">×</button></div>`;
-  box.querySelector(".x").addEventListener("click", () => {
-    try { localStorage.setItem("getappHidden", "1"); } catch { /* fine */ }
-    box.innerHTML = "";
-  });
-  return true;
+  return text ? `<div class="getapp"><div>${text}</div><a class="btn primary small" href="#/app">Show me how</a>
+    <button class="x" aria-label="Hide">×</button></div>` : "";
 }
 
 function appView() {
