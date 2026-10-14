@@ -1195,6 +1195,10 @@ function settingsView() {
       "I've seen it". ${fav.length ? "Tick a team to hide all their games, or open" : "Open"} any game and tap "🙈 Watching later" to hide just that one. It switches off by itself the day after.</p>
 
     <div class="group-title">More</div>
+    <h2>Display</h2>
+    <div class="card checks"><label><input type="checkbox" id="animations" ${s.animations !== false ? "checked" : ""}>Animations between pages</label></div>
+    <p class="help">Quick slides between tabs and pages. Turn them off for instant switching. They're also off whenever your phone's Reduce Motion setting is on.</p>
+
     <h2>Calendar</h2>
     <div class="card" id="cal"><div class="empty">Loading…</div></div>
     <p class="help">Every game for your teams, with where to watch. Your phone checks it every few hours. The link is personal; don't share it.</p>
@@ -1225,6 +1229,7 @@ function settingsView() {
   });
   document.getElementById("useguess")?.addEventListener("click", () => { saveSettings({ local: [guess] }); settingsView(); });
   view.querySelectorAll("input[name=services]").forEach(i => i.addEventListener("change", () => saveSettings({ services: picked("services") })));
+  document.getElementById("animations").addEventListener("change", e => saveSettings({ animations: e.target.checked }));
   document.getElementById("nickname").addEventListener("change", e => saveSettings({ nickname: e.target.value.trim().slice(0, 24) }));
   view.querySelectorAll("input[name=spoilteams]").forEach(i => i.addEventListener("change", () => {
     saveSettings({ spoilers: { ...spoilers(), teams: picked("spoilteams") } });
@@ -1485,7 +1490,35 @@ async function adminView() {
 }
 
 // ---- router ---------------------------------------------------------------------------------
+// ---- page transitions -------------------------------------------------------------------------
+// A quick, slightly bouncy slide when you move between pages (View Transitions API; browsers without it just switch).
+// Tabs slide in tab order, game and team pages slide in from the right and back out. Only taps animate (the live
+// refreshes don't), it never waits more than 150 ms for a page, and it's off with Settings > Animations or the
+// phone's Reduce Motion.
+const NAV_ORDER = { "": 0, day: 0, picks: 1, wire: 2, league: 3, standings: 3, teams: 3, settings: 4, new: 5, app: 5, report: 5, admin: 5 };
+const DETAIL = new Set(["game", "pgame", "team"]);
+let lastPage = null, lastHash = null;
+function navDirection(prev, next) {
+  if (prev === null || location.hash === lastHash) return null;  // first page, or the same page re-shown
+  if (DETAIL.has(next)) return "forward";
+  if (DETAIL.has(prev)) return "back";
+  const a = NAV_ORDER[prev] ?? 0, b = NAV_ORDER[next] ?? 0;
+  return a === b ? "fade" : b > a ? "left" : "right";
+}
+const motionOn = () => ME?.settings?.animations !== false && "startViewTransition" in document
+  && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 function route() {
+  const page = (location.hash || "#/").split("/")[1] || "";
+  const dir = navDirection(lastPage, page);
+  lastPage = page; lastHash = location.hash;
+  if (!dir || !motionOn() || ME?.status !== "approved") return renderRoute();
+  document.documentElement.dataset.nav = dir;
+  const t = document.startViewTransition(() => Promise.race([Promise.resolve(renderRoute()).catch(() => {}), new Promise(r => setTimeout(r, 150))]));
+  t.finished.finally(() => { delete document.documentElement.dataset.nav; });
+}
+
+function renderRoute() {
   clearTimeout(refreshTimer);
   if (ME.status !== "approved") return gateView();
   document.getElementById("tabs").hidden = false;

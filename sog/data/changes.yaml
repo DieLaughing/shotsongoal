@@ -4,6 +4,12 @@
 # and `.venv/bin/python tools/release.py` publishes the day's GitHub Release.
 
 - date: 2026-10-13
+  kind: new
+  title: Page animations
+  text: Moving around the app now has a quick, slightly bouncy slide. Tabs glide left and right in order, games and team pages slide in from the side, and the highlight in the tab bar follows your tap. It's over in about a quarter of a second and never waits for a page. Prefer instant? Settings → Display → Animations between pages turns it off (it's also off when your phone's Reduce Motion setting is on).
+  link: "#/settings"
+
+- date: 2026-10-13
   kind: fixed
   title: Team cards side by side
   text: Following more than one team on a computer or tablet? Their cards now sit side by side instead of the second one hiding off the edge. On a phone you still swipe between them, with dots underneath showing there's more than one. Behind the scenes the app also does less work per page, so the Wire and League tabs load a little lighter.
