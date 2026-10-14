@@ -113,8 +113,10 @@ class Alerts:
         """Teams that someone with a phone signed up for alerts wants fight alerts for."""
         emails = {s["email"] for s in self.store.pushes()}
         teams = set()
-        for email in emails:
-            settings = (self.store.user(email) or {}).get("settings") or {}
+        for u in self.store.users():  # one read of everyone, not one per subscriber
+            if u["email"] not in emails:
+                continue
+            settings = u.get("settings") or {}
             if prefs(settings)["fights"]:
                 teams |= set(settings.get("favorites") or [])
         return teams
@@ -154,8 +156,9 @@ class Alerts:
         people = {}
         for s in subs:
             people.setdefault(s["email"], []).append(s)
+        everyone = {u["email"]: u for u in self.store.users()}  # one read, not one per subscriber
         for email, mine in people.items():
-            user = self.store.user(email) or {}
+            user = everyone.get(email) or {}
             settings = user.get("settings") or {}
             fav, want = set(settings.get("favorites") or []), prefs(settings)
             for e in fresh:
