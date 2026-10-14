@@ -1507,40 +1507,47 @@ async function adminView() {
 
 // ---- router ---------------------------------------------------------------------------------
 // ---- page transitions ------------------------------------------------------------------------
-// "Dynamic Island" morph: the old page goes at once, and the new one opens out of the spot you tapped (a game card,
-// a tab) as a rounded shape that springs to full size while its content fades in. It plays only once the new page's
-// content is actually on screen, so nothing pops in mid-way. Taps only (live refreshes and re-showing the same page
-// never animate); off with Settings > Display or the phone's Reduce Motion.
-let lastHash = null, tapY = null, pendingEnter = false;
-document.addEventListener("pointerdown", e => { tapY = e.clientY; }, { capture: true, passive: true });
+// "Slapshot": the old page goes at once, and the new one flies in from the side, already at speed (a little
+// stretched and leaning into the shot), overshoots its spot and snaps back like a puck hitting the twine. Tabs come
+// from their side of the tab bar, game and team pages from the right, going back from the left. It plays only once
+// the new page's content is on screen, never for live refreshes or the same page re-shown; off with Settings >
+// Display or the phone's Reduce Motion.
+const NAV_ORDER = { "": 0, day: 0, picks: 1, wire: 2, league: 3, standings: 3, teams: 3, settings: 4, new: 5, app: 5, report: 5, admin: 5 };
+const DETAIL = new Set(["game", "pgame", "team"]);
+let lastHash = null, lastPage = null, pendingShot = 0;   // pendingShot: +1 from the right, -1 from the left
 const motionOn = () => ME?.settings?.animations !== false && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+function shotFrom(prev, next) {
+  if (DETAIL.has(next)) return 1;
+  if (DETAIL.has(prev)) return -1;
+  return (NAV_ORDER[next] ?? 0) >= (NAV_ORDER[prev] ?? 0) ? 1 : -1;
+}
+
 function route() {
+  const page = (location.hash || "#/").split("/")[1] || "";
   const changed = lastHash !== null && location.hash !== lastHash;
-  lastHash = location.hash;
-  pendingEnter = changed && motionOn() && ME?.status === "approved";
+  pendingShot = changed && motionOn() && ME?.status === "approved" ? shotFrom(lastPage, page) : 0;
+  lastHash = location.hash; lastPage = page;
   return renderRoute();
 }
 
-function islandEnter() {
-  const r = view.getBoundingClientRect();
-  const vh = window.innerHeight;
-  const y = Math.min(Math.max((tapY ?? vh / 2) - r.top, 0), Math.min(r.height, vh));  // where the tap was, inside the page
-  const top = Math.max(y - 26, 0), bottom = Math.max(r.height - y - 26, 0), side = Math.min(r.width * 0.06, 28);
+function slapshot(d) {
   view.animate([
-    { clipPath: `inset(${top}px ${side}px ${bottom}px ${side}px round 26px)`, opacity: 0.35, transform: "scale(0.985)" },
-    { clipPath: "inset(0px 0px 0px 0px round 0px)", opacity: 1, transform: "none" },
-  ], { duration: 340, easing: "cubic-bezier(.2, 1.12, .32, 1)" });  // a soft spring, like the island opening
-  tapY = null;
+    { transform: `translateX(${56 * d}px) scaleX(1.035) skewX(${-3 * d}deg)`, opacity: 0, offset: 0 },      // already flying
+    { transform: `translateX(${-7 * d}px) scaleX(1) skewX(${0.6 * d}deg)`, opacity: 1, offset: 0.55 },     // hits, overshoots
+    { transform: `translateX(${2 * d}px)`, offset: 0.8 },                                                    // snaps back
+    { transform: "none", opacity: 1, offset: 1 },
+  ], { duration: 280, easing: "cubic-bezier(.12, .8, .3, 1)" });
 }
 
-// Play the morph when a navigation's real content lands in the page (not the "Loading…" placeholder).
+// Fire when a navigation's real content lands in the page (not the "Loading…" placeholder).
 new MutationObserver(() => {
-  if (!pendingEnter) return;
+  if (!pendingShot) return;
   const first = view.firstElementChild;
   if (!first || (first.classList.contains("empty") && /^Loading/.test(first.textContent))) return;
-  pendingEnter = false;
-  islandEnter();
+  const d = pendingShot;
+  pendingShot = 0;
+  slapshot(d);
 }).observe(view, { childList: true });
 
 function renderRoute() {

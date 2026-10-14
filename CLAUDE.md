@@ -84,11 +84,11 @@ which is not committed.
   reads gamecenter/<id>/landing penalties ("Fighting"); first look per game only records.
 - Speed: GZip on responses; /api/team sends the last 10 results + next 10 games; non-live game pages refresh in the
   background (_game_stale_ok); Tonight warms the team cards' game pages after it renders.
-- Page transitions (web/app.js route -> renderRoute, islandEnter): "Dynamic Island" morph with the Web Animations
-  API: the old page goes at once; when a navigation's real content lands in #view (MutationObserver, not the Loading
-  placeholder) the page opens from the last tap's y as a rounded clip-path inset springing to full size (~340 ms).
-  Same address re-shown and quiet refreshes never animate; off with settings.animations = false or
-  prefers-reduced-motion. The tab highlight is one .tab-pill moved by movePill() (CSS spring transition).
+- Page transitions (web/app.js route -> renderRoute, slapshot): Web Animations API. The old page goes at once; when
+  a navigation's real content lands in #view (MutationObserver, not the Loading placeholder) the page flies in from
+  the side (+1 right: forward tabs in NAV_ORDER, game/team pages; -1 left: back), stretched/skewed at speed, overshoots
+  and snaps back (~280 ms). Same address re-shown and quiet refreshes never animate; off with settings.animations =
+  false or prefers-reduced-motion. The tab highlight is one .tab-pill moved by movePill() (CSS spring transition).
 - Settings (web/app.js settingsView) save on every change (saveSettings: optimistic, queued PUTs of the whole settings
   object, toast). Team pickers group NHL teams by sog/teams.py DIVISIONS. Home market = one team (local is a list server-side).
 - Phase 1: access, Tonight, Game, Standings, Teams, Settings, where-to-watch (service links; ESPN+ also links Hulu,
