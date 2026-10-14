@@ -1507,8 +1507,8 @@ async function adminView() {
 
 // ---- router ---------------------------------------------------------------------------------
 // ---- page transitions ------------------------------------------------------------------------
-// "Slapshot": the old page goes at once, and the new one flies in from the side, already at speed (a little
-// stretched and leaning into the shot), overshoots its spot and snaps back like a puck hitting the twine. Tabs come
+// "Slapshot": the old page goes at once, and the new one flies in from the side already at speed, overshoots its
+// spot and snaps back like a puck hitting the twine. Tabs come
 // from their side of the tab bar, game and team pages from the right, going back from the left. It plays only once
 // the new page's content is on screen, never for live refreshes or the same page re-shown; off with Settings >
 // Display or the phone's Reduce Motion.
@@ -1533,10 +1533,12 @@ function route() {
 
 function slapshot(d) {
   view.animate([
-    { transform: `translateX(${56 * d}px) scaleX(1.035) skewX(${-3 * d}deg)`, opacity: 0, offset: 0 },      // already flying
-    { transform: `translateX(${-7 * d}px) scaleX(1) skewX(${0.6 * d}deg)`, opacity: 1, offset: 0.55 },     // hits, overshoots
-    { transform: `translateX(${2 * d}px)`, offset: 0.8 },                                                    // snaps back
-    { transform: "none", opacity: 1, offset: 1 },
+    // Whole-pixel sideways moves only: no scaling or skew, so the text drawn while moving is the same as the text at
+    // rest and nothing shifts when it stops.
+    { transform: `translate3d(${56 * d}px, 0, 0)`, opacity: 0, offset: 0 },   // already flying
+    { transform: `translate3d(${-7 * d}px, 0, 0)`, opacity: 1, offset: 0.55 }, // hits, overshoots
+    { transform: `translate3d(${2 * d}px, 0, 0)`, offset: 0.8 },               // snaps back
+    { transform: "translate3d(0, 0, 0)", opacity: 1, offset: 1 },
   ], { duration: 280, easing: "cubic-bezier(.12, .8, .3, 1)" });
 }
 
