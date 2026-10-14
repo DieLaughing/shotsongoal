@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -73,6 +74,9 @@ class Store:
                 self.conn.execute("INSERT OR IGNORE INTO invite_use (code, email, used_at) "
                                   "SELECT code, used_by, used_at FROM invite WHERE used_by IS NOT NULL")
         self.lock = threading.Lock()
+        self._held = 0  # open batch() blocks: saves wait for one commit at the end
+        self.path = path
+        self._ckpt: sqlite3.Connection | None = None
 
     # ---- saved copy ---------------------------------------------------------
     def get(self, key: str) -> dict | None:
@@ -82,21 +86,63 @@ class Store:
         fresh = row["expires"] is None or parse_iso(row["expires"]) > datetime.now(timezone.utc)
         return {"data": json.loads(row["data"]), "fetched": row["fetched"], "fresh": fresh}
 
+    def meta(self, key: str) -> tuple[str, str | None, bool] | None:
+        """(fetched, expires, fresh) for a saved copy, without reading or parsing the data itself."""
+        row = self.conn.execute("SELECT fetched, expires FROM cache WHERE key=?", (key,)).fetchone()
+        if not row:
+            return None
+        return row["fetched"], row["expires"], row["expires"] is None or parse_iso(row["expires"]) > datetime.now(timezone.utc)
+
     def put(self, key: str, data, ttl: timedelta | None) -> None:
         expires = (datetime.now(timezone.utc) + ttl).strftime("%Y-%m-%dT%H:%M:%SZ") if ttl else None
-        with self.lock, self.conn:
-            self.conn.execute("INSERT OR REPLACE INTO cache VALUES (?,?,?,?)",
-                              (key, json.dumps(data, separators=(",", ":")), now_iso(), expires))
+        text = json.dumps(data, separators=(",", ":"))
+        self._write(lambda: self.conn.execute("INSERT OR REPLACE INTO cache VALUES (?,?,?,?)", (key, text, now_iso(), expires)))
+
+    # ---- checkpoints off the request path ------------------------------------------------------
+    def manual_checkpoints(self) -> None:
+        """Stop SQLite folding the WAL back into the database inside whichever save happens to trigger it (on a USB
+        drive that save could wait hundreds of ms). The poller calls checkpoint() between passes instead."""
+        self.conn.execute("PRAGMA wal_autocheckpoint=0")
+
+    def checkpoint(self) -> tuple[int, int, int]:
+        """A PASSIVE checkpoint on its own connection: never blocks readers or writers. Run it in a thread."""
+        if self._ckpt is None:
+            self._ckpt = sqlite3.connect(self.path, check_same_thread=False)
+        return tuple(self._ckpt.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone())
+
+    # ---- group commit ------------------------------------------------------------------------
+    @contextmanager
+    def batch(self):
+        """Hold the commits of a burst of background saves and make them one (a single disk sync for the lot).
+        Anyone else's commit in the meantime simply takes the held saves with it."""
+        self._held += 1
+        try:
+            yield
+        finally:
+            self._held -= 1
+            if not self._held:
+                with self.lock:
+                    self.conn.commit()
+
+    def _write(self, do) -> None:
+        with self.lock:
+            if self._held:
+                do()
+            else:
+                with self.conn:
+                    do()
 
     def record_run(self, source: str, ok: bool, error: str | None = None) -> None:
         now = now_iso()
-        with self.lock, self.conn:
+
+        def do():
             self.conn.execute("INSERT OR IGNORE INTO source_run (source) VALUES (?)", (source,))
             if ok:
                 self.conn.execute("UPDATE source_run SET last_try=?, last_ok=?, error=NULL WHERE source=?",
                                   (now, now, source))
             else:
                 self.conn.execute("UPDATE source_run SET last_try=?, error=? WHERE source=?", (now, error, source))
+        self._write(do)
 
     def runs(self) -> dict[str, dict]:
         return {r["source"]: dict(r) for r in self.conn.execute("SELECT * FROM source_run ORDER BY source")}

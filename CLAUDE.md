@@ -22,13 +22,19 @@ which is not committed.
   viewed. Feed.cached serves an expired copy younger than STALE_OK (1 day; game pages 1 min) at once and refreshes it in
   the background (refresh_later, one task per key); pages use today_page(), never poll_today(). Only a missing copy
   makes a request wait on the leagues. API requests over 0.5 s are logged ("slow request").
+- SQLite: WAL + synchronous=NORMAL. While the poller runs, automatic checkpoints are off (manual_checkpoints) and
+  each poll pass runs a PASSIVE checkpoint on its own connection in a thread (Store.checkpoint), so no request waits
+  on a checkpoint. Background saves in a pass share one commit (Store.batch). The Wire merge is kept until a source's
+  copy changes (Feed._wire_memo); /api/wire and /api/standings send finished gzipped bytes (_finished).
 - Warm-up (Feed.warm, every poll pass, a few loads each: 4 idle / 1 busy): today's and yesterday's non-live game
   pages, favourite PWHL teams, then every NHL team's schedule/roster/stats, favourites first. Live games: favourites'
   and viewed games every DETAIL_POLL (20 s), the rest every WARM_LIVE_POLL (90 s). /api/game takes score/clock/state
   from the 10-second scoreboard (_freshen), so a 2-minute-old game copy (GAME_STALE_OK) still shows the live score.
-- Phone side: api() keeps GET_CACHE; fast(path, rerender, quiet) shows the phone's copy (< 30 min) at once and
-  re-renders once if fresh data differs; any POST/PUT/DELETE clears it. prefetch() 2.5 s after start loads Pick'em,
-  Wire, standings and favourite team pages. Test with a slow relay (200 ms per request) before shipping speed changes.
+- Phone side: api() keeps GET_CACHE; fast(path, rerender, quiet) waits up to FRESH_WAIT (150 ms) for fresh data and
+  draws once; only a slower answer draws the phone's copy (< 30 min) and re-renders once after any running animation
+  if the data differs. Any POST/PUT/DELETE clears it. prefetch() 2.5 s after start and every 90 s while visible keeps
+  Pick'em, Wire, standings and favourite team pages under ~90 s old. Tonight's banner slot keeps its last HTML
+  (BANNER) across re-renders so the page doesn't shift while it's re-checked. Test with a slow relay (200 ms per request) before shipping speed changes.
 - Page speed rules: each page makes its requests in parallel (hiddenToday() is one /api/hidden call, skipped without
   spoiler settings); showLoading() only paints "Loading…" after 350 ms.
 
@@ -80,6 +86,17 @@ which is not committed.
   reads gamecenter/<id>/landing penalties ("Fighting"); first look per game only records.
 - Speed: GZip on responses; /api/team sends the last 10 results + next 10 games; non-live game pages refresh in the
   background (_game_stale_ok); Tonight warms the team cards' game pages after it renders.
+- Page transitions (web/app.js route -> renderRoute, slapshot): Web Animations API. The old page goes at once; when
+  a navigation's real content lands in #view (MutationObserver, not the Loading placeholder) the page flies in from
+  the side (+1 right: forward tabs in NAV_ORDER, game/team pages; -1 left: back), overshoots and snaps back
+  (~280 ms). Whole-pixel translate only: scale/skew made text re-render and jump when the animation ended.
+  Same address re-shown and quiet refreshes never animate; off with settings.animations =
+  false or prefers-reduced-motion. The tab highlight is one .tab-pill moved by movePill() (CSS spring transition).
+- Navigation chrome: tab bar = icon (20 px) + label (web/index.html inline SVGs); scrolling down adds .compact (icons fold
+  away, ~39 px bar) and .tucked on the header (slides up, keeping the safe-area strip); any scroll up / top of page /
+  new page restores both. Settings = outlined button with a gear,
+  league switch shows the selected league filled. Sub-pages start with backLink(fallback): history.back() when the
+  page was reached inside the app (cameFromApp), else the fallback (games -> #/, teams -> #/league, others -> #/settings).
 - Settings (web/app.js settingsView) save on every change (saveSettings: optimistic, queued PUTs of the whole settings
   object, toast). Team pickers group NHL teams by sog/teams.py DIVISIONS. Home market = one team (local is a list server-side).
 - Phase 1: access, Tonight, Game, Standings, Teams, Settings, where-to-watch (service links; ESPN+ also links Hulu,

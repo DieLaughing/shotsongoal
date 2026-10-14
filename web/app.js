@@ -53,6 +53,7 @@ const goOffline = () => location.replace(`/offline.html?back=${encodeURIComponen
 // the scenes; anything that changes data (a pick, a setting, a reaction) clears it so nothing old shows.
 const GET_CACHE = new Map();
 const SHOW_COPY_FOR = 30 * 60000;   // older copies wait for fresh data instead
+const FRESH_WAIT = 150;             // ms a page waits for fresh data before drawing the phone's copy
 
 async function api(path, opts = {}) {
   const r = await fetch(path, { headers: { Accept: "application/json", "Content-Type": "application/json" }, ...opts });
@@ -71,13 +72,21 @@ async function api(path, opts = {}) {
 
 // A page's data, fast: the phone's copy straight away (then `rerender` once if the fresh data differs), or the
 // network when there's no usable copy. `quiet` (the auto-refresh) always waits for fresh data.
-function fast(path, rerender, quiet = false) {
+async function fast(path, rerender, quiet = false) {
   const hit = GET_CACHE.get(path), age = hit ? Date.now() - hit.at : Infinity;
-  if (age < 3000) return Promise.resolve(hit.data);            // just fetched (this is the re-render)
+  if (age < 3000) return hit.data;                              // just fetched (this is the re-render)
   if (quiet || age > SHOW_COPY_FOR) return api(path);
-  const route = location.hash;
-  api(path).then(d => { if (location.hash === route && JSON.stringify(d) !== JSON.stringify(hit.data)) rerender(); }).catch(() => {});
-  return Promise.resolve(hit.data);
+  // Give fresh data a head start: on a decent connection it lands within 150 ms, so the page draws once, already
+  // current, and nothing changes after the animation. Only a slow answer falls back to the phone's copy.
+  const route = location.hash, fresh = api(path);
+  const first = await Promise.race([fresh.then(d => ({ d }), () => null), new Promise(r => setTimeout(() => r(null), FRESH_WAIT))]);
+  if (first) return first.d;
+  fresh.then(async d => {
+    if (location.hash !== route || JSON.stringify(d) === JSON.stringify(hit.data)) return;
+    await Promise.all(view.getAnimations().map(a => a.finished.catch(() => {})));  // never redraw mid-animation
+    if (location.hash === route) rerender();
+  }).catch(() => {});
+  return hit.data;
 }
 
 // After the app opens: load the other tabs and your teams' pages in the background, a few at a time, so every
@@ -93,9 +102,12 @@ async function prefetch() {
   standings(pageLeague()).catch(() => {});
   for (const path of paths) {
     if (document.hidden) return;
-    if (!GET_CACHE.has(path)) await api(path).catch(() => {});
+    const hit = GET_CACHE.get(path);
+    if (!hit || Date.now() - hit.at > 60000) await api(path).catch(() => {});
   }
 }
+// While the app is open and visible, keep those copies under ~90 s old, so a tab rarely has to catch up after opening.
+setInterval(() => { if (!document.hidden) prefetch(); }, 90000);
 
 const favs = () => new Set(ME?.settings?.favorites || []);
 
@@ -235,7 +247,44 @@ function showLoading(text) {
 
 function setNav(name) {
   document.querySelectorAll("[data-nav]").forEach(a => a.classList.toggle("active", a.dataset.nav === name));
+  movePill();
 }
+
+// Scrolling down folds the tab bar's icons away and slides the top bar off; any scroll up (or the top of the page,
+// or a new page) brings both back. One passive listener, read once per frame.
+let lastScrollY = 0, scrollQueued = false;
+function setCompact(on) {
+  const bar = document.getElementById("tabs");
+  document.querySelector(".top")?.classList.toggle("tucked", on);  // the top bar slides away with it
+  if (bar && bar.classList.contains("compact") !== on) { bar.classList.toggle("compact", on); requestAnimationFrame(movePill); }
+}
+window.addEventListener("scroll", () => {
+  if (scrollQueued) return;
+  scrollQueued = true;
+  requestAnimationFrame(() => {
+    scrollQueued = false;
+    const y = window.scrollY, dy = y - lastScrollY;
+    if (y < 40) setCompact(false);
+    else if (dy > 6) setCompact(true);
+    else if (dy < -2) setCompact(false);
+    lastScrollY = y;
+  });
+}, { passive: true });
+
+// The tab bar's highlight is one pill that slides (with a little spring) to the active tab.
+function movePill() {
+  const bar = document.getElementById("tabs"), on = bar?.querySelector("a.active");
+  let pill = bar?.querySelector(".tab-pill");
+  if (!bar) return;
+  if (!pill) { pill = document.createElement("span"); pill.className = "tab-pill"; bar.prepend(pill); }
+  pill.classList.toggle("still", !motionOn() || !pill.dataset.placed);
+  if (!on) { pill.style.opacity = "0"; return; }
+  pill.style.opacity = "1";
+  pill.style.width = `${on.offsetWidth}px`;
+  pill.style.transform = `translateX(${on.offsetLeft}px)`;
+  pill.dataset.placed = "1";
+}
+window.addEventListener("resize", () => movePill());
 
 function autoRefresh(fn, seconds) {
   clearTimeout(refreshTimer);
@@ -305,6 +354,7 @@ function newBanner() {
 function bindNewBanner() {
   document.getElementById("newbar-x")?.addEventListener("click", async e => {
     e.target.closest(".newbar")?.remove();
+    BANNER = "";
     await markChangesSeen();
   });
 }
@@ -315,7 +365,7 @@ function whatsNewView() {
   setNav("settings");
   const fresh = new Set(unseenChanges().map(c => c.id));
   const days = CHANGES.reduce((m, c) => ((m[c.date] ||= []).push(c), m), {});
-  view.innerHTML = `<h1>What's new</h1>
+  view.innerHTML = `${backLink("#/settings", "Settings")}<h1>What's new</h1>
     <p class="muted">Every update to Shots on Goal, newest first.</p>
     ${Object.entries(days).map(([d, list]) => `<h2>${esc(new Date(d + "T12:00").toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }))}</h2>
       <div class="card">${list.map(c => `<div class="change${fresh.has(c.id) ? " fresh" : ""}">
@@ -445,7 +495,8 @@ function heroes(data, leagues, slateGames) {
     .sort((x, y) => { const a = rank(x), b = rank(y); return a[0] - b[0] || a[1] - b[1] || String(a[2]).localeCompare(String(b[2])); });
   if (!cards.length) return "";
   const live = c => slateGames.find(x => x.away.abbr === c.abbr || x.home.abbr === c.abbr);
-  return `<div class="heroes${cards.length > 1 ? " many" : ""}">${cards.map(c => heroCard(c, live(c))).join("")}</div>`;
+  return `<div class="heroes${cards.length > 1 ? " many" : ""}">${cards.map(c => heroCard(c, live(c))).join("")}</div>`
+    + (cards.length > 1 ? `<div class="hero-dots" aria-hidden="true">${cards.map((_, i) => `<span${i ? "" : ' class="on"'}></span>`).join("")}</div>` : "");
 }
 
 async function tonightView(date, quiet = false) {
@@ -484,7 +535,7 @@ async function tonightView(date, quiet = false) {
     // Arrows step to the nearest day with a game in any shown league.
     prev: days.map(d => d.prev).filter(Boolean).sort().pop(), next: days.map(d => d.next).filter(Boolean).sort()[0] };
   view.innerHTML = `
-    <div id="getapp"></div>
+    <div id="getapp">${BANNER}</div>
     ${heroes(mineData, leagues, days.flatMap(d => d.games || []))}
     ${(n => n ? `<div class="spoil-note">🙈 Spoiler-free: ${n} game${n > 1 ? "s" : ""} hidden. Open one to reveal it when you've watched.</div>` : "")(days.flatMap(d => d.games || []).filter(spoilerHidden).length)}
     <div class="daybar">
@@ -493,12 +544,20 @@ async function tonightView(date, quiet = false) {
       ${day.next ? `<a href="#/day/${day.next}" aria-label="Next day">→</a>` : "<span></span>"}
     </div>
     ${days.map((d, i) => slate(d, leagues[i])).join("")}`;
+  // The dots under swipeable team cards follow the card in view.
+  const strip = view.querySelector(".heroes.many");
+  if (strip) strip.addEventListener("scroll", () => {
+    const i = Math.round(strip.scrollLeft / (strip.firstElementChild.offsetWidth + 10));
+    view.querySelectorAll(".hero-dots span").forEach((d, j) => d.classList.toggle("on", i === j));
+  }, { passive: true });
   // One banner at a time: getting the app / alerts first, otherwise what's new.
-  getAppBanner().then(shown => {
-    const box = document.getElementById("getapp");
-    if (shown || !box) return;
-    box.innerHTML = newBanner();
-    bindNewBanner();
+  bindBanner();
+  getAppBanner().then(html => {
+    const next = html || newBanner(), box = document.getElementById("getapp");
+    if (!box || next === BANNER) return;
+    BANNER = next;
+    box.innerHTML = next;
+    bindBanner();
   });
   const all = days.flatMap(d => d.games || []);
   // Warm your team cards' game pages on the server, so tapping one opens straight away.
@@ -590,12 +649,23 @@ async function pickemView(date, quiet = false) {
 }
 
 // ---- getting the app + alerts --------------------------------------------------------------
-async function getAppBanner() {
+// Tonight's one banner slot: getting the app / alerts first, otherwise what's new. BANNER is the last one shown, so a
+// re-render paints it straight away instead of blanking the slot and shifting the page while it's re-checked.
+let BANNER = "";
+function bindBanner() {
   const box = document.getElementById("getapp");
-  if (!box) return false;
+  box?.querySelector(".getapp .x")?.addEventListener("click", () => {
+    try { localStorage.setItem("getappHidden", "1"); } catch { /* fine */ }
+    BANNER = "";
+    box.innerHTML = "";
+  });
+  bindNewBanner();
+}
+
+async function getAppBanner() {
   let hidden = false;
   try { hidden = localStorage.getItem("getappHidden") === "1"; } catch { /* fine */ }
-  if (hidden) return false;
+  if (hidden) return "";
   let text = null;
   if (!isStandalone() && device() !== "desktop") {
     text = "<b>Put Shots on Goal on your home screen</b> and get alerts when your teams score.";
@@ -604,14 +674,8 @@ async function getAppBanner() {
     const sub = reg ? await reg.pushManager.getSubscription().catch(() => null) : null;
     if (!sub) text = "<b>Turn on alerts</b> for puck drop, goals and finals for your teams.";
   }
-  if (!text) return false;
-  box.innerHTML = `<div class="getapp"><div>${text}</div><a class="btn primary small" href="#/app">Show me how</a>
-    <button class="x" aria-label="Hide">×</button></div>`;
-  box.querySelector(".x").addEventListener("click", () => {
-    try { localStorage.setItem("getappHidden", "1"); } catch { /* fine */ }
-    box.innerHTML = "";
-  });
-  return true;
+  return text ? `<div class="getapp"><div>${text}</div><a class="btn primary small" href="#/app">Show me how</a>
+    <button class="x" aria-label="Hide">×</button></div>` : "";
 }
 
 function appView() {
@@ -638,7 +702,7 @@ function appView() {
   } else {
     step1 = `<p>On a computer this is optional; alerts work in the browser too. In Chrome or Edge, click the install icon at the right end of the address bar, or the menu ${DOTS_ICON} → <b>Install Shots on Goal</b>.</p>`;
   }
-  view.innerHTML = `
+  view.innerHTML = `${backLink("#/settings", "Settings")}
     <h1>Get the app</h1>
     <p class="muted">Shots on Goal works like an app once it's on your home screen: its own icon, full screen, and alerts for your teams.</p>
     <h2>1. Add it to your home screen</h2>
@@ -677,7 +741,7 @@ async function gameView(id, quiet = false, league = "nhl") {
   const g = d.game, a = g.away.abbr, h = g.home.abbr;
   if (league === "pwhl") g.league = "pwhl";
   if (spoilerHidden(g)) {
-    view.innerHTML = `<div class="card pad spoil-cover" style="margin-top:12px">
+    view.innerHTML = `${backLink("#/")}<div class="card pad spoil-cover">
       <div class="spoil-teams">${mark(a, true)}<span>vs</span>${mark(h, true)}</div>
       <div class="spoil-eye">🙈</div>
       <p><b>${esc(fullName(a))} vs ${esc(fullName(h))}</b> is hidden. Scores, goals, the shot map and the recap stay
@@ -710,7 +774,7 @@ async function gameView(id, quiet = false, league = "nhl") {
   };
   const side = (t, abbr) => `<a class="side" href="#/team/${abbr}">${mark(abbr, true)}<span class="nm">${esc(t.name || teamName(abbr))}</span></a>`;
 
-  let html = `<div class="card" style="margin-top:12px">
+  let html = `${backLink("#/")}<div class="card">
     <div class="scorebug">
       ${side(g.away, a)}
       <div><div class="score">${showScore ? `${g.away.score ?? 0} – ${g.home.score ?? 0}` : "vs"}</div><div class="state">${state}</div></div>
@@ -1057,7 +1121,7 @@ async function teamView(abbr) {
   const next = d.schedule.filter(g => g.state !== "final").slice(0, 6);
   const dated = g => `<div class="subhead">${esc(shortDate(g.date))}</div>${gameCard(g, fav)}`;
   const isFav = fav.has(abbr);
-  let html = `<div class="card pad" style="margin-top:12px;display:flex;align-items:center;gap:14px">
+  let html = `${backLink("#/league", "League")}<div class="card pad" style="display:flex;align-items:center;gap:14px">
       ${mark(abbr, true)}
       <div style="flex:1"><h1 style="margin:0">${esc(fullName(abbr))}</h1>
       ${st && leagueOf(abbr) === "pwhl" ? `<div class="muted small">${st.w}-${st.otw}-${st.otl}-${st.l} · ${st.pts} pts · ${esc(ordinal(st.league_rank))} in the PWHL${st.season ? ` (${esc(st.season)})` : ""}</div>`
@@ -1188,6 +1252,10 @@ function settingsView() {
       "I've seen it". ${fav.length ? "Tick a team to hide all their games, or open" : "Open"} any game and tap "🙈 Watching later" to hide just that one. It switches off by itself the day after.</p>
 
     <div class="group-title">More</div>
+    <h2>Display</h2>
+    <div class="card checks"><label><input type="checkbox" id="animations" ${s.animations !== false ? "checked" : ""}>Animations between pages</label></div>
+    <p class="help">Quick slides between tabs and pages. Turn them off for instant switching. They're also off whenever your phone's Reduce Motion setting is on.</p>
+
     <h2>Calendar</h2>
     <div class="card" id="cal"><div class="empty">Loading…</div></div>
     <p class="help">Every game for your teams, with where to watch. Your phone checks it every few hours. The link is personal; don't share it.</p>
@@ -1218,6 +1286,7 @@ function settingsView() {
   });
   document.getElementById("useguess")?.addEventListener("click", () => { saveSettings({ local: [guess] }); settingsView(); });
   view.querySelectorAll("input[name=services]").forEach(i => i.addEventListener("change", () => saveSettings({ services: picked("services") })));
+  document.getElementById("animations").addEventListener("change", e => saveSettings({ animations: e.target.checked }));
   document.getElementById("nickname").addEventListener("change", e => saveSettings({ nickname: e.target.value.trim().slice(0, 24) }));
   view.querySelectorAll("input[name=spoilteams]").forEach(i => i.addEventListener("change", () => {
     saveSettings({ spoilers: { ...spoilers(), teams: picked("spoilteams") } });
@@ -1266,7 +1335,7 @@ async function showMyReports(boxId) {
 function reportView(kind = "bug") {
   setNav("");
   const page = reportFrom;
-  view.innerHTML = `
+  view.innerHTML = `${backLink(reportFrom || "#/")}
     <h1>Report a problem</h1>
     <div class="seg" role="group" aria-label="Kind">
       <button data-kind="bug" class="${kind === "bug" ? "on" : ""}">Something's wrong</button>
@@ -1405,7 +1474,7 @@ async function adminView() {
   const btn = (email, status, label, primary) => `<button class="btn small${primary ? " primary" : ""}" data-email="${esc(email)}" data-status="${status}">${label}</button>`;
   const pending = people("pending"), approved = people("approved"), other = d.users.filter(u => ["denied", "revoked"].includes(u.status));
   const openInvites = d.invites.filter(i => i.uses.length < i.max_uses);
-  view.innerHTML = `
+  view.innerHTML = `${backLink("#/settings", "Settings")}
     <h1>Admin</h1>
     <h2>Waiting for approval</h2>
     <div class="card">${pending.length ? pending.map(u => row(u, btn(u.email, "approved", "Approve", true) + btn(u.email, "denied", "Deny"))).join("") : `<div class="empty">Nobody waiting.</div>`}</div>
@@ -1478,8 +1547,60 @@ async function adminView() {
 }
 
 // ---- router ---------------------------------------------------------------------------------
+// ---- page transitions ------------------------------------------------------------------------
+// "Slapshot": the old page goes at once, and the new one flies in from the side already at speed, overshoots its
+// spot and snaps back like a puck hitting the twine. Tabs come
+// from their side of the tab bar, game and team pages from the right, going back from the left. It plays only once
+// the new page's content is on screen, never for live refreshes or the same page re-shown; off with Settings >
+// Display or the phone's Reduce Motion.
+const NAV_ORDER = { "": 0, day: 0, picks: 1, wire: 2, league: 3, standings: 3, teams: 3, settings: 4, new: 5, app: 5, report: 5, admin: 5 };
+const DETAIL = new Set(["game", "pgame", "team"]);
+let lastHash = null, lastPage = null, pendingShot = 0, cameFromApp = false;   // pendingShot: +1 from the right, -1 from the left
+const motionOn = () => ME?.settings?.animations !== false && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// "← Back" on sub-pages: the page you came from when you got here inside the app, otherwise a sensible parent.
+const backLink = (fallback, label = "Back") => `<a class="back" href="${fallback}" data-back>${BACK_ICON}<span>${esc(label)}</span></a>`;
+const BACK_ICON = `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+function shotFrom(prev, next) {
+  if (DETAIL.has(next)) return 1;
+  if (DETAIL.has(prev)) return -1;
+  return (NAV_ORDER[next] ?? 0) >= (NAV_ORDER[prev] ?? 0) ? 1 : -1;
+}
+
 function route() {
+  const page = (location.hash || "#/").split("/")[1] || "";
+  const changed = lastHash !== null && location.hash !== lastHash;
+  pendingShot = changed && motionOn() && ME?.status === "approved" ? shotFrom(lastPage, page) : 0;
+  if (changed) cameFromApp = true; else if (lastHash === null) cameFromApp = false;
+  lastHash = location.hash; lastPage = page;
+  return renderRoute();
+}
+
+function slapshot(d) {
+  view.animate([
+    // Whole-pixel sideways moves only: no scaling or skew, so the text drawn while moving is the same as the text at
+    // rest and nothing shifts when it stops.
+    { transform: `translate3d(${56 * d}px, 0, 0)`, opacity: 0, offset: 0 },   // already flying
+    { transform: `translate3d(${-7 * d}px, 0, 0)`, opacity: 1, offset: 0.55 }, // hits, overshoots
+    { transform: `translate3d(${2 * d}px, 0, 0)`, offset: 0.8 },               // snaps back
+    { transform: "translate3d(0, 0, 0)", opacity: 1, offset: 1 },
+  ], { duration: 280, easing: "cubic-bezier(.12, .8, .3, 1)" });
+}
+
+// Fire when a navigation's real content lands in the page (not the "Loading…" placeholder).
+new MutationObserver(() => {
+  if (!pendingShot) return;
+  const first = view.firstElementChild;
+  if (!first || (first.classList.contains("empty") && /^Loading/.test(first.textContent))) return;
+  const d = pendingShot;
+  pendingShot = 0;
+  slapshot(d);
+}).observe(view, { childList: true });
+
+function renderRoute() {
   clearTimeout(refreshTimer);
+  setCompact(false);
   if (ME.status !== "approved") return gateView();
   document.getElementById("tabs").hidden = false;
   const [, page, arg] = (location.hash || "#/").split("/");
@@ -1523,6 +1644,7 @@ async function start() {
   window.addEventListener("hashchange", route);
   // Spoiler-free buttons can sit on any page (cards, game page, covers); one listener handles them all.
   view.addEventListener("click", e => {
+    if (e.target.closest("[data-back]") && cameFromApp) { e.preventDefault(); history.back(); return; }
     const b = e.target.closest("[data-spoil]");
     if (b) { e.preventDefault(); spoilerAction(b.dataset.spoil, b.dataset.k); return; }
     const u = e.target.closest("[data-unspoil]");

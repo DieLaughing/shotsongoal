@@ -32,7 +32,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
 }
 a { color: inherit; }
 button { font: inherit; }
@@ -89,6 +89,16 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
   color: var(--ink); background: linear-gradient(135deg, var(--c) 0%, color-mix(in srgb, var(--c) 62%, #000) 100%);
 }
 .heroes.many .hero { flex-basis: 90%; }
+/* Phones: dots under the swipeable cards, so a second card is never a secret. */
+.hero-dots { display: flex; justify-content: center; gap: 6px; margin-top: 8px; }
+.hero-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--border); transition: background .2s, transform .2s; }
+.hero-dots span.on { background: var(--text); transform: scale(1.25); }
+/* Wide screens: no swiping, so the cards share the width (and wrap) instead of hiding off the edge. */
+@media (min-width: 700px) {
+  .heroes.many { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); overflow: visible; }
+  .heroes.many .hero { min-width: 0; align-content: start; }
+  .hero-dots { display: none; }
+}
 .hero.light { --ink: #111; --wash: rgba(0, 0, 0, .1); --ring: rgba(0, 0, 0, .4);
   background: linear-gradient(135deg, var(--c) 0%, color-mix(in srgb, var(--c) 82%, #000) 100%); }
 .hero-top { text-decoration: none; color: inherit; display: grid; gap: 8px; }
@@ -99,7 +109,7 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .hero-r { margin-left: auto; display: grid; justify-items: end; line-height: 1.15; flex: none; }
 .hero-r span { font-size: 12px; opacity: .85; }
 .hero-sc { font-size: 19px; font-variant-numeric: tabular-nums; }
-.hero-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.hero-chips { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; }
 .hero .chip { font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 7px; background: var(--wash); }
 .hero .chip.strong { background: var(--ink); color: var(--c); text-decoration: none; }
 .hero.light .chip.strong { color: #fff; background: #111; }
@@ -387,3 +397,37 @@ body.league-pwhl { --accent: #163F36; --fav: #163F36; --on-accent: #fff; }
 .report-row:first-child { border-top: 0; }
 .report-head { display: flex; gap: 8px; align-items: baseline; }
 .report-reply { padding: 6px 10px; border-left: 3px solid var(--border); color: var(--text); }
+
+/* The slapshot (web/app.js) starts a page off to one side: never let that show a sideways scrollbar. */
+html, body { overflow-x: clip; }
+
+/* ---- tab pill (web/app.js movePill): slides to the active tab; page morph is done in JS (islandEnter) ---- */
+.tabs { isolation: isolate; }
+.tabs a.active { background: transparent; }
+.tab-pill { position: absolute; left: 0; top: 6px; height: calc(100% - 12px - env(safe-area-inset-bottom)); border-radius: 10px;
+  background: var(--bg); z-index: -1; transition: transform 300ms cubic-bezier(.25, 1.35, .45, 1), width 300ms cubic-bezier(.25, 1.35, .45, 1); }
+.tab-pill.still { transition: none; }
+
+/* ---- buttons that look like buttons (tab bar icons, Settings button, league switch, Back) ---- */
+.tabs a { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px 5px; font-size: 11.5px;
+  transition: gap 180ms ease, padding 180ms ease; }
+.tab-ico { width: 20px; height: 20px; display: block; transition: height 180ms ease, opacity 140ms ease; }
+/* Scrolling down folds the icons away (a slim bar of labels); any scroll up brings them back (web/app.js). */
+.tabs.compact a { gap: 0; padding: 5px 4px 4px; }
+.tabs.compact .tab-ico { height: 0; opacity: 0; }
+/* The top bar slides away too (keeping the strip behind the phone's status bar), and comes back on any scroll up. */
+.top { transition: transform 200ms ease; will-change: transform; }
+.top.tucked { transform: translateY(calc(-100% + env(safe-area-inset-top, 0px))); }
+@media (prefers-reduced-motion: reduce) { .tabs a, .tab-ico, .top { transition: none; } }
+.tabs a.active .tab-ico { color: var(--accent); }
+.top-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); padding: 6px 11px; border-radius: 10px; font-weight: 600; font-size: 14px; }
+.top-link .ico { width: 17px; height: 17px; }
+.top-link.active { background: var(--bg); border-color: var(--text); }
+@media (max-width: 380px) { .top-label { display: none; } .top-link { padding: 7px; } }
+.league button:not(.on):hover { color: var(--text); background: var(--surface); }
+.league button.on { background: var(--text); color: var(--bg); box-shadow: none; }
+.back { display: inline-flex; align-items: center; gap: 4px; margin: 12px 0 10px; padding: 7px 12px 7px 8px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); text-decoration: none; font-weight: 600; font-size: 14px; }
+.back .ico { width: 17px; height: 17px; }
+.top-link .ico, .back .ico { color: currentColor; vertical-align: 0; }

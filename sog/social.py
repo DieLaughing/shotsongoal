@@ -109,11 +109,16 @@ def react(email: str, g: dict, event: str, emoji: str | None) -> None:
 def watchers(games: list[dict], email: str, people: dict[str, dict]) -> dict[str, list[dict]]:
     """"nhl:<id>" -> [{name, me}] for a slate, for the cards on Tonight."""
     out: dict[str, list[dict]] = {}
-    for g in games:
-        rows = _rows("SELECT email FROM watching WHERE league=? AND game_id=? ORDER BY since", (league(g), g["id"]))
-        names = [{"name": people[r["email"]]["name"], "me": r["email"] == email} for r in rows if r["email"] in people]
-        if names:
-            out[f"{league(g)}:{g['id']}"] = names
+    if not games:
+        return out
+    wanted = {f"{league(g)}:{g['id']}" for g in games}
+    marks = ",".join("?" * len(games))
+    # One query for the whole slate, not one per game.
+    for r in _rows(f"SELECT league, game_id, email FROM watching WHERE game_id IN ({marks}) ORDER BY since",
+                   tuple(g["id"] for g in games)):
+        key = f"{r['league']}:{r['game_id']}"
+        if key in wanted and r["email"] in people:
+            out.setdefault(key, []).append({"name": people[r["email"]]["name"], "me": r["email"] == email})
     return out
 
 
