@@ -415,7 +415,10 @@ html, body { overflow-x: clip; }
 /* Scrolling down folds the icons away (a slim bar of labels); any scroll up brings them back (web/app.js). */
 .tabs.compact a { gap: 0; padding: 5px 4px 4px; }
 .tabs.compact .tab-ico { height: 0; opacity: 0; }
-@media (prefers-reduced-motion: reduce) { .tabs a, .tab-ico { transition: none; } }
+/* The top bar slides away too (keeping the strip behind the phone's status bar), and comes back on any scroll up. */
+.top { transition: transform 200ms ease; will-change: transform; }
+.top.tucked { transform: translateY(calc(-100% + env(safe-area-inset-top, 0px))); }
+@media (prefers-reduced-motion: reduce) { .tabs a, .tab-ico, .top { transition: none; } }
 .tabs a.active .tab-ico { color: var(--accent); }
 .top-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text); background: var(--surface);
   border: 1px solid var(--border); padding: 6px 11px; border-radius: 10px; font-weight: 600; font-size: 14px; }

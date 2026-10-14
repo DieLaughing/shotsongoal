@@ -250,11 +250,12 @@ function setNav(name) {
   movePill();
 }
 
-// Scrolling down folds the tab bar's icons away; any scroll up (or the top of the page, or a new page) brings them
-// back. One passive listener, read once per frame.
+// Scrolling down folds the tab bar's icons away and slides the top bar off; any scroll up (or the top of the page,
+// or a new page) brings both back. One passive listener, read once per frame.
 let lastScrollY = 0, scrollQueued = false;
 function setCompact(on) {
   const bar = document.getElementById("tabs");
+  document.querySelector(".top")?.classList.toggle("tucked", on);  // the top bar slides away with it
   if (bar && bar.classList.contains("compact") !== on) { bar.classList.toggle("compact", on); requestAnimationFrame(movePill); }
 }
 window.addEventListener("scroll", () => {
