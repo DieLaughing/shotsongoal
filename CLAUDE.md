@@ -87,7 +87,8 @@ which is not committed.
 - Page transitions (web/app.js route -> renderRoute, slapshot): Web Animations API. The old page goes at once; when
   a navigation's real content lands in #view (MutationObserver, not the Loading placeholder) the page flies in from
   the side (+1 right: forward tabs in NAV_ORDER, game/team pages; -1 left: back), overshoots and snaps back
-  (~280 ms). Whole-pixel translate only: scale/skew made text re-render and jump when the animation ended. Same address re-shown and quiet refreshes never animate; off with settings.animations =
+  (~280 ms). Whole-pixel translate only: scale/skew made text re-render and jump when the animation ended.
+  Same address re-shown and quiet refreshes never animate; off with settings.animations =
   false or prefers-reduced-motion. The tab highlight is one .tab-pill moved by movePill() (CSS spring transition).
 - Settings (web/app.js settingsView) save on every change (saveSettings: optimistic, queued PUTs of the whole settings
   object, toast). Team pickers group NHL teams by sog/teams.py DIVISIONS. Home market = one team (local is a list server-side).
