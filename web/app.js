@@ -235,7 +235,23 @@ function showLoading(text) {
 
 function setNav(name) {
   document.querySelectorAll("[data-nav]").forEach(a => a.classList.toggle("active", a.dataset.nav === name));
+  movePill();
 }
+
+// The tab bar's highlight is one pill that slides (with a little spring) to the active tab.
+function movePill() {
+  const bar = document.getElementById("tabs"), on = bar?.querySelector("a.active");
+  let pill = bar?.querySelector(".tab-pill");
+  if (!bar) return;
+  if (!pill) { pill = document.createElement("span"); pill.className = "tab-pill"; bar.prepend(pill); }
+  pill.classList.toggle("still", !motionOn() || !pill.dataset.placed);
+  if (!on) { pill.style.opacity = "0"; return; }
+  pill.style.opacity = "1";
+  pill.style.width = `${on.offsetWidth}px`;
+  pill.style.transform = `translateX(${on.offsetLeft}px)`;
+  pill.dataset.placed = "1";
+}
+window.addEventListener("resize", () => movePill());
 
 function autoRefresh(fn, seconds) {
   clearTimeout(refreshTimer);
@@ -1490,33 +1506,42 @@ async function adminView() {
 }
 
 // ---- router ---------------------------------------------------------------------------------
-// ---- page transitions -------------------------------------------------------------------------
-// A quick, slightly bouncy slide when you move between pages (View Transitions API; browsers without it just switch).
-// Tabs slide in tab order, game and team pages slide in from the right and back out. Only taps animate (the live
-// refreshes don't), it never waits more than 150 ms for a page, and it's off with Settings > Animations or the
-// phone's Reduce Motion.
-const NAV_ORDER = { "": 0, day: 0, picks: 1, wire: 2, league: 3, standings: 3, teams: 3, settings: 4, new: 5, app: 5, report: 5, admin: 5 };
-const DETAIL = new Set(["game", "pgame", "team"]);
-let lastPage = null, lastHash = null;
-function navDirection(prev, next) {
-  if (prev === null || location.hash === lastHash) return null;  // first page, or the same page re-shown
-  if (DETAIL.has(next)) return "forward";
-  if (DETAIL.has(prev)) return "back";
-  const a = NAV_ORDER[prev] ?? 0, b = NAV_ORDER[next] ?? 0;
-  return a === b ? "fade" : b > a ? "left" : "right";
-}
-const motionOn = () => ME?.settings?.animations !== false && "startViewTransition" in document
-  && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+// ---- page transitions ------------------------------------------------------------------------
+// "Dynamic Island" morph: the old page goes at once, and the new one opens out of the spot you tapped (a game card,
+// a tab) as a rounded shape that springs to full size while its content fades in. It plays only once the new page's
+// content is actually on screen, so nothing pops in mid-way. Taps only (live refreshes and re-showing the same page
+// never animate); off with Settings > Display or the phone's Reduce Motion.
+let lastHash = null, tapY = null, pendingEnter = false;
+document.addEventListener("pointerdown", e => { tapY = e.clientY; }, { capture: true, passive: true });
+const motionOn = () => ME?.settings?.animations !== false && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function route() {
-  const page = (location.hash || "#/").split("/")[1] || "";
-  const dir = navDirection(lastPage, page);
-  lastPage = page; lastHash = location.hash;
-  if (!dir || !motionOn() || ME?.status !== "approved") return renderRoute();
-  document.documentElement.dataset.nav = dir;
-  const t = document.startViewTransition(() => Promise.race([Promise.resolve(renderRoute()).catch(() => {}), new Promise(r => setTimeout(r, 150))]));
-  t.finished.finally(() => { delete document.documentElement.dataset.nav; });
+  const changed = lastHash !== null && location.hash !== lastHash;
+  lastHash = location.hash;
+  pendingEnter = changed && motionOn() && ME?.status === "approved";
+  return renderRoute();
 }
+
+function islandEnter() {
+  const r = view.getBoundingClientRect();
+  const vh = window.innerHeight;
+  const y = Math.min(Math.max((tapY ?? vh / 2) - r.top, 0), Math.min(r.height, vh));  // where the tap was, inside the page
+  const top = Math.max(y - 26, 0), bottom = Math.max(r.height - y - 26, 0), side = Math.min(r.width * 0.06, 28);
+  view.animate([
+    { clipPath: `inset(${top}px ${side}px ${bottom}px ${side}px round 26px)`, opacity: 0.35, transform: "scale(0.985)" },
+    { clipPath: "inset(0px 0px 0px 0px round 0px)", opacity: 1, transform: "none" },
+  ], { duration: 340, easing: "cubic-bezier(.2, 1.12, .32, 1)" });  // a soft spring, like the island opening
+  tapY = null;
+}
+
+// Play the morph when a navigation's real content lands in the page (not the "Loading…" placeholder).
+new MutationObserver(() => {
+  if (!pendingEnter) return;
+  const first = view.firstElementChild;
+  if (!first || (first.classList.contains("empty") && /^Loading/.test(first.textContent))) return;
+  pendingEnter = false;
+  islandEnter();
+}).observe(view, { childList: true });
 
 function renderRoute() {
   clearTimeout(refreshTimer);
