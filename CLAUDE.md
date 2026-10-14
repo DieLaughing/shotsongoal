@@ -93,7 +93,8 @@ which is not committed.
   Same address re-shown and quiet refreshes never animate; off with settings.animations =
   false or prefers-reduced-motion. The tab highlight is one .tab-pill moved by movePill() (CSS spring transition).
 - Navigation chrome: tab bar = icon (20 px) + label (web/index.html inline SVGs); scrolling down adds .compact (icons fold
-  away, ~39 px bar), any scroll up / top of page / new page restores it. Settings = outlined button with a gear,
+  away, ~39 px bar) and .tucked on the header (slides up, keeping the safe-area strip); any scroll up / top of page /
+  new page restores both. Settings = outlined button with a gear,
   league switch shows the selected league filled. Sub-pages start with backLink(fallback): history.back() when the
   page was reached inside the app (cameFromApp), else the fallback (games -> #/, teams -> #/league, others -> #/settings).
 - Settings (web/app.js settingsView) save on every change (saveSettings: optimistic, queued PUTs of the whole settings
