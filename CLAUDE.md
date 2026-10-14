@@ -22,6 +22,10 @@ which is not committed.
   viewed. Feed.cached serves an expired copy younger than STALE_OK (1 day; game pages 1 min) at once and refreshes it in
   the background (refresh_later, one task per key); pages use today_page(), never poll_today(). Only a missing copy
   makes a request wait on the leagues. API requests over 0.5 s are logged ("slow request").
+- SQLite: WAL + synchronous=NORMAL. While the poller runs, automatic checkpoints are off (manual_checkpoints) and
+  each poll pass runs a PASSIVE checkpoint on its own connection in a thread (Store.checkpoint), so no request waits
+  on a checkpoint. Background saves in a pass share one commit (Store.batch). The Wire merge is kept until a source's
+  copy changes (Feed._wire_memo); /api/wire and /api/standings send finished gzipped bytes (_finished).
 - Warm-up (Feed.warm, every poll pass, a few loads each: 4 idle / 1 busy): today's and yesterday's non-live game
   pages, favourite PWHL teams, then every NHL team's schedule/roster/stats, favourites first. Live games: favourites'
   and viewed games every DETAIL_POLL (20 s), the rest every WARM_LIVE_POLL (90 s). /api/game takes score/clock/state
