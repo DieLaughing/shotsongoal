@@ -84,6 +84,10 @@ which is not committed.
   reads gamecenter/<id>/landing penalties ("Fighting"); first look per game only records.
 - Speed: GZip on responses; /api/team sends the last 10 results + next 10 games; non-live game pages refresh in the
   background (_game_stale_ok); Tonight warms the team cards' game pages after it renders.
+- Page transitions (web/app.js route -> renderRoute): View Transitions API. #view is the "page" group, header/tab bar
+  are pinned above it, the active tab is "tabpill" (glides). Direction from NAV_ORDER / DETAIL (left/right/forward/
+  back/fade); waits at most 150 ms for the page; same address re-shown never animates; off with settings.animations
+  = false or prefers-reduced-motion. Quiet re-renders (live refresh) don't go through route(), so never animate.
 - Settings (web/app.js settingsView) save on every change (saveSettings: optimistic, queued PUTs of the whole settings
   object, toast). Team pickers group NHL teams by sog/teams.py DIVISIONS. Home market = one team (local is a list server-side).
 - Phase 1: access, Tonight, Game, Standings, Teams, Settings, where-to-watch (service links; ESPN+ also links Hulu,

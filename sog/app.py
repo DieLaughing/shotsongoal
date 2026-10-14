@@ -223,7 +223,8 @@ async def save_settings(request: Request):
         "notify": alerts.prefs(body),
         "seen_changes": str(body.get("seen_changes") or "")[:120],  # newest What's new entry this person has seen
         "spoilers": spoilers.clean(body.get("spoilers"), teams.ALL),
-        "nickname": clean_name(body.get("nickname")),  # what friends see in Pick'em; empty = the email's first part
+        "nickname": clean_name(body.get("nickname")),
+        "animations": body.get("animations") is not False,  # page transitions (Settings > Display); on unless turned off  # what friends see in Pick'em; empty = the email's first part
     }
     store.save_settings(request.state.email, clean)
     return clean
