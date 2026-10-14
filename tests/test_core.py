@@ -612,3 +612,28 @@ def test_fight_alerts_are_opt_in_and_not_replayed(tmp_path):
     asyncio.run(al.on_fights(g, fight))
     (_, p), = pusher.sent
     assert p["title"].startswith("Fight!") and p["body"] == "D · 1st 19:02"
+
+
+def test_batch_holds_commits_until_the_end(tmp_path):
+    import sqlite3
+    from datetime import timedelta
+    from sog.db import Store
+    store = Store(tmp_path / "b.db")
+    other = sqlite3.connect(tmp_path / "b.db")   # another reader sees only committed data
+    with store.batch():
+        store.put("a", {"n": 1}, timedelta(minutes=5))
+        store.put("b", {"n": 2}, timedelta(minutes=5))
+        store.record_run("test", True)
+        assert store.get("a")["data"] == {"n": 1}                                   # the app sees its own saves
+        assert other.execute("SELECT COUNT(*) FROM cache").fetchone()[0] == 0        # not committed yet
+    assert other.execute("SELECT COUNT(*) FROM cache").fetchone()[0] == 2            # one commit for the lot
+    assert store.meta("a")[2] is True and store.meta("missing") is None
+
+
+def test_finished_responses_are_gzipped_once(client, monkeypatch):
+    as_user(monkeypatch, "owner@x.com")
+    client.mod.store.put("standings", [{"abbr": "BOS", "pts": 8, "name": "x" * 2000}], None)
+    r1 = client.get("/api/standings", headers={"Accept-Encoding": "gzip"})
+    r2 = client.get("/api/standings", headers={"Accept-Encoding": "identity"})
+    assert r1.headers["content-encoding"] == "gzip" and r1.json()[0]["abbr"] == "BOS"
+    assert "content-encoding" not in r2.headers and r2.json() == r1.json()

@@ -117,9 +117,15 @@ def pending(before: str) -> list[tuple[str, str]]:
 def for_games(email: str, games: list[dict], names: dict[str, str], now: datetime | None = None) -> list[dict]:
     """The games with this person's pick, and everyone's once the game has started."""
     out = []
+    # One query for the whole slate, not one per game.
+    by_game: dict[tuple, list[dict]] = {}
+    if games:
+        marks = ",".join("?" * len(games))
+        for r in _rows(f"SELECT league, game_id, email, team, lock, won FROM pick WHERE game_id IN ({marks}) ORDER BY created",
+                       tuple(g["id"] for g in games)):
+            by_game.setdefault((r["league"], r["game_id"]), []).append(r)
     for g in games:
-        rows = _rows("SELECT email, team, lock, won FROM pick WHERE league=? AND game_id=? ORDER BY created",
-                     (league(g), g["id"]))
+        rows = by_game.get((league(g), g["id"]), [])
         mine = next((r for r in rows if r["email"] == email), None)
         everyone = [{"name": names.get(r["email"], "Someone"), "team": r["team"], "lock": bool(r["lock"]),
                      "me": r["email"] == email} for r in rows if r["email"] in names] if started(g, now) else None
