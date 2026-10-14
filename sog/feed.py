@@ -25,6 +25,7 @@ WARM_LIVE_POLL = 90                   # seconds between refreshes of live games 
 WARM_PER_PASS = 4                     # background loads per poll pass when no game is on (passes every 30 s)
 WARM_PER_PASS_BUSY = 1                # ... and while games are on (passes every 10 s)
 FIGHT_POLL = 60                       # seconds between fight checks of live games someone wants fight alerts for  # game pages: never more than a refresh or two behind
+SLOW_PASS = 5              # seconds: a scoreboard pass slower than this is logged
 LIVE_POLL = 10            # seconds between score refreshes while a game is on (or about to start)
 IDLE_POLL = 300           # ... and otherwise
 DETAIL_POLL = 20          # a live game's page, only while someone has looked at it recently
@@ -58,6 +59,7 @@ class Feed:
         self.locks: dict[str, asyncio.Lock] = {}
         self.viewed: dict[int, float] = {}   # game id -> last time someone opened its page
         self.today: str | None = None
+        self.busy = False                                # games on now (set by the scoreboard loop)
         self.refreshing: dict[str, asyncio.Task] = {}  # background refreshes in flight, one per key
         self._wire_memo: tuple | None = None            # (sources' versions, merged Wire)
         self.alerts = None                   # set by the app: told about every scoreboard and Wire refresh
@@ -366,14 +368,19 @@ class Feed:
         return data
 
     async def loop(self) -> None:
-        self.store.manual_checkpoints()  # from now on checkpoints happen between passes, below
-        last_idle = last_standings = last_wire = last_pwhl = last_career = last_fights = 0.0
-        last_detail: dict[int, float] = {}
+        """Two loops: the scoreboards (the clock and score on every page, and the alerts) on a steady beat with nothing
+        else in the way, and everything else (game pages, fights, the Wire, warm-up, checkpoints) beside it."""
+        self.store.manual_checkpoints()  # from now on checkpoints happen between background passes
+        self.busy = False
+        await asyncio.gather(self._scoreboard_loop(), self._background_loop())
+
+    async def _scoreboard_loop(self) -> None:
+        last_idle = last_pwhl = 0.0
         while True:
+            started = time.time()
+            busy = self.busy
             try:
                 now = time.time()
-                hit = self.store.get("score:now")
-                busy = bool(hit) and _busy(hit["data"])
                 if busy or now - last_idle >= IDLE_POLL:
                     day = await self.poll_today()
                     last_idle = now
@@ -396,6 +403,32 @@ class Feed:
                         busy = busy or _busy(ours_day)
                         if self.alerts:
                             await self.alerts.on_day(ours_day)
+                pw = self.store.get("pwhl:games")
+                pw_busy = bool(pw) and _busy({"games": pw["data"]})
+                if now - last_pwhl >= (PWHL_LIVE if pw_busy else PWHL_IDLE).total_seconds():
+                    last_pwhl = now
+                    pday = await self.poll_pwhl()
+                    busy = busy or _busy(pday)
+                    if self.alerts:
+                        await self.alerts.on_day(pday)
+                self.busy = busy
+            except Exception:
+                log.exception("scoreboard loop error")
+            took = time.time() - started
+            if took > SLOW_PASS:
+                log.warning("scoreboard pass took %.1f s", took)
+            await asyncio.sleep(LIVE_POLL if self.busy else 30)
+
+    async def _background_loop(self) -> None:
+        last_standings = last_wire = last_career = last_fights = 0.0
+        last_detail: dict[int, float] = {}
+        while True:
+            started = time.time()
+            try:
+                now = time.time()
+                hit = self.store.get("score:now")
+                day = hit["data"] if hit else {"games": []}
+                if self.busy:
                     # Fight alerts: one light request (the game summary) a minute per live game a fan wants them for.
                     if self.alerts and now - last_fights >= FIGHT_POLL:
                         last_fights = now
@@ -417,21 +450,13 @@ class Feed:
                         if g["state"] == "live" and now - last_detail.get(gid, 0) >= every:
                             last_detail[gid] = now
                             await self._refresh_game(gid)
-                pw = self.store.get("pwhl:games")
-                pw_busy = bool(pw) and _busy({"games": pw["data"]})
-                if now - last_pwhl >= (PWHL_LIVE if pw_busy else PWHL_IDLE).total_seconds():
-                    last_pwhl = now
-                    pday = await self.poll_pwhl()
-                    busy = busy or _busy(pday)
-                    if self.alerts:
-                        await self.alerts.on_day(pday)
                 if now - last_wire >= WIRE_POLL:
                     last_wire = now
                     items = await self.wire()
                     if self.alerts:
                         await self.alerts.on_wire(items)
                 with self.store.batch():  # the warm-up's saves share one commit
-                    await self.warm(busy)
+                    await self.warm(self.busy)
                 if now - last_career >= CAREER_POLL:
                     last_career = now
                     favs = {t for u in self.store.users() if u["status"] == "approved"
@@ -441,15 +466,18 @@ class Feed:
                     last_standings = now
                     await self._fetch("standings", "standings", _get_standings, STANDINGS_TTL)
             except Exception:
-                log.exception("poll loop error")
+                log.exception("background loop error")
             try:  # fold the WAL into the database while nobody's request is waiting on it
-                started = time.time()
+                t0 = time.time()
                 busy_ckpt, frames, done = await asyncio.to_thread(self.store.checkpoint)
-                if time.time() - started > 0.25:
-                    log.info("checkpoint: %d of %d WAL frames in %.0f ms", done, frames, (time.time() - started) * 1000)
+                if time.time() - t0 > 0.25:
+                    log.info("checkpoint: %d of %d WAL frames in %.0f ms", done, frames, (time.time() - t0) * 1000)
             except Exception as exc:
                 log.warning("checkpoint failed: %r", exc)
-            await asyncio.sleep(LIVE_POLL if busy else 30)
+            took = time.time() - started
+            if took > SLOW_PASS * 3:
+                log.warning("background pass took %.1f s", took)
+            await asyncio.sleep(LIVE_POLL if self.busy else 30)
 
     def favourite_teams(self) -> set[str]:
         return {t for u in self.store.users() if u["status"] == "approved"

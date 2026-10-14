@@ -286,6 +286,9 @@ function movePill() {
 }
 window.addEventListener("resize", () => movePill());
 
+// Live pages ask again this often (s). The server answers from memory; the NHL's own scoreboard moves every ~20 s.
+const LIVE_REFRESH = 10;
+
 function autoRefresh(fn, seconds) {
   clearTimeout(refreshTimer);
   refreshTimer = setTimeout(() => { if (!document.hidden) fn(true); else autoRefresh(fn, seconds); }, seconds * 1000);
@@ -566,7 +569,7 @@ async function tonightView(date, quiet = false) {
     if (g && g.state !== "postponed") fetch(g.league === "pwhl" ? `/api/pwhl/game/${g.id}` : `/api/game/${g.id}`).catch(() => {});
   }), 1500);
   if (all.some(g => g.state === "live" || (g.state === "pre" && Date.parse(g.start) - Date.now() < 30 * 60000))) {
-    autoRefresh(q => tonightView(date, q), 15);
+    autoRefresh(q => tonightView(date, q), LIVE_REFRESH);
   }
 }
 
@@ -880,7 +883,7 @@ async function gameView(id, quiet = false, league = "nhl") {
     view.querySelectorAll("[data-shots]").forEach(x => x.classList.toggle("on", x === b));
     view.querySelectorAll(".rink [data-p]").forEach(dot => { dot.style.display = b.dataset.shots === "all" || dot.dataset.p === b.dataset.shots ? "" : "none"; });
   }));
-  if (g.state === "live" || (g.state === "pre" && Date.parse(g.start) - Date.now() < 30 * 60000)) autoRefresh(q => gameView(id, q, league), 15);
+  if (g.state === "live" || (g.state === "pre" && Date.parse(g.start) - Date.now() < 30 * 60000)) autoRefresh(q => gameView(id, q, league), LIVE_REFRESH);
 }
 
 // ---- Wire ----------------------------------------------------------------------------
