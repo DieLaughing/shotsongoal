@@ -471,7 +471,18 @@ async def game(game_id: int, request: Request):
     detail = {**detail, "game": _freshen(dict(detail["game"]))}
     _with_watch([detail["game"]], _settings(request))
     odds.attach([detail["game"]])
+    if detail.get("preview"):
+        detail = {**detail, "preview": _with_places(detail["preview"], detail["game"])}
     return {**detail, "social": social.for_game(request.state.email, detail["game"], people())}
+
+
+def _with_places(preview: dict, g: dict) -> dict:
+    """Each team's place in its division, from the saved standings (never waits on the league)."""
+    hit = store.get("standings")
+    rows = {r["abbr"]: r for r in (hit["data"] if hit else [])}
+    places = {side: {k: rows[g[side]["abbr"]].get(k) for k in ("div", "div_rank", "pts", "gp")}
+              for side in ("away", "home") if g[side]["abbr"] in rows}
+    return {**preview, "places": places}
 
 
 @app.get("/api/pwhl/game/{game_id}")

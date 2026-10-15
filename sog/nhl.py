@@ -240,7 +240,71 @@ def parse_detail(landing: dict, rail: dict | None, box: dict | None) -> dict:
         players[side] = {"skaters": skaters, "goalies": goalies}
 
     return {"game": game, "scoring": scoring, "penalties": penalties, "stars": stars, "linescore": linescore,
-            "shots": shots, "team_stats": team_stats, "players": players}
+            "shots": shots, "team_stats": team_stats, "players": players,
+            "preview": parse_preview(landing, rail) if game["state"] == "pre" else None}
+
+
+RESULT = {"W": "W", "L": "L", "OTW": "W", "SOW": "W", "OTL": "OT", "SOL": "OT"}
+PREVIEW_STATS = [  # (rail key, label, percent?, lower is better?)
+    ("goalsForPerGamePlayed", "Goals for / game", False, False),
+    ("goalsAgainstPerGamePlayed", "Goals against / game", False, True),
+    ("ppPctg", "Power play", True, False),
+    ("pkPctg", "Penalty kill", True, False),
+    ("faceoffWinningPctg", "Faceoffs", True, False),
+]
+HOT_LABEL = {"points": "Points", "goals": "Goals", "assists": "Assists"}
+
+
+def _hot(p: dict | None) -> dict | None:
+    return {"name": _player_name(p), "number": p.get("sweaterNumber"), "pos": p.get("positionCode"),
+            "value": p.get("value")} if p else None
+
+
+def parse_preview(landing: dict, rail: dict | None) -> dict | None:
+    """Before puck drop: form, season stats with league ranks, who's hot, goalies' season numbers, the season series,
+    coaches and scratches. All from the landing + right-rail the game page loads anyway. The NHL doesn't name starting
+    goalies here before the game."""
+    m, rail = landing.get("matchup") or {}, rail or {}
+    sides = ("away", "home")
+    l10 = rail.get("last10Record") or {}
+    form = {}
+    for side in sides:
+        t = l10.get(f"{side}Team") or {}
+        st = {"W": "W", "L": "L", "OT": "OT", "O": "OT"}.get(t.get("streakType"))
+        form[side] = {"record": t.get("record"), "streak": f"{st}{t.get('streak')}" if st and t.get("streak") else None,
+                      "last": [{"opp": r.get("opponentAbbrev"), "res": RESULT.get(r.get("gameResult"), "L")}
+                               for r in t.get("pastGameResults") or []]}  # newest first
+    ts = rail.get("teamSeasonStats") or {}
+    stats = []
+    for key, label, pct, low in PREVIEW_STATS:
+        a, h = (ts.get(f"{side}Team") or {} for side in sides)
+        if a.get(key) is None or h.get(key) is None:
+            continue
+        fmt = (lambda v: f"{round(v * 100)}%") if pct else (lambda v: f"{v:.2f}")
+        stats.append({"label": label, "away": fmt(a[key]), "home": fmt(h[key]), "low": low,
+                      "away_rank": a.get(f"{key}Rank"), "home_rank": h.get(f"{key}Rank")})
+    sc = m.get("skaterComparison") or {}
+    hot = [{"label": HOT_LABEL.get(x.get("category"), (x.get("category") or "").title()),
+            "away": _hot(x.get("awayLeader")), "home": _hot(x.get("homeLeader"))} for x in sc.get("leaders") or []]
+    gc = m.get("goalieComparison") or {}
+    goalies = {side: [{"name": _player_name(x), "number": x.get("sweaterNumber"), "gp": x.get("gamesPlayed") or 0,
+                       "record": x.get("record"), "gaa": x.get("gaa"), "sv": x.get("savePctg"), "so": x.get("shutouts") or 0}
+                      for x in sorted((gc.get(f"{side}Team") or {}).get("leaders") or [], key=lambda x: -(x.get("gamesPlayed") or 0))][:3]
+               for side in sides}
+    series = [{"id": x.get("id"), "date": x.get("gameDate"), "state": simple_state(x.get("gameState") or "FUT", x.get("gameScheduleState") or "OK"),
+               "away": (x.get("awayTeam") or {}).get("abbrev"), "home": (x.get("homeTeam") or {}).get("abbrev"),
+               "away_score": (x.get("awayTeam") or {}).get("score"), "home_score": (x.get("homeTeam") or {}).get("score"),
+               "outcome": (x.get("gameOutcome") or {}).get("lastPeriodType")}
+              for x in rail.get("seasonSeries") or [] if x.get("id") != landing.get("id")]
+    wins = rail.get("seasonSeriesWins") or {}
+    info = rail.get("gameInfo") or {}
+    people = {side: {"coach": _t(((info.get(f"{side}Team") or {}).get("headCoach"))),
+                     "scratches": [_player_name(x) for x in (info.get(f"{side}Team") or {}).get("scratches") or []]}
+              for side in sides}
+    out = {"form": form, "stats": stats, "hot": [h for h in hot if h["away"] or h["home"]], "goalies": goalies,
+           "series": {"games": series, "away_wins": wins.get("awayTeamWins", 0), "home_wins": wins.get("homeTeamWins", 0)},
+           "people": people, "hot_context": "last 5 games" if sc.get("contextLabel") == "last_5_games" else "this season"}
+    return out if form["away"]["record"] or stats or hot else None
 
 
 def parse_standings(data: dict) -> list[dict]:

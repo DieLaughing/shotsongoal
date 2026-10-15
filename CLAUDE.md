@@ -78,6 +78,11 @@ which is not committed.
   adds favourite, vig-free win %, high (7+) / low (5.5-) scoring and, once final, upset. No sportsbook links or logos.
   Pick'em upset bonus: a right underdog pick is 2 pts, the lock doubles (4); pick.dog is set with the result, only for
   games from picks.UPSET_FROM (SOG_UPSET_FROM, default 2026-10-19) so older picks keep their points. PWHL has no odds.
+- Pre-game matchup (game page, state pre only): nhl.parse_preview from the landing's `matchup` + right-rail
+  (last10Record, teamSeasonStats with ranks, seasonSeries, gameInfo coaches/scratches); no extra requests.
+  /api/game adds division places from the saved standings (_with_places). The NHL names no starting goalies
+  pre-game, so the page lists each team's goalies this season. previewBlock() in web/app.js; apart() greys the away
+  side of a bar when both team colours are near-identical.
 - Friends on games (sog/social.py): watching + reaction tables. /api/games adds g.watching, game pages add d.social
   (watching, reactions per event key g:<period>-<time>-<scorer> / p:...-<player>, mine, rivals). Rival = a friend
   whose first favourite in that league is the other team; the final alert appends "Tell X." / "X will enjoy this one."

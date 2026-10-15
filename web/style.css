@@ -461,3 +461,27 @@ html, body { overflow-x: clip; }
   font-variant-numeric: tabular-nums; }
 .pick-odds > span { padding-left: 8px; }
 .pick-odds .dog { color: var(--accent); font-weight: 700; }
+
+/* pre-game matchup (previewBlock) */
+.form-row { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--border); }
+.form-row:first-child { border-top: 0; }
+.form-row .who { font-weight: 600; }
+.form-row .detail { color: var(--muted); font-size: 13px; }
+.dots { display: flex; gap: 4px; }
+.dots i, .pre-note i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.res-W { background: var(--have-fg); }
+.res-L { background: var(--accent); }
+.res-OT { background: var(--muted); }
+.pre-note { padding: 8px 14px 10px; font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--border); }
+.pre-note i { width: 8px; height: 8px; margin: 0 2px 0 6px; vertical-align: 0; }
+.pre .cmp .v { font-weight: 500; }
+.pre .bar { gap: 2px; background: none; }
+.pre .cmp .v.best { font-weight: 800; }
+.cmp .v small { display: block; font-size: 10.5px; color: var(--muted); font-weight: 500; }
+.hot-row { display: grid; grid-template-columns: 1fr 70px 1fr; gap: 8px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--border); }
+.hot-row:first-child { border-top: 0; }
+.hot-row > div:last-child { text-align: right; }
+.hot-row .lbl { text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+.hot-row .who { font-weight: 600; font-size: 14px; }
+.big-num { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.g-row { grid-template-columns: 40px 1fr; }
