@@ -236,7 +236,7 @@ function gameCard(g, fav) {
       ${hide ? `<div class="status"><div class="t">🙈 Hidden</div></div>` : statusCell(g)}
       <div class="team-line${lost(h)}">${mark(h.abbr)}<span class="nm">${esc(h.name || teamName(h.abbr))}</span>${sc(h)}</div>
     </a>
-    ${cardWatch(g.watch, g)}${watchersLine(g)}
+    ${cardWatch(g.watch, g)}${oddsLine(g)}${watchersLine(g)}
   </div>`;
 }
 
@@ -254,6 +254,44 @@ function cardWatch(w, g) {
   if (!name) return w.why ? `<div class="watch"><span>${esc(w.why)}</span></div>` : "";
   const have = w.have === true ? `<span class="ok">✓ You have it</span>` : w.have === false ? `<span class="no">Not in your services</span>` : "";
   return `<div class="watch">${name}${have}</div>`;
+}
+
+// Odds, for fun only (sog/odds.py): who's favoured and how many goals are expected, from the last DraftKings line
+// before puck drop. No sportsbook links. Off with Settings > Display > Show odds.
+const oddsOn = () => ME?.settings?.odds !== false;
+const SCORING_WORD = { high: "High-scoring game expected", low: "Low-scoring game expected" };
+function favLine(o) {
+  if (!o?.away_pct) return "";
+  return o.fav ? `${teamName(o.fav)} favoured` : "Even matchup";
+}
+function oddsLine(g) {
+  const o = g.odds;
+  if (!oddsOn() || !o || spoilerHidden(g)) return "";
+  if (g.state === "final") return o.upset ? `<div class="odds"><span class="upset">⚡ Upset!</span></div>` : "";
+  if (g.state !== "pre") return "";
+  const parts = [o.fav ? `${esc(favLine(o))} · ${Math.max(o.away_pct, o.home_pct)}%` : esc(favLine(o)), esc(SCORING_WORD[o.scoring] || "")].filter(Boolean);
+  return parts.length ? `<div class="odds">${parts.join(" · ")}</div>` : "";
+}
+// Game page: win chances as a two-colour bar, expected goals, and whether a final was an upset.
+function oddsBlock(g, ac, hc) {
+  const o = g.odds;
+  if (!oddsOn() || !o || (g.state !== "pre" && !(g.state === "final" && o.upset != null))) return "";
+  const a = g.away.abbr, h = g.home.abbr;
+  ac = apart(ac, hc);
+  const bar = o.away_pct ? `<div class="oddsbar" role="img" aria-label="${esc(teamName(a))} ${o.away_pct}%, ${esc(teamName(h))} ${o.home_pct}%">
+      <span style="--c:${esc(ac)};flex:${o.away_pct}">${esc(TEAMS[a]?.code || a)} ${o.away_pct}%</span>
+      <span style="--c:${esc(hc)};flex:${o.home_pct}">${o.home_pct}% ${esc(TEAMS[h]?.code || h)}</span></div>` : "";
+  let text;
+  if (g.state === "final") {
+    const dog = o.fav === a ? h : a;
+    text = o.upset ? `⚡ <b>Upset!</b> The ${esc(teamName(dog))} won as the underdog (${dog === a ? o.away_pct : o.home_pct}% before puck drop).`
+      : `The ${esc(teamName(o.fav))} won as the favourite.`;
+  } else {
+    text = [o.away_pct ? `<b>${esc(favLine(o))}</b>` : "", o.total != null ? `About ${o.total} goals expected${o.scoring !== "average" ? ` (${o.scoring}-scoring)` : ""}` : ""]
+      .filter(Boolean).join(" · ");
+  }
+  return `<div class="gsec"><div class="gsec-h">Odds · just for fun</div>${g.state === "pre" ? bar : ""}<div class="gsec-ctx">${text}</div>
+    <div class="odds-src">Win chances from DraftKings, with the bookmaker's cut taken out.</div></div>`;
 }
 
 // "Loading…" only when a page takes a moment: fast loads swap straight from the old page to the new one, no flash.
@@ -610,23 +648,33 @@ async function pickemView(date, quiet = false) {
     const hide = spoilerHidden(g), k = spKey(g), started = begun(g);
     SPOIL_GAMES.set(k, g);
     const done = g.state === "final" && !hide;
+    const o = oddsOn() && !hide ? g.odds : null;
     const side = t => {
       const on = g.mine === t.abbr;
       const res = on && done && g.won != null ? (g.won ? " won" : " lost") : "";
       return `<button class="pk${on ? " on" : ""}${res}" data-pick="${t.abbr}" data-k="${esc(k)}" ${started ? "disabled" : ""}>${mark(t.abbr)}${!hide && g.state !== "pre" && t.score != null ? `<b class="pk-sc">${t.score}</b>` : `<span class="pk-nm">${esc(teamName(t.abbr))}</span>`}</button>`;
     };
+    // Before puck drop: each team's win chance under its button, "2×" on the underdog while the upset bonus is on.
+    const pct = t => {
+      const dog = g.bonus && o.fav && o.fav !== t.abbr;
+      return `<span class="${dog ? "dog" : ""}">${t === g.home ? o.home_pct : o.away_pct}%${dog ? " · 2× if right" : ""}</span>`;
+    };
+    const chances = o?.away_pct && !started ? `<div class="pick-odds">${pct(g.away)}<span></span>${pct(g.home)}</div>` : "";
     const mid = hide ? "🙈" : g.state === "live" ? `<span class="live">LIVE</span>` : g.state === "final" ? "Final"
       : g.state === "postponed" ? "Postponed" : g.start ? esc(time(g.start)) : "TBD";
     const friends = (g.picks || []).filter(p => !p.me);
+    const upset = o?.upset && done ? `<div class="pick-friends"><span class="upset">⚡ Upset!</span>${g.won && g.pts > 1 ? ` You got <b>${g.pts} points</b>.` : ""}</div>` : "";
     return `<div class="pick-row">
       <div class="pick-line">${side(g.away)}<div class="pick-mid">${mid}</div>${side(g.home)}
         <button class="lockbtn${g.lock ? " on" : ""}" data-lockk="${esc(k)}" ${started ? "disabled" : ""} aria-pressed="${g.lock}" title="Lock of the night">★</button></div>
+      ${chances}
       ${started && friends.length ? `<div class="pick-friends">${friends.map(p => `${esc(p.name)} ${esc(code(p.team))}${p.lock ? " ★" : ""}`).join(" · ")}</div>`
         : !started && g.count > (g.mine ? 1 : 0) ? `<div class="pick-friends">${g.count - (g.mine ? 1 : 0)} friend${g.count - (g.mine ? 1 : 0) > 1 ? "s have" : " has"} picked</div>` : ""}
+      ${upset}
     </div>`;
   }).join("");
   const table = list => list.length ? `<div class="card"><table class="board"><tr><th></th><th>Name</th><th>Pts</th><th>Right–wrong</th></tr>
-    ${list.map((r, i) => `<tr class="${r.me ? "me" : ""}"><td class="muted">${i + 1}</td><td>${esc(r.name)}${r.me ? " (you)" : ""}</td><td><b>${r.pts}</b></td><td>${r.w}–${r.l}</td></tr>`).join("")}</table></div>`
+    ${list.map((r, i) => `<tr class="${r.me ? "me" : ""}"><td class="muted">${i + 1}</td><td>${esc(r.name)}${r.me ? " (you)" : ""}</td><td><b>${r.pts}</b></td><td>${r.w}–${r.l}${r.upsets ? ` <span class="muted">· ⚡${r.upsets}</span>` : ""}</td></tr>`).join("")}</table></div>`
     : `<div class="card"><div class="empty">No results yet. Make some picks!</div></div>`;
   const b = d.board, last = b.last?.table || [];
   const best = last[0], meLast = last.find(r => r.me);
@@ -638,7 +686,7 @@ async function pickemView(date, quiet = false) {
       <h1>${esc(dayTitle(d.date))}</h1>
       ${d.next ? `<a href="#/picks/${d.next}" aria-label="Next day">→</a>` : "<span></span>"}
     </div>
-    <p class="help">Tap who wins: <b>1 point</b> for every one you get right. Tap ★ on one game a night to make it your lock, worth <b>2 points</b> instead (nothing if it's wrong). Picks lock at puck drop.</p>
+    <p class="help">Tap who wins: <b>1 point</b> for every one you get right${d.games.some(g => g.bonus) ? `, or <b>2 points</b> if they win as the underdog (marked <b>2×</b>)` : ""}. Tap ★ on one game a night to make it your lock: it <b>doubles</b> that game's points (nothing if it's wrong). Picks lock at puck drop.</p>
     ${rows ? `<div class="card picks">${rows}</div>` : `<div class="empty">No games this day.</div>`}
     ${hid.length ? `<h2>The table</h2>${spoilCover(hid, "The Pick'em table")}` : `
       ${lastLine ? `<h2>Last results</h2>${lastLine}` : ""}
@@ -751,6 +799,69 @@ function compareRow(label, a, h, ac, hc) {
     <span class="v">${esc(h)}</span></div>`;
 }
 
+// Before puck drop: the matchup (sog/nhl.py parse_preview). It goes away once the game starts.
+const RES_WORD = { W: "Win", L: "Loss", OT: "OT/SO loss" };
+// Two teams in near-identical colours (Sabres and Leafs are both navy) would read as one bar: grey out the away side.
+function apart(ac, hc) {
+  const rgb = c => /^#[0-9a-f]{6}$/i.test(c) ? [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)) : null;
+  const x = rgb(ac), y = rgb(hc);
+  return x && y && Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) < 80 ? "var(--muted)" : ac;
+}
+function previewBlock(p, a, h, ac, hc) {
+  ac = apart(ac, hc);
+  const side = (s, abbr) => {
+    const f = p.form[s] || {}, pl = p.places?.[s];
+    const dots = [...(f.last || [])].reverse().map(r => `<i class="res-${r.res}" title="${esc(RES_WORD[r.res])} vs ${esc(r.opp)}"></i>`).join("");
+    const bits = [f.record, pl?.div_rank ? `${ordinal(pl.div_rank)} in ${pl.div}` : "", f.streak ? `streak ${f.streak}` : ""].filter(Boolean);
+    return `<div class="form-row">${mark(abbr)}<div><div class="who">${esc(teamName(abbr))}</div><div class="detail">${esc(bits.join(" · "))}</div></div>
+      ${dots ? `<div class="dots" aria-label="Recent results, oldest first">${dots}</div>` : ""}</div>`;
+  };
+  let out = `<h2>Matchup</h2><div class="card">${side("away", a)}${side("home", h)}
+    <div class="pre-note">Recent results, oldest to newest: <i class="res-W"></i> win <i class="res-OT"></i> OT/SO loss <i class="res-L"></i> loss</div></div>`;
+
+  if (p.stats.length) {
+    // The better side is bold; the bar fills toward it (lower is better for goals against).
+    const row = s => {
+      const na = parseFloat(s.away), nh = parseFloat(s.home);
+      const [wa, wh] = s.low ? [nh, na] : [na, nh], total = wa + wh || 1;
+      const better = na === nh ? null : (na > nh) !== s.low ? "away" : "home";
+      const val = (v, r, me) => `<span class="v${better === me ? " best" : ""}">${esc(v)}${r ? `<small>${esc(ordinal(r))}</small>` : ""}</span>`;
+      return `<div class="cmp">${val(s.away, s.away_rank, "away")}
+        <div><div class="lbl">${esc(s.label)}</div><div class="bar"><i style="width:${wa / total * 100}%;background:${ac}"></i><i style="width:${wh / total * 100}%;background:${hc}"></i></div></div>
+        ${val(s.home, s.home_rank, "home")}</div>`;
+    };
+    out += `<h2>Season so far</h2><div class="card compare pre">
+      <div class="cmp"><span>${mark(a)}</span><span class="muted small" style="text-align:center">League rank under each number</span><span style="text-align:right">${mark(h)}</span></div>
+      ${p.stats.map(row).join("")}</div>`;
+  }
+
+  if (p.hot.length) {
+    const who = x => x ? `<div><div class="who">${esc(x.name)} <span class="muted small">${esc(x.pos || "")}</span></div><div class="big-num">${x.value}</div></div>` : "<div></div>";
+    out += `<h2>Who's hot · ${esc(p.hot_context)}</h2><div class="card">${p.hot.map(r =>
+      `<div class="hot-row">${who(r.away)}<div class="lbl">${esc(r.label)}</div>${who(r.home)}</div>`).join("")}</div>`;
+  }
+
+  if (p.goalies.away.length || p.goalies.home.length) {
+    const gl = (s, abbr) => p.goalies[s].map(x => `<div class="event g-row">${mark(abbr)}<div><div class="who">${esc(x.name)} <span class="muted small">#${x.number ?? ""}</span></div>
+      <div class="detail">${esc(x.record || "")} · ${x.sv != null ? x.sv.toFixed(3).replace(/^0/, "") : "–"} SV% · ${x.gaa != null ? x.gaa.toFixed(2) : "–"} GAA${x.so ? ` · ${x.so} SO` : ""} · ${x.gp} GP</div></div></div>`).join("");
+    out += `<h2>Goalies this season</h2><div class="card">${gl("away", a)}${gl("home", h)}</div>
+      <p class="help">The NHL doesn't name starting goalies ahead of time. These are each team's goalies this season, most games first.</p>`;
+  }
+
+  const ser = p.series, done = ser.games.filter(x => x.state === "final"), next = ser.games.filter(x => x.state === "pre");
+  const lead = ser.away_wins === ser.home_wins ? (done.length ? `Series tied ${ser.away_wins}–${ser.home_wins}` : "First meeting this season")
+    : `${teamName(ser.away_wins > ser.home_wins ? a : h)} lead the season series ${Math.max(ser.away_wins, ser.home_wins)}–${Math.min(ser.away_wins, ser.home_wins)}`;
+  out += `<h2>Season series</h2><div class="card pad small"><b>${esc(lead)}</b>
+    ${done.map(x => `<div class="detail">${esc(shortDate(x.date))}: ${esc(x.away)} ${x.away_score}, ${esc(x.home)} ${x.home_score}${x.outcome && x.outcome !== "REG" ? ` (${esc(x.outcome)})` : ""}</div>`).join("")}
+    ${next.length ? `<div class="detail">Still to come: ${next.map(x => `${esc(shortDate(x.date))}, ${esc(x.away)} at ${esc(x.home)}`).join(" · ")}</div>` : ""}
+  </div>`;
+
+  const ppl = p.people || {}, coach = ["away", "home"].filter(s => ppl[s]?.coach).map(s => `${esc(teamName(s === "away" ? a : h))}: ${esc(ppl[s].coach)}`);
+  const scr = ["away", "home"].filter(s => ppl[s]?.scratches?.length).map(s => `${esc(teamName(s === "away" ? a : h))}: ${esc(ppl[s].scratches.join(", "))}`);
+  if (coach.length || scr.length) out += `<p class="help">${coach.length ? `Coaches · ${coach.join(" · ")}` : ""}${scr.length ? `<br>Scratches · ${scr.join(" · ")}` : ""}</p>`;
+  return out;
+}
+
 let moreStatsOpen = false;  // stays open across the live refresh
 async function gameView(id, quiet = false, league = "nhl") {
   setNav("tonight");
@@ -811,9 +922,12 @@ async function gameView(id, quiet = false, league = "nhl") {
       ${side(g.home, h)}
     </div>
     ${watchBlock(g, report)}
+    ${league === "pwhl" ? "" : oddsBlock(g, ac, hc)}
     ${social}
   </div>
   ${d.recap ? `<p class="recap">${esc(d.recap)}</p>` : ""}`;
+
+  if (g.state === "pre" && d.preview) html += previewBlock(d.preview, a, h, ac, hc);
 
   const goals = d.scoring.filter(p => p.goals.length);
   if (goals.length) {
@@ -1276,6 +1390,8 @@ function settingsView() {
     <h2>Display</h2>
     <div class="card checks"><label><input type="checkbox" id="animations" ${s.animations !== false ? "checked" : ""}>Animations between pages</label></div>
     <p class="help">Quick slides between tabs and pages. Turn them off for instant switching. They're also off whenever your phone's Reduce Motion setting is on.</p>
+    <div class="card checks"><label><input type="checkbox" id="odds" ${s.odds !== false ? "checked" : ""}>Show odds</label></div>
+    <p class="help">Who's favoured to win and how many goals are expected, from DraftKings' lines. Just for fun: nothing here links to betting.</p>
     <div class="seg" role="group" aria-label="Buttons on touch screens">${[["right", "Right-handed"], ["left", "Left-handed"]].map(([k, l]) =>
       `<button data-hand="${k}" class="${(s.hand || "right") === k ? "on" : ""}">${l}</button>`).join("")}</div>
     <p class="help">On phones, foldables and tablets, game page buttons sit on this side, under your thumb. On a computer they're centred.</p>
@@ -1311,6 +1427,7 @@ function settingsView() {
   document.getElementById("useguess")?.addEventListener("click", () => { saveSettings({ local: [guess] }); settingsView(); });
   view.querySelectorAll("input[name=services]").forEach(i => i.addEventListener("change", () => saveSettings({ services: picked("services") })));
   document.getElementById("animations").addEventListener("change", e => saveSettings({ animations: e.target.checked }));
+  document.getElementById("odds").addEventListener("change", e => saveSettings({ odds: e.target.checked }));
   document.querySelectorAll("button[data-hand]").forEach(b => b.addEventListener("click", () => {
     document.querySelectorAll("button[data-hand]").forEach(x => x.classList.toggle("on", x === b));
     applyHand(b.dataset.hand); saveSettings({ hand: b.dataset.hand });

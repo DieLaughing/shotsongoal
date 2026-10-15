@@ -3,6 +3,11 @@
 Every update to [Shots on Goal](https://github.com/DieLaughing/shotsongoal), newest first. The same list is on the app's What's new page.
 This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit that file, not this one.
 
+## October 15, 2026
+
+- **Improved: Game previews before puck drop.** Open any upcoming NHL game for the matchup. Each team's record, division place, streak and recent results; how they compare this season (goals for and against, power play, penalty kill, faceoffs, with league ranks); who's hot over the last 5 games; each team's goalies this season; and the season series so far. It all steps aside once the game starts.
+- **New: Odds, just for fun.** Every NHL game now shows who's favoured to win and their chance (from DraftKings' line, with the bookmaker's cut taken out), plus a note when the books expect a high- or low-scoring game. Open a game for the full picture, and after the final you'll see if it was an upset. Nothing links to betting, and Settings → Display → Show odds turns it off. In Pick'em, picking the underdog now pays double if they win (marked 2× before puck drop), and your lock doubles that again. The bonus starts with Monday's games.
+
 ## October 14, 2026
 
 - **Improved: Tidier game page, and buttons under your thumb.** The top of a game page is now in clear groups. The score card is just the game (a power play or 4 on 4 shows under the clock), then where to watch it with one button per app, then you and your friends, with "I'm watching" and "Watching later" side by side. On a phone, foldable or tablet the buttons sit on your thumb's side. Left-handed? Settings → Display has a Right-handed / Left-handed switch. On a computer they're centred.
