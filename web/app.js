@@ -161,6 +161,23 @@ function watchLine(w, game) {
   return `<div class="watch">${app}<span>${esc(w.why)}</span>${pill}</div>`;
 }
 
+
+// Game page "Watch" group: one heading, the why, and one button per app (the links aren't repeated as text).
+// Recap and tickets live here too, since they're the other ways of watching.
+function watchBlock(g, report) {
+  const w = g.watch, links = g.state !== "final" ? w?.links || [] : [];
+  const ctx = w && g.state !== "final" ? [!links.length && (w.app || w.network) ? `<b>${esc(w.app || w.network)}</b>` : "", esc(w.why || "")].filter(Boolean).join(" · ") : "";
+  const pill = !w || g.state === "final" ? "" : w.have === true ? `<span class="pill have">You have it</span>`
+    : w.have === false ? `<span class="pill need">Not in your services</span>` : "";
+  const btns = [
+    ...links.map((l, i) => `<a class="btn${i ? "" : " primary"}" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`),
+    g.recap ? `<a class="btn" href="${esc(g.recap)}" target="_blank" rel="noopener">Recap on NHL.com ↗</a>` : "",
+    g.state === "pre" && g.tickets ? `<a class="btn" href="${esc(g.tickets)}" target="_blank" rel="noopener">Tickets ↗</a>` : ""].join("");
+  if (!ctx && !btns && !report) return "";
+  return `<div class="gsec">
+    <div class="gsec-ctx"><span class="gsec-h">Watch</span>${ctx ? `<span>${ctx}</span>` : ""}${pill}</div>
+    ${btns || report ? `<div class="gsec-row">${btns}${report}</div>` : ""}</div>`;
+}
 // ---- spoiler-free ------------------------------------------------------------------------------
 // settings.spoilers = {teams: always hidden, games: "watching later", seen: watched since}. Mirrors sog/spoilers.py.
 // Only started games from today or yesterday are hidden, so it switches itself off the day after.
@@ -773,28 +790,29 @@ async function gameView(id, quiet = false, league = "nhl") {
     key = key.slice(0, 82);
     const counts = S.reactions[key] || {}, mine = S.mine[key];
     const chips = Object.entries(counts).map(([e, n]) => `<button class="rxc${mine === e ? " mine" : ""}" data-rx="${e}" data-ev="${esc(key)}">${e} ${n}</button>`).join("");
-    return `<div class="rxs">${chips}<button class="rxc add" data-rxopen="${esc(key)}" aria-label="React">${chips ? "＋" : "🙂 React"}</button></div>`;
+    return `<div class="rxs">${chips}<button class="rxc add" data-rxopen="${esc(key)}" aria-label="React">${chips ? "＋" : "🙂＋"}</button></div>`;
   };
   const side = (t, abbr) => `<a class="side" href="#/team/${abbr}">${mark(abbr, true)}<span class="nm">${esc(t.name || teamName(abbr))}</span></a>`;
 
-  let html = `${backLink("#/")}<div class="card">
+  // Top card in three groups: the game itself, where to watch it, and who's watching. Spoiler-free sits
+  // up by Back so it can be found before the score, and the on-ice situation lives under the clock.
+  const upcoming = g.state !== "final" && g.state !== "postponed";
+  const sit = d.situation && g.state === "live" && !g.intermission ? `<div class="sitpill">${esc(d.situation.text)}</div>` : "";
+  const spoilTop = upcoming ? (spoilerMarked(g) ? spoilButton("seen", g, "🙈 Spoiler-free on · turn off") : spoilButton("later", g, "🙈 Watching later")) : "";
+  const report = g.state !== "final" && league !== "pwhl" ? `<button class="linkish" id="report">Wrong channel?</button>` : "";
+  const social = upcoming || friendsLine ? `<div class="gsec gsec-row">
+      ${upcoming ? `<button class="btn small${S.me_watching ? " primary" : ""}" id="watching">${S.me_watching ? "👀 You're watching" : "👀 I'm watching"}</button>` : ""}
+      ${friendsLine ? `<span class="gsec-note">${friendsLine}</span>` : ""}</div>` : "";
+
+  let html = `<div class="detail-top">${backLink("#/")}${spoilTop}</div><div class="card">
     <div class="scorebug">
       ${side(g.away, a)}
-      <div><div class="score">${showScore ? `${g.away.score ?? 0} – ${g.home.score ?? 0}` : "vs"}</div><div class="state">${state}</div></div>
+      <div><div class="score">${showScore ? `${g.away.score ?? 0} – ${g.home.score ?? 0}` : "vs"}</div><div class="state">${state}</div>${sit}</div>
       ${side(g.home, h)}
     </div>
-    ${g.state !== "final" ? `<div style="padding:0 14px 14px">${watchLine(g.watch, g)}</div>` : ""}
-    ${g.state !== "final" && g.watch?.links?.length ? `<div class="links">${g.watch.links.map((l, i) =>
-      `<a class="btn${i ? "" : " primary"}" href="${esc(l.url)}" target="_blank" rel="noopener">Open ${esc(l.name)}</a>`).join("")}</div>` : ""}
-    ${g.recap ? `<div class="links"><a class="btn" href="${esc(g.recap)}" target="_blank" rel="noopener">Watch the recap on NHL.com</a></div>` : ""}
-    ${g.state === "pre" && g.tickets ? `<div class="links"><a class="btn" href="${esc(g.tickets)}" target="_blank" rel="noopener">Buy tickets ↗</a></div>` : ""}
-    ${g.state !== "final" && g.state !== "postponed" ? `<div class="links">
-      <button class="btn small${S.me_watching ? " primary" : ""}" id="watching">${S.me_watching ? "👀 You're watching" : "👀 I'm watching"}</button>
-      ${spoilerMarked(g) ? spoilButton("seen", g, "🙈 Spoiler-free on · turn off") : spoilButton("later", g, "🙈 Watching later")}</div>` : ""}
-    ${friendsLine ? `<div class="friends-line">${friendsLine}</div>` : ""}
-    ${g.state !== "final" && league !== "pwhl" ? `<div class="links"><button class="linkish" id="report">Wrong channel? Tell us</button></div>` : ""}
+    ${watchBlock(g, report)}
+    ${social}
   </div>
-  ${d.situation && g.state === "live" && !g.intermission ? `<div class="banner">${esc(d.situation.text)}</div>` : ""}
   ${d.recap ? `<p class="recap">${esc(d.recap)}</p>` : ""}`;
 
   const goals = d.scoring.filter(p => p.goals.length);

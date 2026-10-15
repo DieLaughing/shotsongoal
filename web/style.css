@@ -158,7 +158,6 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 
 /* friends on every game */
 .watchers { margin-top: 6px; font-size: 12.5px; color: var(--muted); }
-.friends-line { padding: 0 14px 14px; font-size: 13px; color: var(--muted); }
 .rxs { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
 .rxc { font: inherit; font-size: 12.5px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg);
   color: var(--text); cursor: pointer; font-variant-numeric: tabular-nums; }
@@ -282,7 +281,6 @@ tr.cut td { border-top: 2px dashed var(--accent); }
 
 /* live extras */
 .sit { font-size: 11px; font-weight: 750; color: var(--accent); margin-top: 2px; }
-.banner { margin-top: 10px; padding: 10px 14px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); font-weight: 700; text-align: center; }
 .recap { margin: 12px 2px 0; line-height: 1.55; }
 .linkish { background: none; border: 0; color: var(--muted); font-size: 12.5px; text-decoration: underline; cursor: pointer; padding: 2px; }
 .rink { width: 100%; height: auto; display: block; margin: 6px 0; }
@@ -431,3 +429,15 @@ html, body { overflow-x: clip; }
   border: 1px solid var(--border); background: var(--surface); color: var(--text); text-decoration: none; font-weight: 600; font-size: 14px; }
 .back .ico { width: 17px; height: 17px; }
 .top-link .ico, .back .ico { color: currentColor; vertical-align: 0; }
+/* Game page top card: grouped sections, left-aligned, divided by a rule. */
+.detail-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.gsec { display: grid; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--border); }
+.gsec-h { font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.gsec-ctx { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.gsec-ctx b { color: var(--text); }
+.gsec-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gsec-row .linkish { margin-left: auto; }
+.gsec-note { font-size: 13px; color: var(--muted); }
+.sitpill { display: inline-block; margin-top: 6px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 750;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
