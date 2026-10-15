@@ -794,17 +794,17 @@ async function gameView(id, quiet = false, league = "nhl") {
   };
   const side = (t, abbr) => `<a class="side" href="#/team/${abbr}">${mark(abbr, true)}<span class="nm">${esc(t.name || teamName(abbr))}</span></a>`;
 
-  // Top card in three groups: the game itself, where to watch it, and who's watching. Spoiler-free sits
-  // up by Back so it can be found before the score, and the on-ice situation lives under the clock.
+  // Top card in three groups: the game itself, where to watch it, and you + friends (watching now or later).
+  // On touch screens the buttons sit on the side of the hand picked in Settings > Display; elsewhere they're centred.
   const upcoming = g.state !== "final" && g.state !== "postponed";
   const sit = d.situation && g.state === "live" && !g.intermission ? `<div class="sitpill">${esc(d.situation.text)}</div>` : "";
-  const spoilTop = upcoming ? (spoilerMarked(g) ? spoilButton("seen", g, "🙈 Spoiler-free on · turn off") : spoilButton("later", g, "🙈 Watching later")) : "";
   const report = g.state !== "final" && league !== "pwhl" ? `<button class="linkish" id="report">Wrong channel?</button>` : "";
   const social = upcoming || friendsLine ? `<div class="gsec gsec-row">
-      ${upcoming ? `<button class="btn small${S.me_watching ? " primary" : ""}" id="watching">${S.me_watching ? "👀 You're watching" : "👀 I'm watching"}</button>` : ""}
+      ${upcoming ? `<button class="btn small${S.me_watching ? " primary" : ""}" id="watching">${S.me_watching ? "👀 You're watching" : "👀 I'm watching"}</button>
+        ${spoilerMarked(g) ? spoilButton("seen", g, "🙈 Spoiler-free on · turn off") : spoilButton("later", g, "🙈 Watching later")}` : ""}
       ${friendsLine ? `<span class="gsec-note">${friendsLine}</span>` : ""}</div>` : "";
 
-  let html = `<div class="detail-top">${backLink("#/")}${spoilTop}</div><div class="card">
+  let html = `${backLink("#/")}<div class="card">
     <div class="scorebug">
       ${side(g.away, a)}
       <div><div class="score">${showScore ? `${g.away.score ?? 0} – ${g.home.score ?? 0}` : "vs"}</div><div class="state">${state}</div>${sit}</div>
@@ -1276,6 +1276,9 @@ function settingsView() {
     <h2>Display</h2>
     <div class="card checks"><label><input type="checkbox" id="animations" ${s.animations !== false ? "checked" : ""}>Animations between pages</label></div>
     <p class="help">Quick slides between tabs and pages. Turn them off for instant switching. They're also off whenever your phone's Reduce Motion setting is on.</p>
+    <div class="seg" role="group" aria-label="Buttons on touch screens">${[["right", "Right-handed"], ["left", "Left-handed"]].map(([k, l]) =>
+      `<button data-hand="${k}" class="${(s.hand || "right") === k ? "on" : ""}">${l}</button>`).join("")}</div>
+    <p class="help">On phones, foldables and tablets, game page buttons sit on this side, under your thumb. On a computer they're centred.</p>
 
     <h2>Calendar</h2>
     <div class="card" id="cal"><div class="empty">Loading…</div></div>
@@ -1308,6 +1311,10 @@ function settingsView() {
   document.getElementById("useguess")?.addEventListener("click", () => { saveSettings({ local: [guess] }); settingsView(); });
   view.querySelectorAll("input[name=services]").forEach(i => i.addEventListener("change", () => saveSettings({ services: picked("services") })));
   document.getElementById("animations").addEventListener("change", e => saveSettings({ animations: e.target.checked }));
+  document.querySelectorAll("button[data-hand]").forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll("button[data-hand]").forEach(x => x.classList.toggle("on", x === b));
+    applyHand(b.dataset.hand); saveSettings({ hand: b.dataset.hand });
+  }));
   document.getElementById("nickname").addEventListener("change", e => saveSettings({ nickname: e.target.value.trim().slice(0, 24) }));
   view.querySelectorAll("input[name=spoilteams]").forEach(i => i.addEventListener("change", () => {
     saveSettings({ spoilers: { ...spoilers(), teams: picked("spoilteams") } });
@@ -1577,6 +1584,7 @@ async function adminView() {
 const NAV_ORDER = { "": 0, day: 0, picks: 1, wire: 2, league: 3, standings: 3, teams: 3, settings: 4, new: 5, app: 5, report: 5, admin: 5 };
 const DETAIL = new Set(["game", "pgame", "team"]);
 let lastHash = null, lastPage = null, pendingShot = 0, cameFromApp = false;   // pendingShot: +1 from the right, -1 from the left
+const applyHand = hand => { document.documentElement.dataset.hand = hand === "left" ? "left" : "right"; };
 const motionOn = () => ME?.settings?.animations !== false && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // "← Back" on sub-pages: the page you came from when you got here inside the app, otherwise a sensible parent.
@@ -1651,6 +1659,7 @@ function renderRoute() {
 async function start() {
   try {
     ME = await api("/api/me");
+    applyHand(ME.settings?.hand);
   } catch {
     view.innerHTML = `<div class="notice error">Couldn't reach Shots on Goal. Check your connection and reload.</div>`;
     return;
