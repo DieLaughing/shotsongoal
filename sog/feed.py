@@ -11,7 +11,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from . import nhl, pwhl, wire
+from . import nhl, odds, pwhl, wire
 from .teams import TEAMS as NHL_TEAMS
 from .db import Store, parse_iso
 
@@ -19,12 +19,14 @@ log = logging.getLogger("sog.feed")
 
 STALE_OK = timedelta(days=1)          # an expired saved copy this young is shown while a fresh one loads
 GAME_STALE_OK = timedelta(minutes=1)
+GAME_SHAPE = 2                        # bump when parse_detail gains fields pages need: older saved copies are refetched
 CAREER_TTL = timedelta(hours=20)      # milestone watch: career totals, about once a day
 CAREER_POLL = 1800                    # seconds between checks that careers are saved
 WARM_LIVE_POLL = 90                   # seconds between refreshes of live games nobody is watching or follows
 WARM_PER_PASS = 4                     # background loads per poll pass when no game is on (passes every 30 s)
 WARM_PER_PASS_BUSY = 1                # ... and while games are on (passes every 10 s)
-FIGHT_POLL = 60                       # seconds between fight checks of live games someone wants fight alerts for  # game pages: never more than a refresh or two behind
+ODDS_POLL = 1800                      # seconds between ESPN over/under checks (lines move slowly)
+FIGHT_POLL = 60                       # seconds between fight checks of live games someone wants fight alerts for
 SLOW_PASS = 5              # seconds: a scoreboard pass slower than this is logged
 LIVE_POLL = 10            # seconds between score refreshes while a game is on (or about to start)
 IDLE_POLL = 300           # ... and otherwise
@@ -126,8 +128,13 @@ class Feed:
         return await self._load_game(game_id)
 
     async def _load_game(self, game_id: int) -> dict:
-        return await self.cached(f"game:{game_id}", "game", lambda: self._game_fetch(game_id), _game_ttl,
-                                 stale_ok=_game_stale_ok)
+        key = f"game:{game_id}"
+        hit = self.store.get(key)
+        if hit and hit["data"].get("shape") != GAME_SHAPE:
+            # Saved before the page gained fields (e.g. the pre-game preview): expire it and wait for a fresh copy.
+            self.store.put(key, hit["data"], timedelta(seconds=-1))
+            return await self._fetch(key, "game", lambda: self._game_fetch(game_id), _game_ttl)
+        return await self.cached(key, "game", lambda: self._game_fetch(game_id), _game_ttl, stale_ok=_game_stale_ok)
 
     async def _game_fetch(self, game_id: int) -> dict:
         landing, rail, box, pbp = await asyncio.gather(
@@ -140,7 +147,8 @@ class Feed:
         detail = nhl.parse_detail(landing, None if isinstance(rail, Exception) else rail,
                                   None if isinstance(box, Exception) else box)
         plays = {"shots": [], "situation": None} if isinstance(pbp, Exception) else nhl.parse_pbp(pbp)
-        return {**detail, "shotmap": plays["shots"], "situation": plays["situation"], "recap": nhl.recap(detail)}
+        return {**detail, "shotmap": plays["shots"], "situation": plays["situation"], "recap": nhl.recap(detail),
+                "shape": GAME_SHAPE}
 
     async def standings(self) -> list:
         async def fetch():
@@ -384,6 +392,7 @@ class Feed:
                 if busy or now - last_idle >= IDLE_POLL:
                     day = await self.poll_today()
                     last_idle = now
+                    odds.note(day["games"])  # the NHL drops a game's line at puck drop: keep the last one
                     busy = _busy(day)
                     if self.alerts:
                         await self.alerts.on_day(day)
@@ -400,6 +409,7 @@ class Feed:
                     ours = slate_date()
                     if day.get("date") and day["date"] < ours:
                         ours_day = await self.day(ours)
+                        odds.note(ours_day["games"])
                         busy = busy or _busy(ours_day)
                         if self.alerts:
                             await self.alerts.on_day(ours_day)
@@ -420,7 +430,7 @@ class Feed:
             await asyncio.sleep(LIVE_POLL if self.busy else 30)
 
     async def _background_loop(self) -> None:
-        last_standings = last_wire = last_career = last_fights = 0.0
+        last_standings = last_wire = last_career = last_fights = last_odds = 0.0
         last_detail: dict[int, float] = {}
         while True:
             started = time.time()
@@ -462,6 +472,9 @@ class Feed:
                     favs = {t for u in self.store.users() if u["status"] == "approved"
                             for t in (u["settings"] or {}).get("favorites") or [] if not t.startswith(pwhl.PREFIX)}
                     await self.refresh_careers(favs)
+                if now - last_odds >= ODDS_POLL:
+                    last_odds = now
+                    await self.refresh_totals()
                 if now - last_standings >= STANDINGS_TTL.total_seconds():
                     last_standings = now
                     await self._fetch("standings", "standings", _get_standings, STANDINGS_TTL)
@@ -478,6 +491,18 @@ class Feed:
             if took > SLOW_PASS * 3:
                 log.warning("background pass took %.1f s", took)
             await asyncio.sleep(LIVE_POLL if self.busy else 30)
+
+    async def refresh_totals(self) -> None:
+        """Expected goals (ESPN's over/under) for the slate's games that haven't started."""
+        date = self.opening_day()
+        try:
+            totals = await odds.fetch_totals(date)
+        except Exception as exc:
+            log.warning("odds totals failed: %r", exc)
+            self.store.record_run("odds", False, f"{type(exc).__name__}: {exc}"[:300])
+            return
+        self.store.record_run("odds", True)
+        odds.note_totals((await self.day(date))["games"], totals)
 
     def favourite_teams(self) -> set[str]:
         return {t for u in self.store.users() if u["status"] == "approved"

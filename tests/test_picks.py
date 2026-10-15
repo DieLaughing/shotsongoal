@@ -48,7 +48,7 @@ def test_one_lock_per_night_and_scoring():
     nhl = picks.board("a@x", names, ["nhl"], "2026-10-14")["table"]
     assert [(r["name"], r["pts"], r["w"], r["l"]) for r in nhl] == [("Al", 1, 1, 1), ("Bo", 0, 0, 2)]
     both = picks.board("a@x", names, ["nhl", "pwhl"], "2026-10-14")
-    assert both["table"][0] == {"name": "Al", "me": True, "pts": 2, "w": 2, "l": 1}  # the lost lock scores nothing
+    assert both["table"][0] == {"name": "Al", "me": True, "pts": 2, "w": 2, "l": 1, "upsets": 0}  # the lost lock scores nothing
     assert both["last"]["date"] == "2026-10-13" and both["season"] == "2026-27"
 
 

@@ -1,21 +1,29 @@
-"""Pick'em: everyone picks a winner for each game (NHL and PWHL) before puck drop. A right pick is 1 point; one
-"lock of the night" per date is worth 2 if right (0 if wrong). Results are filled in from the day slates the app
-already loads, so this never asks the leagues for anything extra. Friends' picks show once a game has started."""
+"""Pick'em: everyone picks a winner for each game (NHL and PWHL) before puck drop. A right pick is 1 point, or 2 when
+the team won as the underdog (the last DraftKings line before puck drop, see odds.py; games from UPSET_FROM on).
+One "lock of the night" per date doubles that if right (0 if wrong). Results are filled in from the day slates the
+app already loads, so this never asks the leagues for anything extra. Friends' picks show once a game has started."""
 from __future__ import annotations
 
+import os
 import sqlite3
 import threading
 from datetime import date as Date, datetime, timedelta, timezone
+
+from . import odds
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS pick (
     email TEXT NOT NULL, league TEXT NOT NULL, game_id INTEGER NOT NULL, date TEXT NOT NULL, start TEXT,
     team TEXT NOT NULL, lock INTEGER NOT NULL DEFAULT 0, created TEXT NOT NULL,
     won INTEGER,                                    -- NULL until the game is final
+    dog INTEGER NOT NULL DEFAULT 0,                 -- 1 = picked the underdog (set with the result)
     PRIMARY KEY (email, league, game_id)
 );
 CREATE INDEX IF NOT EXISTS pick_date ON pick (date);
 """
+
+# The upset bonus counts for games on or after this date, so picks made under the old rules keep their points.
+UPSET_FROM = os.environ.get("SOG_UPSET_FROM", "2026-10-19")
 
 _conn: sqlite3.Connection | None = None
 _lock = threading.Lock()
@@ -26,6 +34,8 @@ def init(conn: sqlite3.Connection) -> None:
     _conn = conn
     with _lock, conn:
         conn.executescript(SCHEMA)
+        if "dog" not in {r[1] for r in conn.execute("PRAGMA table_info(pick)")}:
+            conn.execute("ALTER TABLE pick ADD COLUMN dog INTEGER NOT NULL DEFAULT 0")
 
 
 def _rows(sql: str, args: tuple = ()) -> list[dict]:
@@ -103,8 +113,9 @@ def record_results(games: list[dict]) -> int:
             if g.get("state") != "final" or a is None or h is None or a == h:
                 continue
             winner = g["away"]["abbr"] if a > h else g["home"]["abbr"]
-            n += _conn.execute("UPDATE pick SET won = (team = ?) WHERE league=? AND game_id=? AND won IS NULL",
-                               (winner, league(g), g["id"])).rowcount
+            dog = odds.underdog(league(g), g["id"]) if (g.get("date") or "") >= UPSET_FROM else None
+            n += _conn.execute("UPDATE pick SET won = (team = ?), dog = (team = ?) WHERE league=? AND game_id=? AND won IS NULL",
+                               (winner, g[dog]["abbr"] if dog else "", league(g), g["id"])).rowcount
     return n
 
 
@@ -114,6 +125,15 @@ def pending(before: str) -> list[tuple[str, str]]:
         "SELECT DISTINCT league, date FROM pick WHERE won IS NULL AND date <= ? ORDER BY date DESC LIMIT 10", (before,))]
 
 
+def points(won: bool, lock: bool, dog: bool) -> int:
+    return ((2 if dog else 1) * (2 if lock else 1)) if won else 0
+
+
+def bonus_on(g: dict) -> bool:
+    """Whether a right underdog pick on this game earns the upset bonus."""
+    return (g.get("date") or "") >= UPSET_FROM
+
+
 def for_games(email: str, games: list[dict], names: dict[str, str], now: datetime | None = None) -> list[dict]:
     """The games with this person's pick, and everyone's once the game has started."""
     out = []
@@ -121,7 +141,7 @@ def for_games(email: str, games: list[dict], names: dict[str, str], now: datetim
     by_game: dict[tuple, list[dict]] = {}
     if games:
         marks = ",".join("?" * len(games))
-        for r in _rows(f"SELECT league, game_id, email, team, lock, won FROM pick WHERE game_id IN ({marks}) ORDER BY created",
+        for r in _rows(f"SELECT league, game_id, email, team, lock, won, dog FROM pick WHERE game_id IN ({marks}) ORDER BY created",
                        tuple(g["id"] for g in games)):
             by_game.setdefault((r["league"], r["game_id"]), []).append(r)
     for g in games:
@@ -131,6 +151,8 @@ def for_games(email: str, games: list[dict], names: dict[str, str], now: datetim
                      "me": r["email"] == email} for r in rows if r["email"] in names] if started(g, now) else None
         out.append({**g, "mine": mine["team"] if mine else None, "lock": bool(mine and mine["lock"]),
                     "won": None if not mine or mine["won"] is None else bool(mine["won"]),
+                    "pts": points(bool(mine["won"]), bool(mine["lock"]), bool(mine["dog"])) if mine and mine["won"] is not None else None,
+                    "bonus": bonus_on(g),
                     "picks": everyone, "count": len(rows)})
     return out
 
@@ -139,7 +161,7 @@ def board(email: str, names: dict[str, str], leagues: list[str], today: str) -> 
     """Season table, this week and the last night with results, for the given leagues."""
     lo, hi = season_bounds(season_of(today))
     marks = ",".join("?" * len(leagues))
-    rows = _rows(f"SELECT email, date, lock, won FROM pick WHERE won IS NOT NULL AND date BETWEEN ? AND ? "
+    rows = _rows(f"SELECT email, date, lock, won, dog FROM pick WHERE won IS NOT NULL AND date BETWEEN ? AND ? "
                  f"AND league IN ({marks})", (lo, hi, *leagues))
     rows = [r for r in rows if r["email"] in names]
     week_from = week_start(today)
@@ -147,9 +169,10 @@ def board(email: str, names: dict[str, str], leagues: list[str], today: str) -> 
     def table(picked: list[dict]) -> list[dict]:
         people: dict[str, dict] = {}
         for r in picked:
-            p = people.setdefault(r["email"], {"name": names[r["email"]], "me": r["email"] == email, "pts": 0, "w": 0, "l": 0})
+            p = people.setdefault(r["email"], {"name": names[r["email"]], "me": r["email"] == email, "pts": 0, "w": 0, "l": 0, "upsets": 0})
             p["w" if r["won"] else "l"] += 1
-            p["pts"] += (2 if r["lock"] else 1) if r["won"] else 0
+            p["upsets"] += 1 if r["won"] and r["dog"] else 0
+            p["pts"] += points(bool(r["won"]), bool(r["lock"]), bool(r["dog"]))
         return sorted(people.values(), key=lambda p: (-p["pts"], -p["w"], p["l"], p["name"].lower()))
 
     last_day = max((r["date"] for r in rows), default=None)

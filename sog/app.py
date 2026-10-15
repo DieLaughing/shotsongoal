@@ -19,7 +19,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Red
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import access, bugs, alerts, changes, home, ics, picks, pwhl, social, spoilers, teams, watch, wire
+from . import access, bugs, alerts, changes, home, ics, odds, picks, pwhl, social, spoilers, teams, watch, wire
 from .db import Store, parse_iso
 from .feed import Feed
 from .push import Pusher
@@ -38,6 +38,7 @@ log = logging.getLogger("sog.app")
 store = Store(DATA_DIR / "sog.db")
 bugs.init(store.conn)
 picks.init(store.conn)
+odds.init(store.conn)
 social.init(store.conn)
 feed = Feed(store)
 pusher = Pusher(DATA_DIR, access.ADMIN)
@@ -223,9 +224,10 @@ async def save_settings(request: Request):
         "notify": alerts.prefs(body),
         "seen_changes": str(body.get("seen_changes") or "")[:120],  # newest What's new entry this person has seen
         "spoilers": spoilers.clean(body.get("spoilers"), teams.ALL),
-        "nickname": clean_name(body.get("nickname")),
+        "nickname": clean_name(body.get("nickname")),  # what friends see in Pick'em; empty = the email's first part
         "hand": "left" if body.get("hand") == "left" else "right",  # which side game buttons sit on touch screens
-        "animations": body.get("animations") is not False,  # page transitions (Settings > Display); on unless turned off  # what friends see in Pick'em; empty = the email's first part
+        "odds": body.get("odds") is not False,  # favourites and expected goals on games (Settings > Display); on by default
+        "animations": body.get("animations") is not False,  # page transitions (Settings > Display); on unless turned off
     }
     store.save_settings(request.state.email, clean)
     return clean
@@ -443,7 +445,7 @@ async def games(request: Request, date: str | None = None, league: str = "nhl"):
     # No date = today in Eastern time (last night's games until 6 am); see feed.slate_date.
     target = date or feed.opening_day()
     day = await _upstream(feed.today_page() if target == feed.today else feed.day(target))
-    return {**day, "games": _with_watchers(_with_watch([dict(g) for g in day["games"]], _settings(request)), request)}
+    return {**day, "games": odds.attach(_with_watchers(_with_watch([dict(g) for g in day["games"]], _settings(request)), request))}
 
 
 LIVE_FIELDS = ("state", "raw_state", "period", "clock", "running", "intermission", "outcome", "situation")
@@ -468,7 +470,19 @@ async def game(game_id: int, request: Request):
     detail = await _upstream(feed.game(game_id))
     detail = {**detail, "game": _freshen(dict(detail["game"]))}
     _with_watch([detail["game"]], _settings(request))
+    odds.attach([detail["game"]])
+    if detail.get("preview"):
+        detail = {**detail, "preview": _with_places(detail["preview"], detail["game"])}
     return {**detail, "social": social.for_game(request.state.email, detail["game"], people())}
+
+
+def _with_places(preview: dict, g: dict) -> dict:
+    """Each team's place in its division, from the saved standings (never waits on the league)."""
+    hit = store.get("standings")
+    rows = {r["abbr"]: r for r in (hit["data"] if hit else [])}
+    places = {side: {k: rows[g[side]["abbr"]].get(k) for k in ("div", "div_rank", "pts", "gp")}
+              for side in ("away", "home") if g[side]["abbr"] in rows}
+    return {**preview, "places": places}
 
 
 @app.get("/api/pwhl/game/{game_id}")
@@ -623,7 +637,7 @@ async def pickem(request: Request, date: str | None = None, leagues: str = "nhl"
     today = feed.opening_day()
     date = date or today
     days = await asyncio.gather(*[_upstream(_slate(lg, date)) for lg in lgs])
-    games = [dict(g, league=lg) for lg, d in zip(lgs, days) for g in d["games"]]
+    games = odds.attach([dict(g, league=lg) for lg, d in zip(lgs, days) for g in d["games"]])
     picks.record_results(games)
     for lg, d in picks.pending(today):  # older picks still waiting for a result (the app was down, say)
         if (d != date or lg not in lgs) and d < today:
