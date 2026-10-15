@@ -23,7 +23,7 @@ CREATE INDEX IF NOT EXISTS pick_date ON pick (date);
 """
 
 # The upset bonus counts for games on or after this date, so picks made under the old rules keep their points.
-UPSET_FROM = os.environ.get("SOG_UPSET_FROM", "2026-10-19")
+UPSET_FROM = os.environ.get("SOG_UPSET_FROM", "2026-10-15")
 
 _conn: sqlite3.Connection | None = None
 _lock = threading.Lock()

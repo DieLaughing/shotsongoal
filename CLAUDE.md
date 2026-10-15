@@ -77,7 +77,7 @@ which is not committed.
   query). Expected goals = ESPN scoreboard overUnder, every ODDS_POLL (30 min) in the background loop. odds.attach
   adds favourite, vig-free win %, high (7+) / low (5.5-) scoring and, once final, upset. No sportsbook links or logos.
   Pick'em upset bonus: a right underdog pick is 2 pts, the lock doubles (4); pick.dog is set with the result, only for
-  games from picks.UPSET_FROM (SOG_UPSET_FROM, default 2026-10-19) so older picks keep their points. PWHL has no odds.
+  games from picks.UPSET_FROM (SOG_UPSET_FROM, default 2026-10-15) so older picks keep their points. PWHL has no odds.
 - Pre-game matchup (game page, state pre only): nhl.parse_preview from the landing's `matchup` + right-rail
   (last10Record, teamSeasonStats with ranks, seasonSeries, gameInfo coaches/scratches); no extra requests.
   /api/game adds division places from the saved standings (_with_places). The NHL names no starting goalies
