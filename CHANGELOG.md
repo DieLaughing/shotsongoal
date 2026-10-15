@@ -5,6 +5,7 @@ This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit th
 
 ## October 14, 2026
 
+- **Improved: Tidier game page, and buttons under your thumb.** The top of a game page is now in clear groups. The score card is just the game (a power play or 4 on 4 shows under the clock), then where to watch it with one button per app, then you and your friends, with "I'm watching" and "Watching later" side by side. On a phone, foldable or tablet the buttons sit on your thumb's side. Left-handed? Settings → Display has a Right-handed / Left-handed switch. On a computer they're centred.
 - **Fixed: Livelier game clock.** Left a game or Tonight open during play and the clock seemed stuck? On busy nights the scoreboard was waiting behind other background work. It now updates on its own steady beat, and open live pages check every 10 seconds, so the clock and score keep up with the NHL's own scoreboard (which itself moves about every 20 seconds).
 
 ## October 13, 2026

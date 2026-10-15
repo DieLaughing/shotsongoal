@@ -224,6 +224,7 @@ async def save_settings(request: Request):
         "seen_changes": str(body.get("seen_changes") or "")[:120],  # newest What's new entry this person has seen
         "spoilers": spoilers.clean(body.get("spoilers"), teams.ALL),
         "nickname": clean_name(body.get("nickname")),
+        "hand": "left" if body.get("hand") == "left" else "right",  # which side game buttons sit on touch screens
         "animations": body.get("animations") is not False,  # page transitions (Settings > Display); on unless turned off  # what friends see in Pick'em; empty = the email's first part
     }
     store.save_settings(request.state.email, clean)
