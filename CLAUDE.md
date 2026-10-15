@@ -68,9 +68,16 @@ which is not committed.
   blurred; alerts.py skips goal/final pushes (puck drop still sent).
 - Pick'em (#/picks, sog/picks.py, pick table): one pick per person per game before its start (server checks the
   slate's state/start), one lock per date (2 pts if right, 0 if wrong). Results are filled from final games in the
-  slates GET /api/pickem loads (+ up to 10 older pending dates). Friends' picks only after puck drop; names =
+  slates GET /api/pickem loads (+ up to 10 older pending dates); underdog bonus: see Odds. Friends' picks only after puck drop; names =
   settings.nickname or the email's local part (friend_names(); emails never sent). Season = Jul-Jun, week = Mon-Sun.
   The table is covered while a spoiler-free game is hidden.
+- Odds, for fun (sog/odds.py; Settings > Display > Show odds, on by default): the DraftKings moneyline comes free in the
+  NHL score feed (oddsPartners, matched by name; nhl.parse_score -> g.odds) but vanishes at puck drop, so the
+  scoreboard loop saves each pre-game line to game_odds (write on change; all rows kept in memory, pages never
+  query). Expected goals = ESPN scoreboard overUnder, every ODDS_POLL (30 min) in the background loop. odds.attach
+  adds favourite, vig-free win %, high (7+) / low (5.5-) scoring and, once final, upset. No sportsbook links or logos.
+  Pick'em upset bonus: a right underdog pick is 2 pts, the lock doubles (4); pick.dog is set with the result, only for
+  games from picks.UPSET_FROM (SOG_UPSET_FROM, default 2026-10-19) so older picks keep their points. PWHL has no odds.
 - Friends on games (sog/social.py): watching + reaction tables. /api/games adds g.watching, game pages add d.social
   (watching, reactions per event key g:<period>-<time>-<scorer> / p:...-<player>, mine, rivals). Rival = a friend
   whose first favourite in that league is the other team; the final alert appends "Tell X." / "X will enjoy this one."

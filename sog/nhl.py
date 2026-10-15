@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from curl_cffi.requests import AsyncSession
 
+from .odds import american
+
 BASE = "https://api-web.nhle.com/v1"
 _session: AsyncSession | None = None
 
@@ -94,7 +96,20 @@ def _score_goals(g: dict) -> list[dict]:
     return out
 
 
-def parse_game(g: dict) -> dict:
+ODDS_PARTNER = "DraftKings"   # the US book in the scoreboard's oddsPartners list
+ODDS_PARTNER_ID = 9           # its id there, used if the list is missing
+
+
+def _odds(g: dict, partner: int) -> dict | None:
+    """The partner's moneyline for both teams: {"away": -102, "home": -118}. The NHL drops odds once a game starts."""
+    line = {}
+    for side in ("away", "home"):
+        v = next((o.get("value") for o in (g.get(f"{side}Team") or {}).get("odds") or [] if o.get("providerId") == partner), None)
+        line[side] = american(v)
+    return line if None not in line.values() else None
+
+
+def parse_game(g: dict, odds_partner: int | None = None) -> dict:
     clock = g.get("clock") or {}
     pd = g.get("periodDescriptor") or {}
     state = g.get("gameState") or "FUT"
@@ -120,6 +135,7 @@ def parse_game(g: dict) -> dict:
         "broadcasts": [{"network": (b.get("network") or "").strip(), "market": b.get("market"),
                         "country": b.get("countryCode")} for b in g.get("tvBroadcasts") or []],
         "goals": _score_goals(g),
+        "odds": _odds(g, odds_partner) if odds_partner else None,
         "situation": parse_situation((g.get("situation") or {}).get("situationCode"),
                                      (g.get("awayTeam") or {}).get("abbrev") or "", (g.get("homeTeam") or {}).get("abbrev") or "",
                                      pd.get("periodType")) if state in ("LIVE", "CRIT") else None,
@@ -127,9 +143,10 @@ def parse_game(g: dict) -> dict:
 
 
 def parse_score(data: dict) -> dict:
-    """The /score/<date> day: every game with live score and clock."""
+    """The /score/<date> day: every game with live score and clock, and the moneyline before puck drop."""
+    partner = next((p.get("partnerId") for p in data.get("oddsPartners") or [] if p.get("name") == ODDS_PARTNER), ODDS_PARTNER_ID)
     return {"date": data.get("currentDate"), "prev": data.get("prevDate"), "next": data.get("nextDate"),
-            "games": [parse_game(g) for g in data.get("games") or []]}
+            "games": [parse_game(g, partner) for g in data.get("games") or []]}
 
 
 def _player_name(p: dict | None) -> str:
