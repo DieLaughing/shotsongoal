@@ -448,3 +448,16 @@ html, body { overflow-x: clip; }
 .sitpill { display: inline-block; margin-top: 6px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 750;
   color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface));
   border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+
+/* odds, for fun (oddsLine / oddsBlock) */
+.odds { margin-top: 6px; font-size: 12.5px; color: var(--muted); }
+.upset { color: var(--accent); font-weight: 750; }
+.oddsbar { display: flex; gap: 2px; height: 22px; border-radius: 999px; overflow: hidden; font-size: 11.5px; font-weight: 700; }
+.oddsbar span { background: var(--c); color: #fff; display: flex; align-items: center; padding: 0 9px; white-space: nowrap; min-width: 0;
+  text-shadow: 0 0 2px rgba(0, 0, 0, .5); }
+.oddsbar span + span { justify-content: flex-end; }
+.odds-src { font-size: 11.5px; color: var(--muted); }
+.pick-odds { display: grid; grid-template-columns: 1fr 64px 1fr 40px; gap: 8px; padding-top: 4px; font-size: 11.5px; color: var(--muted);
+  font-variant-numeric: tabular-nums; }
+.pick-odds > span { padding-left: 8px; }
+.pick-odds .dog { color: var(--accent); font-weight: 700; }
