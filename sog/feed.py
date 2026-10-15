@@ -19,6 +19,7 @@ log = logging.getLogger("sog.feed")
 
 STALE_OK = timedelta(days=1)          # an expired saved copy this young is shown while a fresh one loads
 GAME_STALE_OK = timedelta(minutes=1)
+GAME_SHAPE = 2                        # bump when parse_detail gains fields pages need: older saved copies are refetched
 CAREER_TTL = timedelta(hours=20)      # milestone watch: career totals, about once a day
 CAREER_POLL = 1800                    # seconds between checks that careers are saved
 WARM_LIVE_POLL = 90                   # seconds between refreshes of live games nobody is watching or follows
@@ -127,8 +128,13 @@ class Feed:
         return await self._load_game(game_id)
 
     async def _load_game(self, game_id: int) -> dict:
-        return await self.cached(f"game:{game_id}", "game", lambda: self._game_fetch(game_id), _game_ttl,
-                                 stale_ok=_game_stale_ok)
+        key = f"game:{game_id}"
+        hit = self.store.get(key)
+        if hit and hit["data"].get("shape") != GAME_SHAPE:
+            # Saved before the page gained fields (e.g. the pre-game preview): expire it and wait for a fresh copy.
+            self.store.put(key, hit["data"], timedelta(seconds=-1))
+            return await self._fetch(key, "game", lambda: self._game_fetch(game_id), _game_ttl)
+        return await self.cached(key, "game", lambda: self._game_fetch(game_id), _game_ttl, stale_ok=_game_stale_ok)
 
     async def _game_fetch(self, game_id: int) -> dict:
         landing, rail, box, pbp = await asyncio.gather(
@@ -141,7 +147,8 @@ class Feed:
         detail = nhl.parse_detail(landing, None if isinstance(rail, Exception) else rail,
                                   None if isinstance(box, Exception) else box)
         plays = {"shots": [], "situation": None} if isinstance(pbp, Exception) else nhl.parse_pbp(pbp)
-        return {**detail, "shotmap": plays["shots"], "situation": plays["situation"], "recap": nhl.recap(detail)}
+        return {**detail, "shotmap": plays["shots"], "situation": plays["situation"], "recap": nhl.recap(detail),
+                "shape": GAME_SHAPE}
 
     async def standings(self) -> list:
         async def fetch():
