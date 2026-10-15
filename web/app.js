@@ -277,6 +277,7 @@ function oddsBlock(g, ac, hc) {
   const o = g.odds;
   if (!oddsOn() || !o || (g.state !== "pre" && !(g.state === "final" && o.upset != null))) return "";
   const a = g.away.abbr, h = g.home.abbr;
+  ac = apart(ac, hc);
   const bar = o.away_pct ? `<div class="oddsbar" role="img" aria-label="${esc(teamName(a))} ${o.away_pct}%, ${esc(teamName(h))} ${o.home_pct}%">
       <span style="--c:${esc(ac)};flex:${o.away_pct}">${esc(TEAMS[a]?.code || a)} ${o.away_pct}%</span>
       <span style="--c:${esc(hc)};flex:${o.home_pct}">${o.home_pct}% ${esc(TEAMS[h]?.code || h)}</span></div>` : "";
@@ -798,6 +799,69 @@ function compareRow(label, a, h, ac, hc) {
     <span class="v">${esc(h)}</span></div>`;
 }
 
+// Before puck drop: the matchup (sog/nhl.py parse_preview). It goes away once the game starts.
+const RES_WORD = { W: "Win", L: "Loss", OT: "OT/SO loss" };
+// Two teams in near-identical colours (Sabres and Leafs are both navy) would read as one bar: grey out the away side.
+function apart(ac, hc) {
+  const rgb = c => /^#[0-9a-f]{6}$/i.test(c) ? [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)) : null;
+  const x = rgb(ac), y = rgb(hc);
+  return x && y && Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) < 80 ? "var(--muted)" : ac;
+}
+function previewBlock(p, a, h, ac, hc) {
+  ac = apart(ac, hc);
+  const side = (s, abbr) => {
+    const f = p.form[s] || {}, pl = p.places?.[s];
+    const dots = [...(f.last || [])].reverse().map(r => `<i class="res-${r.res}" title="${esc(RES_WORD[r.res])} vs ${esc(r.opp)}"></i>`).join("");
+    const bits = [f.record, pl?.div_rank ? `${ordinal(pl.div_rank)} in ${pl.div}` : "", f.streak ? `streak ${f.streak}` : ""].filter(Boolean);
+    return `<div class="form-row">${mark(abbr)}<div><div class="who">${esc(teamName(abbr))}</div><div class="detail">${esc(bits.join(" · "))}</div></div>
+      ${dots ? `<div class="dots" aria-label="Recent results, oldest first">${dots}</div>` : ""}</div>`;
+  };
+  let out = `<h2>Matchup</h2><div class="card">${side("away", a)}${side("home", h)}
+    <div class="pre-note">Recent results, oldest to newest: <i class="res-W"></i> win <i class="res-OT"></i> OT/SO loss <i class="res-L"></i> loss</div></div>`;
+
+  if (p.stats.length) {
+    // The better side is bold; the bar fills toward it (lower is better for goals against).
+    const row = s => {
+      const na = parseFloat(s.away), nh = parseFloat(s.home);
+      const [wa, wh] = s.low ? [nh, na] : [na, nh], total = wa + wh || 1;
+      const better = na === nh ? null : (na > nh) !== s.low ? "away" : "home";
+      const val = (v, r, me) => `<span class="v${better === me ? " best" : ""}">${esc(v)}${r ? `<small>${esc(ordinal(r))}</small>` : ""}</span>`;
+      return `<div class="cmp">${val(s.away, s.away_rank, "away")}
+        <div><div class="lbl">${esc(s.label)}</div><div class="bar"><i style="width:${wa / total * 100}%;background:${ac}"></i><i style="width:${wh / total * 100}%;background:${hc}"></i></div></div>
+        ${val(s.home, s.home_rank, "home")}</div>`;
+    };
+    out += `<h2>Season so far</h2><div class="card compare pre">
+      <div class="cmp"><span>${mark(a)}</span><span class="muted small" style="text-align:center">League rank under each number</span><span style="text-align:right">${mark(h)}</span></div>
+      ${p.stats.map(row).join("")}</div>`;
+  }
+
+  if (p.hot.length) {
+    const who = x => x ? `<div><div class="who">${esc(x.name)} <span class="muted small">${esc(x.pos || "")}</span></div><div class="big-num">${x.value}</div></div>` : "<div></div>";
+    out += `<h2>Who's hot · ${esc(p.hot_context)}</h2><div class="card">${p.hot.map(r =>
+      `<div class="hot-row">${who(r.away)}<div class="lbl">${esc(r.label)}</div>${who(r.home)}</div>`).join("")}</div>`;
+  }
+
+  if (p.goalies.away.length || p.goalies.home.length) {
+    const gl = (s, abbr) => p.goalies[s].map(x => `<div class="event g-row">${mark(abbr)}<div><div class="who">${esc(x.name)} <span class="muted small">#${x.number ?? ""}</span></div>
+      <div class="detail">${esc(x.record || "")} · ${x.sv != null ? x.sv.toFixed(3).replace(/^0/, "") : "–"} SV% · ${x.gaa != null ? x.gaa.toFixed(2) : "–"} GAA${x.so ? ` · ${x.so} SO` : ""} · ${x.gp} GP</div></div></div>`).join("");
+    out += `<h2>Goalies this season</h2><div class="card">${gl("away", a)}${gl("home", h)}</div>
+      <p class="help">The NHL doesn't name starting goalies ahead of time. These are each team's goalies this season, most games first.</p>`;
+  }
+
+  const ser = p.series, done = ser.games.filter(x => x.state === "final"), next = ser.games.filter(x => x.state === "pre");
+  const lead = ser.away_wins === ser.home_wins ? (done.length ? `Series tied ${ser.away_wins}–${ser.home_wins}` : "First meeting this season")
+    : `${teamName(ser.away_wins > ser.home_wins ? a : h)} lead the season series ${Math.max(ser.away_wins, ser.home_wins)}–${Math.min(ser.away_wins, ser.home_wins)}`;
+  out += `<h2>Season series</h2><div class="card pad small"><b>${esc(lead)}</b>
+    ${done.map(x => `<div class="detail">${esc(shortDate(x.date))}: ${esc(x.away)} ${x.away_score}, ${esc(x.home)} ${x.home_score}${x.outcome && x.outcome !== "REG" ? ` (${esc(x.outcome)})` : ""}</div>`).join("")}
+    ${next.length ? `<div class="detail">Still to come: ${next.map(x => `${esc(shortDate(x.date))}, ${esc(x.away)} at ${esc(x.home)}`).join(" · ")}</div>` : ""}
+  </div>`;
+
+  const ppl = p.people || {}, coach = ["away", "home"].filter(s => ppl[s]?.coach).map(s => `${esc(teamName(s === "away" ? a : h))}: ${esc(ppl[s].coach)}`);
+  const scr = ["away", "home"].filter(s => ppl[s]?.scratches?.length).map(s => `${esc(teamName(s === "away" ? a : h))}: ${esc(ppl[s].scratches.join(", "))}`);
+  if (coach.length || scr.length) out += `<p class="help">${coach.length ? `Coaches · ${coach.join(" · ")}` : ""}${scr.length ? `<br>Scratches · ${scr.join(" · ")}` : ""}</p>`;
+  return out;
+}
+
 let moreStatsOpen = false;  // stays open across the live refresh
 async function gameView(id, quiet = false, league = "nhl") {
   setNav("tonight");
@@ -862,6 +926,8 @@ async function gameView(id, quiet = false, league = "nhl") {
     ${social}
   </div>
   ${d.recap ? `<p class="recap">${esc(d.recap)}</p>` : ""}`;
+
+  if (g.state === "pre" && d.preview) html += previewBlock(d.preview, a, h, ac, hc);
 
   const goals = d.scoring.filter(p => p.goals.length);
   if (goals.length) {
