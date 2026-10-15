@@ -83,6 +83,8 @@ which is not committed.
   /api/game adds division places from the saved standings (_with_places). The NHL names no starting goalies
   pre-game, so the page lists each team's goalies this season. previewBlock() in web/app.js; apart() greys the away
   side of a bar when both team colours are near-identical.
+  Saved game copies carry `shape` (feed.GAME_SHAPE): bump it whenever parse_detail gains fields a page needs, or
+  pre-game copies saved before the deploy keep the old fields for up to 30 minutes (a never-expiring final forever).
 - Friends on games (sog/social.py): watching + reaction tables. /api/games adds g.watching, game pages add d.social
   (watching, reactions per event key g:<period>-<time>-<scorer> / p:...-<player>, mine, rivals). Rival = a friend
   whose first favourite in that league is the other team; the final alert appends "Tell X." / "X will enjoy this one."
