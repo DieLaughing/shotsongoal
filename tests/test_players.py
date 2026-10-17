@@ -176,7 +176,7 @@ def test_image_routes_reject_made_up_names(client, monkeypatch):
     _fake_leagues(monkeypatch)
     as_user(monkeypatch, "owner@x.com")
     for path in ("/img/p/nhl/XXX/8477956-96.webp", "/img/p/nhl/BOS/8477956-50.webp", "/img/p/nhl/BOS/..%2Fsog.db",
-                 "/img/p/pwhl/BOS/12-96.webp", "/img/logo/BOS-blue.svg", "/img/logo/PW-XXX-96.webp", "/img/logo/x.svg"):
+                 "/img/p/pwhl/BOS/12-96.webp"):
         assert client.get(path).status_code == 404, path
     assert client.get("/img/p/nhl/BOS/8477956-96.webp").status_code == 404   # the league has no photo: a plain miss
 
@@ -187,3 +187,35 @@ def test_marks_and_photos_settings(client, monkeypatch):
     assert s["marks"] == "logos" and s["photos"] is False
     s = client.put("/api/settings", json={"marks": "<script>"}).json()
     assert s["marks"] == "badges" and s["photos"] is True
+
+
+def test_logos_are_one_stylesheet(tmp_path):
+    """Every logo in one CSS file, light and dark; a team without a logo gets no rule (and keeps its badge)."""
+    from sog import images
+    png = io.BytesIO()
+    Image.new("RGBA", (200, 120), (10, 80, 60, 255)).save(png, "PNG")
+
+    async def fake_get(self, url):
+        if "/tor.png" in url:
+            raise images.Missing(url)
+        if "500-dark" in url:   # a different dark version: it gets its own rule
+            out = io.BytesIO()
+            Image.new("RGBA", (200, 120), (240, 240, 240, 255)).save(out, "PNG")
+            return out.getvalue()
+        return png.getvalue()
+    imgs = images.Images(tmp_path, lambda: "20262027")
+    imgs._get = fake_get.__get__(imgs)
+    path = asyncio.run(images.logos_css(imgs, ["BOS", "TOR"], {"PW-BOS": 1}))
+    css = path.read_text()
+    assert ".mark.lg-BOS{background:url(\"data:image/webp;base64," in css and "lg-TOR" not in css
+    assert ".mark.lg-PW-BOS{background:url(\"data:image/webp;base64," in css
+    assert css.index("@media (prefers-color-scheme: dark)") < css.rindex(".mark.lg-BOS{background-image")
+    assert images.css_version(path) and len(images.css_version(path)) == 10
+
+
+def test_me_offers_logos_only_when_chosen(client, monkeypatch):
+    _fake_leagues(monkeypatch)
+    as_user(monkeypatch, "owner@x.com")
+    assert client.get("/api/me").json()["logos"] is None
+    client.put("/api/settings", json={"marks": "logos"})
+    assert "logos" in client.get("/api/me").json()   # None until built (badges meanwhile), then a versioned URL

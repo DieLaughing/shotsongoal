@@ -491,11 +491,6 @@ html, body { overflow-x: clip; }
 .plink:hover, .plink:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
 .ph { border-radius: 50%; background: var(--border); object-fit: cover; flex: none; vertical-align: middle; }
 .ph.gone { visibility: hidden; }
-.mark.logo { background: none; position: relative; }
-.mark.logo .code { visibility: hidden; }
-.mark.logo img, .mark.logo picture { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
-.mark.nologo { background: var(--c, #666); }
-.mark.nologo img, .mark.nologo picture { display: none; }
 .pcell { display: inline-flex; align-items: center; gap: 8px; }
 .event.star .star-who { display: flex; align-items: center; gap: 10px; }
 .seg-top a { flex: 1; text-align: center; text-decoration: none; padding: 7px 10px; border-radius: 8px; color: var(--muted); font-weight: 650; font-size: 13.5px; }
@@ -509,14 +504,16 @@ html, body { overflow-x: clip; }
 .chip { font-size: 12.5px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); }
 .statline { display: flex; justify-content: space-between; gap: 6px; text-align: center; font-variant-numeric: tabular-nums; }
 .statline div { display: flex; flex-direction: column; flex: 1; }
-.statline b { font-size: 19px; }
+.statline b { font-size: 17px; }
 .statline span { font-size: 11px; color: var(--muted); font-weight: 650; letter-spacing: .04em; }
 .pad-x { padding: 10px 14px 12px; }
-.form { width: 100%; height: auto; margin-top: 6px; }
-.form rect { fill: var(--border); }
-.form rect.win { fill: var(--accent); }
-.form text { font-size: 9px; fill: var(--muted); }
-.form text.v { font-size: 10px; font-weight: 700; fill: var(--text); }
+.form { display: flex; gap: 6px; height: 118px; margin-top: 8px; max-width: 520px; }
+.form-col { flex: 1; display: grid; grid-template-rows: 1fr 18px; min-width: 0; }
+.form-area { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-top: 16px; min-height: 0; }
+.form-bar { width: 70%; max-width: 34px; border-radius: 3px 3px 0 0; background: var(--border); flex: none; }
+.form-bar.hit { background: var(--accent); }
+.form-v { font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 16px; }
+.form-x { font-size: 10.5px; color: var(--muted); text-align: center; align-self: center; }
 table.log tr[data-href] { cursor: pointer; }
 table.log th:nth-child(-n+2), table.log td:nth-child(-n+2) { text-align: left; }
 table.seasons tr.minor td { color: var(--muted); }
@@ -538,3 +535,16 @@ table.seasons td:nth-child(2) { white-space: normal; min-width: 7em; }
 .prow-main .mark { width: 28px; height: 18px; font-size: 9.5px; }
 .prow-val { font-weight: 750; font-size: 16px; font-variant-numeric: tabular-nums; }
 .search-box { width: 100%; font-size: 16px; padding: 11px 12px; margin: 4px 0 6px; }
+.team-head { display: flex; align-items: center; gap: 14px; }
+.grow { display: grid; grid-template-columns: 88px 1fr auto; align-items: center; gap: 10px; padding: 10px 14px; text-decoration: none; color: inherit; border-top: 1px solid var(--border); font-size: 14px; }
+.grow:first-child { border-top: 0; }
+.grow-date { color: var(--muted); font-size: 13px; }
+.grow-opp { min-width: 0; display: flex; align-items: center; gap: 6px; }
+table.log .tm { display: inline-flex; align-items: center; gap: 6px; }
+.grow-opp > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grow-r { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.res-w { color: var(--have-fg); }
+.res-l { color: var(--need-fg); }
+table.roster th:first-child, table.roster td:first-child { text-align: left; }
+table.roster td:first-child { white-space: normal; }
+table.roster .pcell > span { display: flex; flex-direction: column; line-height: 1.25; }

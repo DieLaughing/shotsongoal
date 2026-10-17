@@ -5,7 +5,7 @@ This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit th
 
 ## October 17, 2026
 
-- **New: Player pages, leaders and search.** Tap any player's name (goal scorers, assists, three stars, box scores, rosters, team leaders) for their own page. It has their photo, age, size and draft spot, this season's numbers, a chart and log of their last games, their whole career season by season, and awards. NHL players also get an Advanced tab with expected goals and shot share from MoneyPuck.com, showing how they rank against the league. The League tab now has Leaders (points, goals, assists, wins, save % and GAA, for the NHL and PWHL), and the magnifying glass at the top searches every player and team. Prefer logos to the coloured team badges? Settings → Display has a switch, and player photos can be turned off there too.
+- **New: Player pages, leaders and search.** Tap any player's name (goal scorers, assists, three stars, box scores, rosters, team leaders) for their own page. It has their photo, age, size and draft spot, this season's numbers, a chart and log of their last games, their whole career season by season, and awards. NHL players also get an Advanced tab with expected goals and shot share from MoneyPuck.com, showing how they rank against the league. The League tab now has Leaders (points, goals, assists, wins, save % and GAA, for the NHL and PWHL), and the magnifying glass at the top searches every player and team. Team pages are tidier too, with the next game up top and then Games, Players and News tabs, with the roster and this season's numbers in one table. Prefer logos to the coloured team badges? Settings → Display has a switch, and player photos can be turned off there too.
 
 ## October 16, 2026
 
