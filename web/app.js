@@ -1675,8 +1675,8 @@ function settingsView() {
     <div class="card checks"><label><input type="checkbox" id="animations" ${s.animations !== false ? "checked" : ""}>Animations between pages</label></div>
     <p class="help">Quick slides between tabs and pages. Turn them off for instant switching. They're also off whenever your phone's Reduce Motion setting is on.</p>
     <div class="seg" role="group" aria-label="Team marks">${[["badges", "Team badges"], ["logos", "Team logos"]].map(([k, l]) =>
-      `<button data-marks="${k}" class="${(s.marks || "badges") === k ? "on" : ""}">${l}</button>`).join("")}</div>
-    <p class="help">How teams show up everywhere: coloured badges with their letters, or the teams' own logos.</p>
+      `<button data-marks="${k}" class="${(s.marks || "logos") === k ? "on" : ""}">${l}</button>`).join("")}</div>
+    <p class="help">How teams show up everywhere: the teams' own logos, or coloured badges with their letters (the leanest).</p>
     <div class="card checks"><label><input type="checkbox" id="photos" ${s.photos !== false ? "checked" : ""}>Player photos</label></div>
     <p class="help">Faces on player pages, leaders, rosters and the three stars. They're small and the app keeps them after the first look; turn them off for the leanest pages.</p>
     <div class="card checks"><label><input type="checkbox" id="odds" ${s.odds !== false ? "checked" : ""}>Show odds</label></div>

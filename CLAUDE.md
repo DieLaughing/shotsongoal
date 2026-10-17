@@ -180,8 +180,8 @@ Operating rules shared with the sibling app (standards, speed budget, shared par
   (gamebygame needs season_id); PWHL photos assets.leaguestat.com/pwhl/240x240/<id>.jpg.
 
 ## Conventions
-- Team marks are coloured badges with the abbreviation by default. Logos and player photos are opt-out/opt-in settings
-  (Settings > Display: marks badges|logos, photos on|off), loaded from the leagues' image servers through /img/ and
+- Team marks are logos by default (settings.marks, default "logos" via _user_settings) or coloured badges with the
+  abbreviation; player photos are on by default (Settings > Display: marks logos|badges, photos on|off), loaded from the leagues' image servers through /img/ and
   never committed to the repo (trademarks, likenesses).
 
 ## Agent skills
