@@ -2,7 +2,11 @@
 
 Past days are tagged at that day's last commit; today's at HEAD. A release that already exists gets its notes
 refreshed if entries were added; today's also moves to HEAD and rebuilds the Docker image. Needs the gh CLI signed in. Run after pushing: .venv/bin/python tools/release.py
+
+The image only builds if the speed budget passes (tools/perfcheck.py runs first in .github/workflows/docker.yml).
+To ship over budget on purpose: tools/release.py --perf-override "why", which puts the reason in today's notes.
 """
+import argparse
 import subprocess
 import sys
 from datetime import date
@@ -18,10 +22,15 @@ def run(*args, check=True) -> str:
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--perf-override", metavar="WHY", help="build today's image even if the speed budget fails")
+    why = ap.parse_args().perf_override
     today = date.today().isoformat()
     for day, items in sorted(changes.by_date(changes.load()).items()):
         tag = "v" + day.replace("-", ".")
         notes = changes.day_notes(items) + "\n\nFull history: [CHANGELOG.md](CHANGELOG.md)"
+        if why and day == today:
+            notes += f"\n\nperf-override: {why}"
         exists = subprocess.run(["gh", "release", "view", tag], cwd=ROOT, capture_output=True).returncode == 0
         if exists:
             current = run("gh", "release", "view", tag, "--json", "body", "--jq", ".body")
@@ -32,7 +41,7 @@ def main():
             if day == today and behind:  # today's release follows the newest commit and rebuilds the Docker image
                 run("git", "tag", "-f", tag, "HEAD")
                 run("git", "push", "-f", "origin", f"refs/tags/{tag}")
-                run("gh", "workflow", "run", "docker.yml", "--ref", tag)
+                run("gh", "workflow", "run", "docker.yml", "--ref", tag, *(["-f", "perf_override=true"] if why else []))
                 print(f"{tag}: moved to {run('git', 'rev-parse', '--short', 'HEAD')}, image rebuilding")
             continue
         sha = run("git", "rev-parse", "HEAD") if day == today else \
