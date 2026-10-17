@@ -34,6 +34,9 @@ def main():
         exists = subprocess.run(["gh", "release", "view", tag], cwd=ROOT, capture_output=True).returncode == 0
         if exists:
             current = run("gh", "release", "view", tag, "--json", "body", "--jq", ".body")
+            kept = [line for line in current.splitlines() if line.startswith("perf-override:")]
+            if kept and not (why and day == today):   # an override stays on the record when the notes are rebuilt
+                notes += "\n\n" + kept[0]
             if current.strip() != notes.strip():
                 run("gh", "release", "edit", tag, "--notes", notes)
                 print(f"{tag}: notes updated")

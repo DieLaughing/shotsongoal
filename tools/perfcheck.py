@@ -23,6 +23,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -34,22 +35,26 @@ RUNS = 20
 TABS = ["#/picks", "#/wire", "#/league", "#/settings", "#/"]
 DETAIL = ['a[href^="#/game/"]', 'a[href^="#/team/"]']    # found on the pages: the first game and team link
 
-# New content in #view: a first element that wasn't there before and isn't the "Loading…" placeholder.
-READY = """old => { const f = document.getElementById("view").firstElementChild;
-  return !!f && f !== old && !(f.classList.contains("empty") && /^Loading/.test(f.textContent)); }"""
+# What #view shows: 0 = nothing new yet (or the "Loading…" placeholder), 1 = the page, 2 = an error message. A page
+# that fails fast must not pass as a fast page, so errors come back as -1 (reported "error", over budget).
+STATE = """old => { const v = document.getElementById("view"), f = v && v.firstElementChild;
+  if (!f || f === old || (f.classList.contains("empty") && /^Loading/.test(f.textContent))) return 0;
+  return v.querySelector(".error") || /Couldn['’]t (load|reach)/.test(v.textContent) ? 2 : 1; }"""
 GO = """async ([hash, wait]) => {
-  const ready = %s, old = document.getElementById("view").firstElementChild, t0 = performance.now();
+  const state = %s, old = document.getElementById("view").firstElementChild, t0 = performance.now();
+  if (location.hash === hash) return 0;   // already there: no navigation to wait for
   location.hash = hash;
   return await new Promise(done => {
-    const check = () => ready(old) ? done(performance.now() - t0)
-      : performance.now() - t0 > wait ? done(null) : requestAnimationFrame(check);
+    const check = () => { const s = state(old), ms = performance.now() - t0;
+      s ? done(s === 2 ? -1 : ms) : ms > wait ? done(null) : requestAnimationFrame(check); };
     requestAnimationFrame(check);
   });
-}""" % READY
-FIRST = """() => new Promise(done => {
-  const check = () => document.getElementById("view") && (%s)(null) ? done(performance.now()) : requestAnimationFrame(check);
+}""" % STATE
+FIRST = """wait => new Promise(done => {
+  const check = () => { const s = document.getElementById("view") ? (%s)(null) : 0, ms = performance.now();
+    s ? done(s === 2 ? -1 : ms) : ms > wait ? done(null) : requestAnimationFrame(check); };
   check();
-})""" % READY
+})""" % STATE
 
 
 def free_port() -> int:
@@ -87,7 +92,7 @@ def browse(url: str) -> tuple[float, dict[str, float | None], set[str]]:
         cdp.send("Network.emulateNetworkConditions", {"offline": False, "latency": LATENCY_MS,
                                                       "downloadThroughput": DOWN_KBPS * 125, "uploadThroughput": DOWN_KBPS * 125})
         page.goto(url + "/", wait_until="commit")
-        first = page.evaluate(FIRST)
+        first = page.evaluate(FIRST, 15000)
         page.wait_for_timeout(4000)                  # prefetch() runs 2.5 s after start
         pages = list(TABS)
         for sel in DETAIL:                           # a game page and a team page, from links the app shows
@@ -114,8 +119,11 @@ def time_apis(url: str, paths: set[str]) -> dict[str, float]:
         took = []
         for _ in range(RUNS):
             t0 = time.perf_counter()
-            with urllib.request.urlopen(url + path, timeout=10) as r:
-                r.read()
+            try:
+                with urllib.request.urlopen(url + path, timeout=10) as r:
+                    r.read()
+            except urllib.error.HTTPError as e:   # pages ask for some things that may not exist (a 404 is an answer)
+                e.read()
             took.append((time.perf_counter() - t0) * 1000)
         took.sort()
         out[path] = took[max(0, int(len(took) * 0.95) - 1)]
@@ -143,10 +151,11 @@ def main() -> int:
     rows = [("first visit", "/", first, FIRST_MS)]
     rows += [("revisit", h, ms, REVISIT_MS) for h, ms in revisit.items()]
     rows += [("api p95", p, ms, API_P95_MS) for p, ms in api.items()]
-    bad = [r for r in rows if r[2] is None or r[2] > r[3]]
+    over = lambda ms, b: ms is None or ms < 0 or ms > b  # noqa: E731
+    bad = [r for r in rows if over(r[2], r[3])]
+    shown = lambda ms: "timeout" if ms is None else "error" if ms < 0 else round(ms)  # noqa: E731
     lines = ["| check | page | ms | budget | |", "|---|---|---:|---:|---|"]
-    lines += [f"| {k} | `{p}` | {'timeout' if ms is None else round(ms)} | {b} | {'❌' if ms is None or ms > b else '✅'} |"
-              for k, p, ms, b in rows]
+    lines += [f"| {k} | `{p}` | {shown(ms)} | {b} | {'❌' if over(ms, b) else '✅'} |" for k, p, ms, b in rows]
     verdict = f"{len(bad)} over budget" if bad else "all within budget"
     report = "\n".join(lines) + f"\n\n**{verdict}** (slow relay {LATENCY_MS} ms per request, {DOWN_KBPS} kbps)\n"
     print(report)
