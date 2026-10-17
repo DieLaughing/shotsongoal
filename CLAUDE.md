@@ -145,6 +145,20 @@ Operating rules shared with the sibling app (standards, speed budget, shared par
 - Tickets: NHL games carry `tickets` = the feed's ticketsLink (Ticketmaster event); PWHL = the scorebar's TicketUrl,
   else the league's tickets page for upcoming games. Shown only before puck drop.
 
+- Players (#/player/<id> NHL, #/pplayer/<id> PWHL): bio, this season, Games (form chart + game log), Career (totals,
+  season by season with other leagues hidden behind a button, awards) and Advanced (NHL only, MoneyPuck). Every name
+  in scoring, three stars, box scores, team leaders, rosters and milestones links here (parsers carry `pid`).
+  Leaders (#/leaders, League tab: Standings | Leaders) and Search (#/search, header icon: players from every roster
+  via /api/search, filtered on the phone; teams; the top team's next and last game). Player pages and leaders follow
+  spoiler-free like the team page and standings.
+- sog/images.py: /img/p/<league>/<team>/<id>-<96|192>.webp and /img/logo/<ABBR>-light|dark.svg (NHL) or
+  <PW-XXX>-96.webp (PWHL). Downloaded once, shrunk with Pillow (80 KB headshot -> 2 KB), kept in /data/img (photos
+  7 days, logos 30, misses remembered 1 day), sent with a week's Cache-Control; sw.js serves /img/ cache-first from
+  its own cache (600 entries). NHL photos use this season's mugs URL, else the player's landing `headshot`.
+- sog/moneypuck.py: MoneyPuck's season skaters/goalies CSVs (listed on moneypuck.com/data.htm; free for
+  non-commercial use with credit, so the Advanced tab links MoneyPuck.com). Fetched every 6 h in the background; a
+  player page only peeks at the saved copy (Feed.moneypuck_peek) and never waits on the 2 MB download.
+
 ## Wire notes
 - NHL.com news RSS answers 403 even to a Chrome fingerprint: not used. ESPN previews/recaps/videos are filtered out.
 - ESPN uses LA/NJ/SJ/TB/UTAH and its own team ids: mapped in sog/wire.py. Free-text posts are tagged by nickname,
@@ -157,9 +171,14 @@ Operating rules shared with the sibling app (standards, speed budget, shared par
 - Where-to-watch is US-only; each person picks their services and the teams whose home market they live in (blackouts).
   Networks/rules in sog/watch.py + sog/data/networks.yaml; recheck every October.
 - Game page = landing + right-rail (linescore, shots, team stats) + boxscore.
+- Player page = player/<id>/landing + player/<id>/game-log/now. Leaders = skater-stats-leaders/current and
+  goalie-stats-leaders/current. PWHL players = HockeyTech view=player category=profile|seasonstats|gamebygame
+  (gamebygame needs season_id); PWHL photos assets.leaguestat.com/pwhl/240x240/<id>.jpg.
 
 ## Conventions
-- No league or team logos (trademarks); team marks are coloured squares with the abbreviation.
+- Team marks are coloured badges with the abbreviation by default. Logos and player photos are opt-out/opt-in settings
+  (Settings > Display: marks badges|logos, photos on|off), loaded from the leagues' image servers through /img/ and
+  never committed to the repo (trademarks, likenesses).
 
 ## Agent skills
 

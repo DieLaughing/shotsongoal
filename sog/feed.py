@@ -11,7 +11,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from . import nhl, odds, pwhl, wire
+from . import moneypuck, nhl, odds, pwhl, wire
 from .teams import TEAMS as NHL_TEAMS
 from .db import Store, parse_iso
 
@@ -33,6 +33,11 @@ IDLE_POLL = 300           # ... and otherwise
 DETAIL_POLL = 20          # a live game's page, only while someone has looked at it recently
 VIEW_WINDOW = 300
 STANDINGS_TTL = timedelta(minutes=15)
+PLAYER_TTL = timedelta(hours=1)       # a player page: bio, season, career
+LOG_TTL = timedelta(minutes=20)       # ... and its game log (a game a night at most)
+LEADERS_TTL = timedelta(minutes=30)
+MONEYPUCK_TTL = timedelta(hours=6)    # MoneyPuck's season files change overnight
+INDEX_TTL = timedelta(hours=12)       # search: every player on every roster
 NEWS_TTL = timedelta(minutes=10)      # ESPN moves and headlines, Sportsnet
 INSIDER_TTL = timedelta(minutes=2)    # Bluesky: rumours move fast
 WIRE_POLL = 120
@@ -212,6 +217,96 @@ class Feed:
                 "roster": [] if isinstance(rost, Exception) else rost,
                 "stats": {"skaters": [], "goalies": []} if isinstance(st, Exception) else st}
 
+    # ---- players --------------------------------------------------------------------------------
+    async def player(self, pid: int) -> dict:
+        """An NHL player page: bio, season, career and this season's game log, plus MoneyPuck's numbers."""
+        async def landing():
+            return nhl.parse_player(await nhl.get(f"player/{pid}/landing"))
+        info = await self.cached(f"player:{pid}", "player", landing, PLAYER_TTL)
+
+        async def game_log():
+            return nhl.parse_game_log(await nhl.get(f"player/{pid}/game-log/now"), info["goalie"])
+        try:
+            games = await self.cached(f"player:{pid}:log", "player", game_log, LOG_TTL)
+        except Exception:
+            games = []
+        return {**info, "log": games, "advanced": self.moneypuck_peek().get(str(pid))}
+
+    async def headshot(self, pid: int) -> str | None:
+        """The photo URL from the player's own page, for images.py when this season's photo isn't where it should be."""
+        hit = self.store.get(f"player:{pid}:headshot")
+        if hit:
+            return hit["data"].get("url")
+
+        async def fetch():
+            return {"url": (await nhl.get(f"player/{pid}/landing")).get("headshot")}
+        return (await self._fetch(f"player:{pid}:headshot", "player", fetch, timedelta(days=7)))["url"]
+
+    async def pwhl_player(self, pid: int) -> dict:
+        async def fetch():
+            season = await self._pwhl_season_with_games()
+            profile, stats, games = await asyncio.gather(
+                pwhl.get(feed="modulekit", view="player", category="profile", player_id=pid),
+                pwhl.get(feed="modulekit", view="player", category="seasonstats", player_id=pid),
+                pwhl.get(feed="modulekit", view="player", category="gamebygame", player_id=pid, season_id=season["id"]))
+            out = pwhl.parse_player(profile, stats, games, pid)
+            if not out["name"]:
+                raise LookupError(f"no PWHL player {pid}")
+            return out
+        return await self.cached(f"pwhl:player:{pid}", "pwhl", fetch, PLAYER_TTL)
+
+    async def leaders(self, league: str = "nhl") -> dict:
+        if league == "pwhl":
+            async def fetch():
+                season = await self._pwhl_season_with_games()
+                sk, gl = await asyncio.gather(
+                    pwhl.get(feed="modulekit", view="statviewtype", type="topscorers", season_id=season["id"], first=0, limit=100),
+                    pwhl.get(feed="modulekit", view="statviewtype", type="topgoalies", season_id=season["id"], first=0, limit=30))
+                return {"season": season["name"], "cats": pwhl.parse_leaders(sk, gl)}
+            return await self.cached("pwhl:leaders", "pwhl", fetch, LEADERS_TTL)
+
+        async def fetch():
+            sk, gl = await asyncio.gather(
+                nhl.get("skater-stats-leaders/current?categories=points,goals,assists&limit=50"),
+                nhl.get("goalie-stats-leaders/current?categories=wins,savePctg,goalsAgainstAverage&limit=25"))
+            return {"season": nhl.season_label(nhl.current_season(eastern_today())), "cats": nhl.parse_leaders(sk, gl)}
+        return await self.cached("leaders", "leaders", fetch, LEADERS_TTL)
+
+    async def moneypuck(self) -> dict:
+        async def fetch():
+            return await moneypuck.fetch(nhl.current_season(eastern_today()))
+        return await self.cached("moneypuck", "moneypuck", fetch, MONEYPUCK_TTL, stale_ok=timedelta(days=3))
+
+    def moneypuck_peek(self) -> dict:
+        """The saved MoneyPuck numbers without waiting (a 2 MB download never holds up a page): missing or old ones
+        are fetched in the background, for the next visit."""
+        hit = self.store.get("moneypuck")
+        if not hit or not hit["fresh"]:
+            self.refresh_later("moneypuck", self.moneypuck)
+        return hit["data"] if hit else {}
+
+    async def search_index(self) -> list[list]:
+        """[id, name, team, pos] for every player on every roster (NHL and PWHL), for the search page. Built from the
+        rosters the warm-up already keeps, so it's mostly free."""
+        async def fetch():
+            async def nhl_roster(abbr):
+                return abbr, await self.team_roster(abbr)
+
+            async def pwhl_roster(key):
+                return key, await self.pwhl_roster(key)
+            jobs = [nhl_roster(a) for a in NHL_TEAMS] + [pwhl_roster(pwhl.key(c)) for c in PWHL_TEAM_IDS]
+            rows = []
+            for got in await asyncio.gather(*jobs, return_exceptions=True):
+                if isinstance(got, Exception):
+                    continue
+                team, roster = got
+                rows += [[int(p["id"]), p["name"], team, p.get("pos")] for p in roster
+                         if str(p.get("id") or "").isdigit() and p.get("name")]
+            if not rows:
+                raise LookupError("no rosters")
+            return rows
+        return await self.cached("search:index", "search", fetch, INDEX_TTL)
+
     async def wire(self) -> list[dict]:
         """Every source merged, newest first. A failing source just drops out until it's back. The merged list is
         kept until one of its sources is saved again, so a page doesn't re-read ~25 copies each time."""
@@ -301,7 +396,7 @@ class Feed:
             return [{**r, "season": season["name"]} for r in rows]
         return await self.cached("pwhl:standings", "pwhl", fetch, STANDINGS_TTL)
 
-    async def pwhl_team(self, key: str) -> dict:
+    async def pwhl_roster(self, key: str) -> list[dict]:
         code = key.removeprefix(pwhl.PREFIX)
         tid = PWHL_TEAM_IDS.get(code)
 
@@ -313,6 +408,11 @@ class Feed:
                 if cur and cur["id"] != season["id"]:
                     rows = pwhl.parse_roster(await pwhl.get(feed="modulekit", view="roster", team_id=tid, season_id=cur["id"]))
             return rows
+        return await self.cached(f"pwhl:team:{code}:roster", "pwhl", roster, timedelta(hours=12))
+
+    async def pwhl_team(self, key: str) -> dict:
+        code = key.removeprefix(pwhl.PREFIX)
+        tid = PWHL_TEAM_IDS.get(code)
 
         async def stats():
             season = await self._pwhl_season_with_games()
@@ -323,7 +423,7 @@ class Feed:
 
         games, rost, st = await asyncio.gather(
             self.pwhl_games(),
-            self.cached(f"pwhl:team:{code}:roster", "pwhl", roster, timedelta(hours=12)),
+            self.pwhl_roster(key),
             self.cached(f"pwhl:team:{code}:stats", "pwhl", stats, timedelta(hours=1)),
             return_exceptions=True)
         sched = [] if isinstance(games, Exception) else [g for g in games if key in (g["away"]["abbr"], g["home"]["abbr"])]
@@ -430,7 +530,7 @@ class Feed:
             await asyncio.sleep(LIVE_POLL if self.busy else 30)
 
     async def _background_loop(self) -> None:
-        last_standings = last_wire = last_career = last_fights = last_odds = 0.0
+        last_standings = last_wire = last_career = last_fights = last_odds = last_players = 0.0
         last_detail: dict[int, float] = {}
         while True:
             started = time.time()
@@ -475,6 +575,10 @@ class Feed:
                 if now - last_odds >= ODDS_POLL:
                     last_odds = now
                     await self.refresh_totals()
+                if now - last_players >= 3600 and not self.busy:   # search index + MoneyPuck, quiet times only
+                    last_players = now
+                    self.refresh_later("search:index", self.search_index)
+                    self.moneypuck_peek()
                 if now - last_standings >= STANDINGS_TTL.total_seconds():
                     last_standings = now
                     await self._fetch("standings", "standings", _get_standings, STANDINGS_TTL)

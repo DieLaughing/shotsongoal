@@ -1,5 +1,8 @@
-// Caches the app shell so it opens instantly; data always comes from the network first.
-const CACHE = "sog-v4";
+// Caches the app shell so it opens instantly; data always comes from the network first. Photos and logos (/img/) are
+// the other way round: the phone's copy first, kept in their own cache, so a face seen once never downloads again.
+const CACHE = "sog-v5";
+const IMAGES = "sog-img-v1";
+const IMAGES_MAX = 600;   // about 2 MB of small photos; the oldest go first
 const SHELL = ["/", "/offline.html", "/style.css", "/app.js", "/manifest.webmanifest", "/icons/icon.svg"];
 
 // Cloudflare's codes for "can't reach the server behind the tunnel" (a real bug in the app is a plain 500).
@@ -11,7 +14,7 @@ self.addEventListener("install", e => {
 });
 
 self.addEventListener("activate", e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE && k !== IMAGES).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
@@ -19,6 +22,19 @@ self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== location.origin) return;
   if (url.pathname.startsWith("/invite/") || url.pathname.startsWith("/cdn-cgi/")) return;
+  if (url.pathname.startsWith("/img/")) {
+    e.respondWith(caches.open(IMAGES).then(async c => {
+      const hit = await c.match(e.request);
+      if (hit) return hit;
+      const res = await fetch(e.request);
+      if (res.ok) {
+        c.put(e.request, res.clone());
+        c.keys().then(keys => keys.slice(0, Math.max(0, keys.length - IMAGES_MAX)).forEach(k => c.delete(k)));
+      }
+      return res;
+    }));
+    return;
+  }
   // Opening the app while the Pi is down: Cloudflare answers 502/530 (or the phone has no network), so show
   // the cached offline page instead of Cloudflare's error page.
   if (e.request.mode === "navigate") {

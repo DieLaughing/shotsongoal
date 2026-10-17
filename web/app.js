@@ -98,7 +98,7 @@ async function prefetch() {
   try { wire = { ...wire, ...JSON.parse(localStorage.getItem("wire") || "{}") }; } catch { /* defaults */ }
   const paths = [`/api/pickem?leagues=${leagues.join(",")}`,
     ...leagues.map(l => `/api/wire?league=${l}&kind=${wire.kind}&mine=${wire.mine ? 1 : 0}`),
-    ...(ME.settings.favorites || []).map(a => `/api/team/${encodeURIComponent(a)}`)];
+    ...(ME.settings.favorites || []).map(a => `/api/team/${encodeURIComponent(a)}`), "/api/search"];
   standings(pageLeague()).catch(() => {});
   for (const path of paths) {
     if (document.hidden) return;
@@ -111,9 +111,15 @@ setInterval(() => { if (!document.hidden) prefetch(); }, 90000);
 
 const favs = () => new Set(ME?.settings?.favorites || []);
 
+// A team's mark: its coloured badge, or (Settings > Display) its logo. A logo that can't load falls back to the badge.
 function mark(abbr, big = false) {
   const t = TEAMS[abbr] || {};
-  return `<span class="mark${t.light ? " light" : ""}${big ? " big" : ""}" style="--c:${esc(t.color || "#666")}">${esc(t.code || abbr)}</span>`;
+  const cls = `mark${t.light ? " light" : ""}${big ? " big" : ""}`, code = esc(t.code || abbr);
+  if (ME?.settings?.marks !== "logos" || !TEAMS[abbr]) return `<span class="${cls}" style="--c:${esc(t.color || "#666")}">${code}</span>`;
+  const img = leagueOf(abbr) === "pwhl"
+    ? `<img src="/img/logo/${abbr}-96.webp" alt="" loading="lazy" decoding="async">`
+    : `<picture><source srcset="/img/logo/${abbr}-dark.svg" media="(prefers-color-scheme: dark)"><img src="/img/logo/${abbr}-light.svg" alt="" loading="lazy" decoding="async"></picture>`;
+  return `<span class="${cls} logo" style="--c:${esc(t.color || "#666")}" title="${esc(fullName(abbr))}"><span class="code">${code}</span>${img}</span>`;
 }
 
 const teamName = abbr => TEAMS[abbr]?.name || abbr;
@@ -397,7 +403,7 @@ async function markChangesSeen() {
 }
 
 function updateNewDot() {
-  document.querySelector(".top-link")?.classList.toggle("has-new", unseenChanges().length > 0);
+  document.querySelector(".top-link[data-nav=settings]")?.classList.toggle("has-new", unseenChanges().length > 0);
 }
 
 function newBanner() {
@@ -934,9 +940,9 @@ async function gameView(id, quiet = false, league = "nhl") {
     html += `<h2>Scoring</h2><div class="card">${goals.map(p => `<div class="subhead">${esc(p.period)}</div>${p.goals.map(x => {
       const tags = [x.strength !== "EV" ? x.strength : "", x.modifier === "empty-net" ? "EN" : ""].filter(Boolean)
         .map(t => `<span class="tag">${esc(t)}</span>`).join("");
-      const assists = x.assists.length ? x.assists.map(y => `${esc(y.name)}${y.total ? ` (${y.total})` : ""}`).join(", ") : "Unassisted";
+      const assists = x.assists.length ? x.assists.map(y => `${plink(y.name, y.pid, league)}${y.total ? ` (${y.total})` : ""}`).join(", ") : "Unassisted";
       return `<div class="event"><span class="when">${esc(x.time)}</span>${mark(x.team)}
-        <div><span class="run">${x.away}–${x.home}</span><div class="who">${esc(x.scorer)}${x.total ? ` (${x.total})` : ""}${tags}</div>
+        <div><span class="run">${x.away}–${x.home}</span><div class="who">${plink(x.scorer, x.pid, league)}${x.total ? ` (${x.total})` : ""}${tags}</div>
         <div class="detail">${assists}${x.clip ? ` · <a href="${esc(x.clip)}" target="_blank" rel="noopener">clip</a>` : ""}</div>${rx(`g:${p.period}-${x.time}-${x.scorer}`)}</div></div>`;
     }).join("")}`).join("")}</div>`;
   }
@@ -955,8 +961,8 @@ async function gameView(id, quiet = false, league = "nhl") {
 
 
   if (d.stars.length) {
-    html += `<h2>Three stars</h2><div class="card">${d.stars.map(s => `<div class="event"><span class="when">${"★".repeat(s.star)}</span>${mark(s.team)}
-      <div><div class="who">${esc(s.name)} <span class="muted small">${esc(s.pos)}</span></div><div class="detail">${esc(s.line)}</div></div></div>`).join("")}</div>`;
+    html += `<h2>Three stars</h2><div class="card">${d.stars.map(s => `<div class="event star"><span class="when">${"★".repeat(s.star)}</span>${mark(s.team)}
+      <div class="star-who">${photo(league, s.team, s.pid, 40)}<div><div class="who">${plink(s.name, s.pid, league)} <span class="muted small">${esc(s.pos)}</span></div><div class="detail">${esc(s.line)}</div></div></div></div>`).join("")}</div>`;
   }
 
   // Team stats, penalties and players: one tap away so the page leads with what happened.
@@ -980,9 +986,9 @@ async function gameView(id, quiet = false, league = "nhl") {
     const abbr = s === "away" ? a : h;
     more += `<h2>${esc(teamName(abbr))} players</h2><div class="card scroll"><table>
       <tr><th>Skater</th><th>G</th><th>A</th><th>P</th><th>+/-</th><th>SOG</th><th>Hits</th><th>TOI</th></tr>
-      ${p.skaters.map(x => `<tr><td>${esc(x.name)} <span class="muted small">${esc(x.pos)}</span></td><td>${x.g}</td><td>${x.a}</td><td><b>${x.p}</b></td><td>${x.pm > 0 ? "+" : ""}${x.pm}</td><td>${x.sog}</td><td>${x.hits}</td><td>${esc(x.toi || "")}</td></tr>`).join("")}
+      ${p.skaters.map(x => `<tr><td>${plink(x.name, x.pid, league)} <span class="muted small">${esc(x.pos)}</span></td><td>${x.g}</td><td>${x.a}</td><td><b>${x.p}</b></td><td>${x.pm > 0 ? "+" : ""}${x.pm}</td><td>${x.sog}</td><td>${x.hits}</td><td>${esc(x.toi || "")}</td></tr>`).join("")}
     </table>${p.goalies.length ? `<table><tr><th>Goalie</th><th>Saves</th><th>GA</th><th>SV%</th><th>TOI</th></tr>
-      ${p.goalies.map(x => `<tr><td>${esc(x.name)}</td><td>${x.saves}/${x.sa}</td><td>${x.ga}</td><td>${x.sa ? (x.saves / x.sa).toFixed(3).replace(/^0/, "") : "–"}</td><td>${esc(x.toi || "")}</td></tr>`).join("")}</table>` : ""}</div>`;
+      ${p.goalies.map(x => `<tr><td>${plink(x.name, x.pid, league)}</td><td>${x.saves}/${x.sa}</td><td>${x.ga}</td><td>${x.sa ? (x.saves / x.sa).toFixed(3).replace(/^0/, "") : "–"}</td><td>${esc(x.toi || "")}</td></tr>`).join("")}</table>` : ""}</div>`;
   }
 
   if (more) html += `<details class="more-stats" ${moreStatsOpen ? "open" : ""}><summary>More stats: team, penalties, players</summary>${more}</details>`;
@@ -1194,14 +1200,14 @@ async function standingsView(mode = "division") {
   standings(lg).catch(() => null);  // start loading the table while the spoiler check runs
   const hid = (await hiddenToday().catch(() => [])).filter(g => g.state === "final" && leagueOf(g.home.abbr) === lg);
   if (hid.length) {
-    view.innerHTML = leaguePicker(lg) + spoilCover(hid, "These standings", "include");
+    view.innerHTML = leagueTabs("standings") + leaguePicker(lg) + spoilCover(hid, "These standings", "include");
     bindLeaguePicker(() => standingsView(mode));
     return;
   }
   if (lg === "pwhl") {
     let rows;
     try { rows = await standings("pwhl"); } catch (e) { view.innerHTML = failed(e); return; }
-    view.innerHTML = leaguePicker("pwhl") + yourTeamTiles("pwhl") + pwhlStandings(rows);
+    view.innerHTML = leagueTabs("standings") + leaguePicker("pwhl") + yourTeamTiles("pwhl") + pwhlStandings(rows);
     bindLeaguePicker(() => standingsView(mode));
     return;
   }
@@ -1230,7 +1236,7 @@ async function standingsView(mode = "division") {
       body += `<h2>${esc(div)}</h2>` + standingsTable(list.sort((x, y) => x.div_rank - y.div_rank));
     }
   }
-  view.innerHTML = `${leaguePicker("nhl")}${yourTeamTiles("nhl")}<div class="seg">${STANDING_MODES.map(([k, l]) => `<button data-mode="${k}" class="${k === mode ? "on" : ""}">${l}</button>`).join("")}</div>${body}`;
+  view.innerHTML = `${leagueTabs("standings")}${leaguePicker("nhl")}${yourTeamTiles("nhl")}<div class="seg">${STANDING_MODES.map(([k, l]) => `<button data-mode="${k}" class="${k === mode ? "on" : ""}">${l}</button>`).join("")}</div>${body}`;
   bindLeaguePicker(() => standingsView(mode));
   view.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", () => {
     try { localStorage.setItem("standingsMode", b.dataset.mode); } catch { /* fine */ }
@@ -1251,7 +1257,7 @@ async function teamView(abbr) {
   const hid = hidden.filter(g => g.state === "final" && (g.away.abbr === abbr || g.home.abbr === abbr));
   if (hid.length) { view.innerHTML = `<div style="margin-top:12px">${spoilCover(hid, `The ${teamName(abbr)} page`)}</div>`; return; }
   const st = rows.find(r => r.abbr === abbr);
-  const fav = favs();
+  const fav = favs(), lg = leagueOf(abbr);
   const done = d.schedule.filter(g => g.state === "final").slice(-5).reverse();
   const next = d.schedule.filter(g => g.state !== "final").slice(0, 6);
   const dated = g => `<div class="subhead">${esc(shortDate(g.date))}</div>${gameCard(g, fav)}`;
@@ -1266,22 +1272,22 @@ async function teamView(abbr) {
   if (next.length) html += `<h2>Coming up</h2><div class="card">${next.map(dated).join("")}</div>`;
   if (done.length) html += `<h2>Recent results</h2><div class="card">${done.map(dated).join("")}</div>`;
   if (d.milestones?.length) html += `<h2>Close to a milestone</h2><div class="card">${d.milestones.map(m =>
-    `<div class="ms-row"><div><b>${esc(m.name)}</b><div class="muted small">${m.now.toLocaleString()} career ${MS_WORD[m.stat][1]} · next: ${m.target.toLocaleString()}</div></div>
+    `<div class="ms-row"><div><b>${plink(m.name, m.id)}</b><div class="muted small">${m.now.toLocaleString()} career ${MS_WORD[m.stat][1]} · next: ${m.target.toLocaleString()}</div></div>
       <span class="pill info">${m.left} to go</span></div>`).join("")}</div>`;
   if (d.wire?.length) html += `<h2>News &amp; moves</h2><div class="card">${d.wire.slice(0, 8).map(i => wireItem(i, new Set(), hidden)).join("")}</div>`;
   const sk = d.stats.skaters.slice(0, 10);
   if (sk.length) {
     html += `<h2>Leaders</h2><div class="card scroll"><table><tr><th>Skater</th><th>GP</th><th>G</th><th>A</th><th>P</th><th>+/-</th></tr>
-      ${sk.map(p => `<tr><td>${esc(p.name)} <span class="muted small">${esc(p.pos)}</span></td><td>${p.gp}</td><td>${p.g}</td><td>${p.a}</td><td><b>${p.p}</b></td><td>${p.pm > 0 ? "+" : ""}${p.pm}</td></tr>`).join("")}
+      ${sk.map(p => `<tr><td>${plink(p.name, p.pid, lg)} <span class="muted small">${esc(p.pos)}</span></td><td>${p.gp}</td><td>${p.g}</td><td>${p.a}</td><td><b>${p.p}</b></td><td>${p.pm > 0 ? "+" : ""}${p.pm}</td></tr>`).join("")}
       </table>${d.stats.goalies.length ? `<table><tr><th>Goalie</th><th>GP</th><th>W-L-OT</th><th>GAA</th><th>SV%</th></tr>
-      ${d.stats.goalies.map(p => `<tr><td>${esc(p.name)}</td><td>${p.gp}</td><td>${p.w}-${p.l}-${p.otl}</td><td>${p.gaa.toFixed(2)}</td><td>${p.svpct.toFixed(3).replace(/^0/, "")}</td></tr>`).join("")}</table>` : ""}</div>`;
+      ${d.stats.goalies.map(p => `<tr><td>${plink(p.name, p.pid, lg)}</td><td>${p.gp}</td><td>${p.w}-${p.l}-${p.otl}</td><td>${p.gaa.toFixed(2)}</td><td>${p.svpct.toFixed(3).replace(/^0/, "")}</td></tr>`).join("")}</table>` : ""}</div>`;
   }
   if (d.roster.length) {
     const groups = { F: "Forwards", D: "Defense", G: "Goalies" };
     html += `<h2>Roster</h2><div class="card scroll"><table><tr><th>#</th><th>Player</th><th>Pos</th><th>Shoots</th><th>Born</th></tr>
       ${Object.entries(groups).map(([k, label]) => `<tr><td colspan="5" class="subhead">${label}</td></tr>` + d.roster.filter(p => p.group === k)
         .sort((x, y) => (x.number || 99) - (y.number || 99))
-        .map(p => `<tr><td class="muted">${p.number ?? ""}</td><td>${esc(p.name)}</td><td>${esc(p.pos)}</td><td>${esc(p.shoots || "")}</td><td class="muted">${esc((p.born || "").slice(0, 4))} ${esc(p.country || "")}</td></tr>`).join("")).join("")}
+        .map(p => `<tr><td class="muted">${p.number ?? ""}</td><td><span class="pcell">${photo(lg, abbr, p.id, 28)}${plink(p.name, p.id, lg)}</span></td><td>${esc(p.pos)}</td><td>${esc(p.shoots || "")}</td><td class="muted">${esc((p.born || "").slice(0, 4))} ${esc(p.country || "")}</td></tr>`).join("")).join("")}
       </table></div>`;
   }
   view.innerHTML = html;
@@ -1291,6 +1297,247 @@ async function teamView(abbr) {
     ME.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify({ ...ME.settings, favorites: [...list] }) });
     teamView(abbr);
   });
+}
+
+// ---- players: pages, leaders, search -------------------------------------------------------------
+// Photos and logos come from the app's own /img/ (shrunk once on the server, then kept by the phone). Text never
+// waits for them: they load lazily into fixed-size spots, and one that's missing just leaves the spot empty.
+const photosOn = () => ME?.settings?.photos !== false;
+const playerHref = (league, pid) => `#/${league === "pwhl" ? "pplayer" : "player"}/${pid}`;
+const plink = (name, pid, league = "nhl") => pid ? `<a class="plink" href="${playerHref(league, pid)}">${esc(name)}</a>` : esc(name);
+function photo(league, team, pid, size = 32) {
+  if (!photosOn() || !pid || !team) return "";
+  return `<img class="ph" src="/img/p/${league}/${encodeURIComponent(team)}/${pid}-${size > 48 ? 192 : 96}.webp" width="${size}" height="${size}" alt="" loading="lazy" decoding="async">`;
+}
+// One listener for every image on every page: a logo that won't load turns back into the badge; a photo just goes.
+document.addEventListener("error", e => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  if (img.closest(".mark.logo")) img.closest(".mark.logo").classList.replace("logo", "nologo");
+  else if (img.classList.contains("ph")) img.classList.add("gone");
+}, true);
+
+const ageOf = born => {
+  if (!born) return null;
+  const b = new Date(born), n = new Date();
+  return n.getFullYear() - b.getFullYear() - (n < new Date(n.getFullYear(), b.getMonth(), b.getDate()) ? 1 : 0);
+};
+const pct3 = v => (v || 0).toFixed(3).replace(/^0/, "");
+const signed = v => `${v > 0 ? "+" : ""}${v}`;
+const POS_NAME = { C: "Center", L: "Left wing", R: "Right wing", D: "Defense", G: "Goalie", F: "Forward" };
+let playerTab = "games", allLeagues = false;
+
+function statLine(s, goalie) {
+  const cells = goalie
+    ? [["GP", s.gp], ["W", s.w], ["L", s.l], ["OT", s.otl], ["GAA", s.gaa.toFixed(2)], ["SV%", pct3(s.svpct)], ["SO", s.so]]
+    : [["GP", s.gp], ["G", s.g], ["A", s.a], ["P", s.p], ["+/-", signed(s.pm)], ...(s.toi ? [["TOI", s.toi]] : [])];
+  return `<div class="statline">${cells.map(([k, v]) => `<div><b>${esc(v)}</b><span>${k}</span></div>`).join("")}</div>`;
+}
+
+// The last games as bars: points for skaters, save % for goalies. Oldest on the left, like reading a season.
+function formChart(log, goalie) {
+  const games = log.slice(0, 10).reverse();
+  if (games.length < 2) return "";
+  const W = 300, H = 92, bw = W / games.length;
+  const val = g => goalie ? Math.max(0, (g.svpct || 0) - 0.8) / 0.2 : g.p;
+  const top = goalie ? 1 : Math.max(3, ...games.map(g => g.p));
+  const bars = games.map((g, i) => {
+    const v = val(g), h = Math.max(2, (v / top) * (H - 26));
+    const label = goalie ? pct3(g.svpct) : g.p;
+    return `<rect x="${i * bw + bw * 0.18}" y="${H - 16 - h}" width="${bw * 0.64}" height="${h}" rx="2" class="${goalie ? (g.dec === "W" ? "win" : "") : g.p ? "win" : ""}"/>
+      <text x="${i * bw + bw / 2}" y="${H - 20 - h}" text-anchor="middle" class="v">${label}</text>
+      <text x="${i * bw + bw / 2}" y="${H - 3}" text-anchor="middle">${esc(TEAMS[g.opp]?.code || g.opp)}</text>`;
+  }).join("");
+  return `<div class="card pad"><div class="muted small">${goalie ? "Save % — last games" : "Points — last games"}</div>
+    <svg class="form" viewBox="0 0 ${W} ${H}" role="img" aria-label="${goalie ? "Save percentage" : "Points"} in the last ${games.length} games">${bars}</svg></div>`;
+}
+
+function gameLogTable(log, goalie, league) {
+  if (!log.length) return `<div class="card pad muted small">No games yet this season.</div>`;
+  const opp = g => `<span class="tm">${g.home ? "vs" : "@"} ${mark(g.opp)}</span>`;
+  const link = g => g.game ? ` data-href="${league === "pwhl" ? "#/pgame/" : "#/game/"}${g.game}"` : "";
+  return `<div class="card scroll"><table class="log">${goalie
+    ? `<tr><th>Date</th><th>Opp</th><th>Dec</th><th>SA</th><th>GA</th><th>SV%</th><th>TOI</th></tr>
+      ${log.map(g => `<tr${link(g)}><td class="muted">${esc(shortDate(g.date))}</td><td>${opp(g)}</td><td>${esc(g.dec || "–")}</td><td>${g.sa}</td><td>${g.ga}</td><td>${pct3(g.svpct)}</td><td>${esc(g.toi || "")}</td></tr>`).join("")}`
+    : `<tr><th>Date</th><th>Opp</th><th>G</th><th>A</th><th>P</th><th>+/-</th><th>S</th><th>TOI</th></tr>
+      ${log.map(g => `<tr${link(g)}><td class="muted">${esc(shortDate(g.date))}</td><td>${opp(g)}</td><td>${g.g}</td><td>${g.a}</td><td><b>${g.p}</b></td><td>${signed(g.pm)}</td><td>${g.shots}</td><td>${esc(g.toi || "")}</td></tr>`).join("")}`}
+  </table></div><p class="help">Tap a game to open it.</p>`;
+}
+
+function careerBlock(d) {
+  const goalie = d.goalie, c = d.career || {};
+  const totals = [["Regular season", c.regular], ["Playoffs", c.playoffs]].filter(([, s]) => s && s.gp)
+    .map(([label, s]) => `<div class="subhead">${label}</div><div class="pad-x">${statLine(s, goalie)}</div>`).join("");
+  const head = goalie ? "<th>GP</th><th>W</th><th>L</th><th>OT</th><th>GAA</th><th>SV%</th>" : "<th>GP</th><th>G</th><th>A</th><th>P</th><th>+/-</th>";
+  const cells = s => goalie ? `<td>${s.gp}</td><td>${s.w}</td><td>${s.l}</td><td>${s.otl}</td><td>${s.gaa.toFixed(2)}</td><td>${pct3(s.svpct)}</td>`
+    : `<td>${s.gp}</td><td>${s.g}</td><td>${s.a}</td><td><b>${s.p}</b></td><td>${signed(s.pm)}</td>`;
+  const pro = d.league === "pwhl" ? "PWHL" : "NHL";
+  const others = d.seasons.filter(s => s.league !== pro).length;
+  const rows = d.seasons.map(s => `<tr class="${s.league === pro ? "" : "minor"}"><td>${esc(s.season)}</td><td>${esc(s.team || "")}${s.league !== pro ? ` <span class="muted small">${esc(s.league || "")}</span>` : ""}</td>${cells(s)}</tr>`).join("");
+  return `${totals ? `<h2>Career</h2><div class="card">${totals}</div>` : ""}
+    ${rows ? `<h2>Season by season</h2><div class="card scroll"><table class="seasons${allLeagues ? " all" : ""}"><tr><th>Season</th><th>Team</th>${head}</tr>${rows}</table></div>
+      <p class="help">Regular season${allLeagues ? `, every league (grey rows: before or besides the ${pro})` : ` in the ${pro}`}.
+      ${others ? `<button class="linkish" data-allleagues>${allLeagues ? `Just the ${pro}` : `Show every league (${others} more)`}</button>` : ""}</p>` : ""}
+    ${d.awards?.length ? `<h2>Awards</h2><div class="card">${d.awards.map(a => `<div class="ms-row"><b>${esc(a.name)}</b><span class="muted small">${esc(a.seasons.join(", "))}</span></div>`).join("")}</div>` : ""}`;
+}
+
+// MoneyPuck's numbers, each with how it ranks among the league's regulars at that position group.
+function advancedBlock(d) {
+  const a = d.advanced;
+  if (!a) return `<div class="card pad muted small">No advanced stats for this player yet this season.</div>`;
+  const bar = (label, value, pct, note) => `<div class="adv"><div class="adv-top"><span>${label}</span><b>${value}</b></div>
+    ${pct == null ? "" : `<div class="adv-bar"><span style="width:${Math.max(3, pct)}%"></span></div><div class="muted small">${note ? `${esc(note)} · ` : ""}better than ${pct}% of regulars</div>`}</div>`;
+  let rows;
+  if (a.goalie) {
+    rows = bar("Goals saved above expected", signed(a.gsax), a.pct?.gsax, `${a.ga} allowed on ${a.xga} expected`)
+      + (a.hdsv != null ? bar("High-danger save %", pct3(a.hdsv), a.pct?.hdsv, `${a.hd} high-danger shots faced`) : "");
+  } else {
+    const diff = Math.round((a.goals - a.xg) * 10) / 10;
+    const finish = Math.abs(diff) < 0.5 ? "scoring about as expected" : diff > 0 ? `${signed(diff)} more than expected` : `${Math.abs(diff)} fewer than expected`;
+    rows = bar("Expected goals", a.xg.toFixed(1), a.pct?.xg, `${a.goals} actual goals: ${finish}`)
+      + bar("Expected goals share (5-on-5)", `${a.xgf}%`, a.pct?.xgf, "of the chances while on the ice")
+      + bar("Shot attempts share (5-on-5)", `${a.cf}%`, a.pct?.cf, `${a.attempts} own attempts`);
+  }
+  return `<div class="card pad">${rows}</div>
+    <p class="help">Expected goals count each shot by how often shots like it go in (distance, angle, rebound, rush).
+      Advanced stats: <a href="${esc(d.credit || "https://moneypuck.com")}" target="_blank" rel="noopener">MoneyPuck.com</a>.</p>`;
+}
+
+async function playerView(id, league = "nhl") {
+  setNav("league");
+  showLoading("Loading player…");
+  const path = league === "pwhl" ? `/api/pwhl/player/${id}` : `/api/player/${id}`;
+  let d, hidden = [];
+  try { [d, hidden] = await Promise.all([fast(path, () => playerView(id, league)), hiddenToday().catch(() => [])]); }
+  catch (e) { view.innerHTML = e.status === 404 ? `${backLink("#/league", "League")}<div class="card pad">That player isn't in the league's records.</div>` : failed(e); return; }
+  const hid = d.team ? hidden.filter(g => g.state === "final" && (g.away.abbr === d.team || g.home.abbr === d.team)) : [];
+  if (hid.length) { view.innerHTML = `<div style="margin-top:12px">${spoilCover(hid, `${d.name}'s page`)}</div>`; return; }
+  const f = d.facts || {}, age = ageOf(f.born);
+  const chips = [age != null ? `${age} yrs` : "", f.height || "", f.weight ? `${f.weight} lb` : "",
+    f.shoots ? `${d.goalie ? "Catches" : "Shoots"} ${f.shoots}` : "", f.country || ""].filter(Boolean);
+  const hasAdv = league === "nhl";
+  if (playerTab === "advanced" && !hasAdv) playerTab = "games";
+  const tabs = [["games", "Games"], ["career", "Career"], ...(hasAdv ? [["advanced", "Advanced"]] : [])];
+  const body = { games: () => formChart(d.log, d.goalie) + gameLogTable(d.log, d.goalie, league), career: () => careerBlock(d), advanced: () => advancedBlock(d) };
+  view.innerHTML = `${backLink("#/league", "League")}
+    <div class="card pad phero">
+      ${photosOn() ? `<div class="phero-ph">${photo(league, d.team || "", d.id, 96)}</div>` : ""}
+      <div class="phero-main">
+        <h1>${esc(d.name)}</h1>
+        <div class="muted small">${d.number != null ? `#${d.number} · ` : ""}${esc(POS_NAME[d.pos] || d.pos || "")}</div>
+        ${d.team ? `<a class="tm phero-team" href="#/team/${d.team}">${mark(d.team)}<span>${esc(fullName(d.team))}</span></a>` : `<div class="muted small">${d.active ? "" : "Not active"}</div>`}
+      </div>
+    </div>
+    ${chips.length ? `<div class="chipsrow">${chips.map(c => `<span class="chip">${esc(c)}</span>`).join("")}</div>` : ""}
+    ${f.birthplace || d.draft ? `<p class="help">${f.birthplace ? `Born in ${esc(f.birthplace)}${f.born ? `, ${esc(new Date(f.born + "T12:00").toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }))}` : ""}.` : ""}
+      ${d.draft ? ` Drafted ${esc(d.draft)}.` : ""}</p>` : ""}
+    ${d.season ? `<h2>${esc(d.season.label)} season</h2><div class="card pad">${statLine(d.season, d.goalie)}</div>` : ""}
+    <div class="seg" role="tablist">${tabs.map(([k, l]) => `<button data-ptab="${k}" class="${k === playerTab ? "on" : ""}">${l}</button>`).join("")}</div>
+    <div id="ptab">${body[playerTab]()}</div>`;
+  const bindRows = () => {
+    view.querySelectorAll("tr[data-href]").forEach(r => r.addEventListener("click", () => { location.hash = r.dataset.href; }));
+    view.querySelector("[data-allleagues]")?.addEventListener("click", () => {
+      allLeagues = !allLeagues;
+      document.getElementById("ptab").innerHTML = body[playerTab]();
+      bindRows();
+    });
+  };
+  bindRows();
+  view.querySelectorAll("[data-ptab]").forEach(b => b.addEventListener("click", () => {
+    playerTab = b.dataset.ptab;
+    view.querySelectorAll("[data-ptab]").forEach(x => x.classList.toggle("on", x === b));
+    document.getElementById("ptab").innerHTML = body[playerTab]();
+    bindRows();
+  }));
+}
+
+// League tab: Standings | Leaders, as one row above either page.
+const leagueTabs = current => `<div class="seg seg-top">${[["#/league", "standings", "Standings"], ["#/leaders", "leaders", "Leaders"]].map(([href, k, l]) =>
+  `<a href="${href}" class="${k === current ? "on" : ""}">${l}</a>`).join("")}</div>`;
+const LEADER_CATS = [["points", "Points"], ["goals", "Goals"], ["assists", "Assists"], ["wins", "Wins"], ["savePctg", "SV%"], ["goalsAgainstAverage", "GAA"]];
+
+async function leadersView(quiet = false) {
+  setNav("league");
+  if (!quiet) showLoading("Loading leaders…");
+  const lg = pageLeague();
+  let cat = "points";
+  try { cat = localStorage.getItem("leadersCat") || cat; } catch { /* fine */ }
+  let d, hid = [];
+  try { [d, hid] = await Promise.all([fast(`/api/leaders?league=${lg}`, () => leadersView(true)), hiddenToday().catch(() => [])]); }
+  catch (e) { view.innerHTML = leagueTabs("leaders") + failed(e); return; }
+  hid = hid.filter(g => g.state === "final" && leagueOf(g.home.abbr) === lg);
+  if (hid.length) {
+    view.innerHTML = leagueTabs("leaders") + leaguePicker(lg) + spoilCover(hid, "The leaders", "include");
+    bindLeaguePicker(() => leadersView());
+    return;
+  }
+  const rows = d.cats[cat] || [];
+  const fmt = v => cat === "savePctg" ? pct3(v) : cat === "goalsAgainstAverage" ? (+v).toFixed(2) : v;
+  const fav = favs();
+  view.innerHTML = `${leagueTabs("leaders")}${leaguePicker(lg)}
+    <div class="seg">${LEADER_CATS.map(([k, l]) => `<button data-cat="${k}" class="${k === cat ? "on" : ""}">${l}</button>`).join("")}</div>
+    <div class="card">${rows.length ? rows.map((r, i) => `<a class="prow${fav.has(r.team) ? " fav" : ""}" href="${playerHref(lg, r.pid)}">
+      <span class="rank">${i && fmt(rows[i - 1].value) === fmt(r.value) ? "" : i + 1}</span>${photo(lg, r.team, r.pid, 36)}
+      <span class="prow-main"><b>${esc(r.name)}</b><span class="muted small">${mark(r.team)} ${esc(r.pos || "")}</span></span>
+      <span class="prow-val">${fmt(r.value)}</span></a>`).join("") : `<div class="pad muted small">No numbers yet this season.</div>`}</div>
+    <p class="help">${esc(d.season)} regular season.${["savePctg", "goalsAgainstAverage"].includes(cat) ? " Goalies with enough starts to count." : ""} Your teams' players are highlighted.</p>`;
+  bindLeaguePicker(() => leadersView());
+  view.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => {
+    try { localStorage.setItem("leadersCat", b.dataset.cat); } catch { /* fine */ }
+    leadersView(true);
+  }));
+}
+
+// Search: players (every roster, both leagues), teams, and the next and last game of the team you typed. The
+// player list arrives once (~10 KB); every key press after that is searched on the phone, with no waiting.
+let searchText = "";
+const fold = s => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+function searchResults(q, players) {
+  const f = fold(q.trim());
+  if (f.length < 2) return { teams: [], players: [] };
+  const score = s => { const t = fold(s); return t.startsWith(f) ? 0 : t.split(/[\s-]/).some(w => w.startsWith(f)) ? 1 : t.includes(f) ? 2 : -1; };
+  const teams = Object.entries(TEAMS).map(([abbr, t]) => [abbr, Math.min(...[t.name, t.place, `${t.place} ${t.name}`, t.code || abbr].map(score).map(x => x < 0 ? 9 : x))])
+    .filter(([, s]) => s < 9).sort((x, y) => x[1] - y[1] || teamName(x[0]).localeCompare(teamName(y[0]))).map(([a]) => a);
+  const fav = favs();
+  const found = players.map(p => [p, score(p[1])]).filter(([, s]) => s >= 0)
+    .sort((x, y) => x[1] - y[1] || (fav.has(y[0][2]) - fav.has(x[0][2])) || x[0][1].localeCompare(y[0][1])).slice(0, 30).map(([p]) => p);
+  return { teams: teams.slice(0, 6), players: found };
+}
+
+async function searchView() {
+  setNav("search");
+  view.innerHTML = `<h1>Search</h1>
+    <input class="field search-box" id="q" type="search" placeholder="Players and teams" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(searchText)}">
+    <div id="results"></div>`;
+  const box = document.getElementById("q"), out = document.getElementById("results");
+  if (!searchText) box.focus();
+  let players = null;
+  const draw = async () => {
+    searchText = box.value;
+    if (!players) { out.innerHTML = searchText.trim().length >= 2 ? `<div class="empty">Loading players…</div>` : ""; return; }
+    const r = searchResults(searchText, players);
+    if (searchText.trim().length < 2) { out.innerHTML = `<p class="help">Type a name: Pastrnak, Keller, Bruins, Fleet…</p>`; return; }
+    if (!r.teams.length && !r.players.length) { out.innerHTML = `<div class="card pad muted small">Nothing matches “${esc(searchText.trim())}”.</div>`; return; }
+    out.innerHTML = `${r.teams.length ? `<h2>Teams</h2><div class="card">${r.teams.map(a => `<a class="prow" href="#/team/${a}">${mark(a, true)}<span class="prow-main"><b>${esc(fullName(a))}</b><span class="muted small">${leagueOf(a) === "pwhl" ? "PWHL" : esc(TEAMS[a]?.div || "NHL")}</span></span></a>`).join("")}</div>
+      <div id="teamgames"></div>` : ""}
+      ${r.players.length ? `<h2>Players</h2><div class="card">${r.players.map(([pid, name, team, pos]) => `<a class="prow" href="${playerHref(leagueOf(team), pid)}">${photo(leagueOf(team), team, pid, 36)}
+        <span class="prow-main"><b>${esc(name)}</b><span class="muted small">${mark(team)} ${esc(teamName(team))} · ${esc(pos || "")}</span></span></a>`).join("")}</div>` : ""}`;
+    if (r.teams.length) {
+      const abbr = r.teams[0], want = searchText;
+      const t = await fast(`/api/team/${encodeURIComponent(abbr)}`, () => {}).catch(() => null);
+      const box2 = document.getElementById("teamgames");
+      if (!t || !box2 || want !== searchText) return;
+      const last = t.schedule.filter(g => g.state === "final").slice(-1), next = t.schedule.filter(g => g.state !== "final").slice(0, 1);
+      const hidden = await hiddenToday().catch(() => []);
+      const shown = [...next, ...last].filter(g => !hidden.some(h => h.id === g.id));
+      if (shown.length) box2.innerHTML = `<h2>${esc(teamName(abbr))} games</h2><div class="card">${shown.map(g => `<div class="subhead">${esc(shortDate(g.date))}</div>${gameCard(g, favs())}`).join("")}</div>`;
+    }
+  };
+  box.addEventListener("input", draw);
+  draw();
+  try { players = (await fast("/api/search", () => {})).players; } catch (e) { out.innerHTML = failed(e); return; }
+  draw();
 }
 
 function ordinal(n) {
@@ -1390,6 +1637,11 @@ function settingsView() {
     <h2>Display</h2>
     <div class="card checks"><label><input type="checkbox" id="animations" ${s.animations !== false ? "checked" : ""}>Animations between pages</label></div>
     <p class="help">Quick slides between tabs and pages. Turn them off for instant switching. They're also off whenever your phone's Reduce Motion setting is on.</p>
+    <div class="seg" role="group" aria-label="Team marks">${[["badges", "Team badges"], ["logos", "Team logos"]].map(([k, l]) =>
+      `<button data-marks="${k}" class="${(s.marks || "badges") === k ? "on" : ""}">${l}</button>`).join("")}</div>
+    <p class="help">How teams show up everywhere: coloured badges with their letters, or the teams' own logos.</p>
+    <div class="card checks"><label><input type="checkbox" id="photos" ${s.photos !== false ? "checked" : ""}>Player photos</label></div>
+    <p class="help">Faces on player pages, leaders, rosters and the three stars. They're small and the app keeps them after the first look; turn them off for the leanest pages.</p>
     <div class="card checks"><label><input type="checkbox" id="odds" ${s.odds !== false ? "checked" : ""}>Show odds</label></div>
     <p class="help">Who's favoured to win and how many goals are expected, from DraftKings' lines. Just for fun: nothing here links to betting.</p>
     <div class="seg" role="group" aria-label="Buttons on touch screens">${[["right", "Right-handed"], ["left", "Left-handed"]].map(([k, l]) =>
@@ -1428,6 +1680,11 @@ function settingsView() {
   view.querySelectorAll("input[name=services]").forEach(i => i.addEventListener("change", () => saveSettings({ services: picked("services") })));
   document.getElementById("animations").addEventListener("change", e => saveSettings({ animations: e.target.checked }));
   document.getElementById("odds").addEventListener("change", e => saveSettings({ odds: e.target.checked }));
+  document.getElementById("photos").addEventListener("change", e => saveSettings({ photos: e.target.checked }));
+  view.querySelectorAll("button[data-marks]").forEach(b => b.addEventListener("click", () => {
+    saveSettings({ marks: b.dataset.marks });
+    settingsView();   // every mark on the page changes
+  }));
   document.querySelectorAll("button[data-hand]").forEach(b => b.addEventListener("click", () => {
     document.querySelectorAll("button[data-hand]").forEach(x => x.classList.toggle("on", x === b));
     applyHand(b.dataset.hand); saveSettings({ hand: b.dataset.hand });
@@ -1732,11 +1989,12 @@ const VIEWS = {};
 // Same checks as renderRoute: a page whose argument it rejects is counted as what it shows instead.
 const VIEW_PAGE = { standings: "league", teams: "league" };
 const VIEW_ARG = { day: ["date", /^\d{4}-\d{2}-\d{2}$/], picks: ["date", /^\d{4}-\d{2}-\d{2}$/], game: ["id", /^\d+$/],
-  pgame: ["id", /^\d+$/], team: ["team", /^(PW-)?[A-Z]{2,3}$/] };
-const VIEW_PLAIN = new Set(["picks", "wire", "league", "settings", "app", "new", "report"]);   // fine without an argument
+  pgame: ["id", /^\d+$/], team: ["team", /^(PW-)?[A-Z]{2,3}$/], player: ["id", /^\d+$/], pplayer: ["id", /^\d+$/] };
+const VIEW_PLAIN = new Set(["picks", "wire", "league", "settings", "app", "new", "report", "leaders", "search"]);   // fine without an argument
 const VIEW_NAME = { tonight: "Tonight", "day/:date": "Another day", "game/:id": "NHL game", "pgame/:id": "PWHL game",
   picks: "Pick'em", "picks/:date": "Pick'em, another day", wire: "Wire", league: "League", "team/:team": "Team page",
-  settings: "Settings", app: "Get the app", new: "What's new", report: "Report a problem" };
+  settings: "Settings", app: "Get the app", new: "What's new", report: "Report a problem",
+  "player/:id": "NHL player", "pplayer/:id": "PWHL player", leaders: "Leaders", search: "Search" };
 
 function countView() {
   if (ME?.status !== "approved" || ME.admin) return;
@@ -1810,6 +2068,10 @@ function renderRoute() {
     return standingsView(mode);
   }
   if (page === "team" && /^(PW-)?[A-Z]{2,3}$/.test(arg || "")) return teamView(arg);
+  if (page === "player" && /^\d+$/.test(arg || "")) return playerView(arg);
+  if (page === "pplayer" && /^\d+$/.test(arg || "")) return playerView(arg, "pwhl");
+  if (page === "leaders") return leadersView();
+  if (page === "search") return searchView();
   if (page === "settings") return settingsView();
   if (page === "app") return appView();
   if (page === "new") return whatsNewView();

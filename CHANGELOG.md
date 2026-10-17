@@ -3,6 +3,10 @@
 Every update to [Shots on Goal](https://github.com/DieLaughing/shotsongoal), newest first. The same list is on the app's What's new page.
 This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit that file, not this one.
 
+## October 17, 2026
+
+- **New: Player pages, leaders and search.** Tap any player's name (goal scorers, assists, three stars, box scores, rosters, team leaders) for their own page. It has their photo, age, size and draft spot, this season's numbers, a chart and log of their last games, their whole career season by season, and awards. NHL players also get an Advanced tab with expected goals and shot share from MoneyPuck.com, showing how they rank against the league. The League tab now has Leaders (points, goals, assists, wins, save % and GAA, for the NHL and PWHL), and the magnifying glass at the top searches every player and team. Prefer logos to the coloured team badges? Settings → Display has a switch, and player photos can be turned off there too.
+
 ## October 16, 2026
 
 - **Improved: Counting which pages get used.** The app now keeps a simple tally of how often each kind of page is opened (Tonight, game pages, Pick'em, the Wire and so on). It isn't tracking you. It never records who opened what, so not even the person running the app can see who clicked anything, just totals like "game pages were opened 40 times this week". It's strictly for deciding what to build and improve next. Tallies are kept for six months.

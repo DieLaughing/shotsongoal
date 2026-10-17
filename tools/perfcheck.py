@@ -1,6 +1,6 @@
 """Speed budget check (docs/operating.md): a phone-sized headless Chromium with 200 ms added to every request (the
-"slow relay") opens the app, visits every tab and a game and team page, then comes back to each one. Every API call the
-pages made is then timed directly against the server.
+"slow relay") opens the app, visits every tab and a game, team and player page, then comes back to each one. Every API
+call the pages made is then timed directly against the server.
 
   first visit    content on screen after opening the app with nothing cached          < FIRST_MS
   revisit        content on screen after going back to a page already seen            < REVISIT_MS
@@ -32,8 +32,8 @@ FIRST_MS, REVISIT_MS, API_P95_MS = 1500, 300, 200
 LATENCY_MS = 200          # added to every request: the slow relay
 DOWN_KBPS = 1600          # a slow phone connection (~"slow 4G")
 RUNS = 20
-TABS = ["#/picks", "#/wire", "#/league", "#/settings", "#/"]
-DETAIL = ['a[href^="#/game/"]', 'a[href^="#/team/"]']    # found on the pages: the first game and team link
+TABS = ["#/picks", "#/wire", "#/league", "#/leaders", "#/search", "#/settings", "#/"]
+DETAIL = ['a[href^="#/game/"]', 'a[href^="#/team/"]', 'a[href^="#/player/"]']   # found on the pages: the first of each
 
 # What #view shows: 0 = nothing new yet (or the "Loading…" placeholder), 1 = the page, 2 = an error message. A page
 # that fails fast must not pass as a fast page, so errors come back as -1 (reported "error", over budget).
@@ -95,8 +95,8 @@ def browse(url: str) -> tuple[float, dict[str, float | None], set[str]]:
         first = page.evaluate(FIRST, 15000)
         page.wait_for_timeout(4000)                  # prefetch() runs 2.5 s after start
         pages = list(TABS)
-        for sel in DETAIL:                           # a game page and a team page, from links the app shows
-            for hop in ["#/", "#/league"]:
+        for sel in DETAIL:                           # a game, team and player page, from links the app shows
+            for hop in ["#/", "#/league", "#/leaders"]:
                 page.evaluate(GO, [hop, 10000])
                 href = page.eval_on_selector(sel, "a => a.getAttribute('href')") if page.query_selector(sel) else None
                 if href:

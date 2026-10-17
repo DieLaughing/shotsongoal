@@ -16,13 +16,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import access, bugs, alerts, changes, home, ics, odds, picks, pwhl, slow, social, spoilers, teams, usage, watch, wire
+from . import access, bugs, alerts, changes, home, ics, moneypuck, nhl, odds, picks, pwhl, slow, social, spoilers, teams, usage, watch, wire
 from .db import Store, parse_iso
-from .feed import Feed
+from .feed import PWHL_TEAM_IDS, Feed, eastern_today
+from .images import SIZES, Images
 from .push import Pusher
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -43,6 +44,7 @@ social.init(store.conn)
 usage.init(sqlite3.connect(store.path, check_same_thread=False, timeout=10))   # its own: see usage.init
 slow.init(sqlite3.connect(store.path, check_same_thread=False, timeout=10))
 feed = Feed(store)
+images = Images(DATA_DIR / "img", lambda: nhl.current_season(eastern_today()), feed.headshot)
 pusher = Pusher(DATA_DIR, access.ADMIN)
 feed.alerts = alerts.Alerts(store, pusher, access.BASE_URL)
 
@@ -233,6 +235,8 @@ async def save_settings(request: Request):
         "hand": "left" if body.get("hand") == "left" else "right",  # which side game buttons sit on touch screens
         "odds": body.get("odds") is not False,  # favourites and expected goals on games (Settings > Display); on by default
         "animations": body.get("animations") is not False,  # page transitions (Settings > Display); on unless turned off
+        "marks": "logos" if body.get("marks") == "logos" else "badges",  # team marks: coloured badges (default) or logos
+        "photos": body.get("photos") is not False,  # player photos (Settings > Display); on unless turned off
     }
     store.save_settings(request.state.email, clean)
     return clean
@@ -562,6 +566,86 @@ async def team(abbr: str, request: Request):
     return {**data, "schedule": _with_watch(sched, _settings(request)),
             "wire": [i for i in items if abbr in i["teams"]][:20],
             "milestones": home.near_milestones(career["players"]) if career else []}
+
+
+# ---- players ----------------------------------------------------------------------------------
+PID = re.compile(r"^\d{1,8}$")
+
+
+async def _player(coro):
+    try:
+        return await coro
+    except LookupError:
+        raise HTTPException(404, "No such player")
+    except Exception as exc:
+        if getattr(getattr(exc, "response", None), "status_code", None) == 404:
+            raise HTTPException(404, "No such player")
+        raise HTTPException(502, f"Player data unavailable right now ({type(exc).__name__})")
+
+
+@app.get("/api/player/{pid}")
+async def player(pid: str):
+    if not PID.match(pid):
+        raise HTTPException(404)
+    data = await _player(feed.player(int(pid)))
+    return {**data, "credit": moneypuck.CREDIT if data.get("advanced") else None}
+
+
+@app.get("/api/pwhl/player/{pid}")
+async def pwhl_player(pid: str):
+    if not PID.match(pid):
+        raise HTTPException(404)
+    return {**await _player(feed.pwhl_player(int(pid))), "advanced": None}
+
+
+@app.get("/api/leaders")
+async def leaders(request: Request, league: str = "nhl"):
+    league = "pwhl" if league == "pwhl" else "nhl"
+    data = await _upstream(feed.leaders(league))
+    meta = store.meta("pwhl:leaders" if league == "pwhl" else "leaders")
+    return _finished(request, ("leaders", league), meta[:2] if meta else None, lambda: data)
+
+
+@app.get("/api/search")
+async def search_index(request: Request):
+    """Every rostered player as [id, name, team, pos]: the phone searches it as you type, with no request per key."""
+    rows = await _upstream(feed.search_index())
+    meta = store.meta("search:index")
+    return _finished(request, ("search",), meta[:2] if meta else None, lambda: {"players": rows})
+
+
+# ---- images: photos and logos, shrunk and cached (sog/images.py) --------------------------------
+IMG_CACHE = {"Cache-Control": "public, max-age=604800", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"}
+IMG_MISS = Response(status_code=404, headers={"Cache-Control": "public, max-age=86400"})
+PHOTO_NAME = re.compile(r"^(\d{1,8})-(\d+)\.webp$")
+LOGO_NAME = re.compile(r"^((?:PW-)?[A-Z]{2,3})-(light\.svg|dark\.svg|96\.webp)$")
+
+
+@app.get("/img/p/{league}/{team}/{name}")
+async def player_photo(league: str, team: str, name: str):
+    m = PHOTO_NAME.match(name)
+    ok_team = team in (teams.TEAMS if league == "nhl" else teams.ALL if league == "pwhl" and team.startswith("PW-") else ())
+    if not m or not ok_team or int(m[2]) not in SIZES:
+        return IMG_MISS
+    path = await images.photo(league, team, int(m[1]), int(m[2]))
+    return FileResponse(path, media_type="image/webp", headers=IMG_CACHE) if path else IMG_MISS
+
+
+@app.get("/img/logo/{name}")
+async def team_logo(name: str):
+    """NHL: BOS-light.svg / BOS-dark.svg (the NHL's own SVGs). PWHL: PW-BOS-96.webp (shrunk from their PNG)."""
+    m = LOGO_NAME.match(name)
+    if not m:
+        return IMG_MISS
+    abbr, kind = m[1], m[2]
+    code = abbr.removeprefix("PW-")
+    if abbr.startswith("PW-") and kind == "96.webp" and code in PWHL_TEAM_IDS:
+        path = await images.pwhl_logo(abbr, PWHL_TEAM_IDS[code])
+        return FileResponse(path, media_type="image/webp", headers=IMG_CACHE) if path else IMG_MISS
+    if abbr in teams.TEAMS and kind in ("light.svg", "dark.svg"):
+        path = await images.nhl_logo(abbr, kind.removesuffix(".svg"))
+        return FileResponse(path, media_type="image/svg+xml", headers=IMG_CACHE) if path else IMG_MISS
+    return IMG_MISS
 
 
 @app.get("/api/myteams")
