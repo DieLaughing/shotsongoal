@@ -186,7 +186,8 @@ def test_marks_and_photos_settings(client, monkeypatch):
     s = client.put("/api/settings", json={"marks": "logos", "photos": False}).json()
     assert s["marks"] == "logos" and s["photos"] is False
     s = client.put("/api/settings", json={"marks": "<script>"}).json()
-    assert s["marks"] == "badges" and s["photos"] is True
+    assert s["marks"] == "logos" and s["photos"] is True
+    assert client.put("/api/settings", json={"marks": "badges"}).json()["marks"] == "badges"
 
 
 def test_logos_are_one_stylesheet(tmp_path):
@@ -213,9 +214,11 @@ def test_logos_are_one_stylesheet(tmp_path):
     assert images.css_version(path) and len(images.css_version(path)) == 10
 
 
-def test_me_offers_logos_only_when_chosen(client, monkeypatch):
+def test_me_offers_logos_unless_badges_are_picked(client, monkeypatch):
     _fake_leagues(monkeypatch)
     as_user(monkeypatch, "owner@x.com")
+    assert client.get("/api/me").json()["settings"]["marks"] == "logos"   # the default, before anyone picks
+    client.put("/api/settings", json={"marks": "badges"})
     assert client.get("/api/me").json()["logos"] is None
     client.put("/api/settings", json={"marks": "logos"})
     assert "logos" in client.get("/api/me").json()   # None until built (badges meanwhile), then a versioned URL

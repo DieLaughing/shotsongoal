@@ -140,6 +140,7 @@ def _user_settings(user: dict | None, email: str | None) -> dict:
         s = {"favorites": list(watch.DEFAULT_LOCAL), "services": ["espn_plus", "regional", "espn", "abc", "tnt"]}
     s.setdefault("favorites", [])
     s.setdefault("local", list(watch.DEFAULT_LOCAL))
+    s.setdefault("marks", "logos")   # people who never picked get logos; picking badges is saved
     s["notify"] = alerts.prefs(s)
     s["spoilers"] = spoilers.clean(s.get("spoilers"), teams.ALL)
     return s
@@ -237,7 +238,7 @@ async def save_settings(request: Request):
         "hand": "left" if body.get("hand") == "left" else "right",  # which side game buttons sit on touch screens
         "odds": body.get("odds") is not False,  # favourites and expected goals on games (Settings > Display); on by default
         "animations": body.get("animations") is not False,  # page transitions (Settings > Display); on unless turned off
-        "marks": "logos" if body.get("marks") == "logos" else "badges",  # team marks: coloured badges (default) or logos
+        "marks": "badges" if body.get("marks") == "badges" else "logos",  # team marks: logos (default) or coloured badges
         "photos": body.get("photos") is not False,  # player photos (Settings > Display); on unless turned off
     }
     store.save_settings(request.state.email, clean)
