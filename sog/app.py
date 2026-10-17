@@ -20,7 +20,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Red
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import access, bugs, alerts, changes, home, ics, odds, picks, pwhl, social, spoilers, teams, usage, watch, wire
+from . import access, bugs, alerts, changes, home, ics, odds, picks, pwhl, slow, social, spoilers, teams, usage, watch, wire
 from .db import Store, parse_iso
 from .feed import Feed
 from .push import Pusher
@@ -33,7 +33,6 @@ ABBR = re.compile(r"^(PW-)?[A-Z]{2,3}$")  # NHL "BOS", PWHL "PW-BOS"
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 REREQUEST_AFTER = timedelta(days=7)    # a denied or revoked person may ask again after this
 RENOTIFY_AFTER = timedelta(hours=12)   # pressing Request twice doesn't ping the phone twice
-SLOW = 0.5                             # seconds: API requests slower than this are logged
 log = logging.getLogger("sog.app")
 
 store = Store(DATA_DIR / "sog.db")
@@ -42,6 +41,7 @@ picks.init(store.conn)
 odds.init(store.conn)
 social.init(store.conn)
 usage.init(sqlite3.connect(store.path, check_same_thread=False, timeout=10))   # its own: see usage.init
+slow.init(sqlite3.connect(store.path, check_same_thread=False, timeout=10))
 feed = Feed(store)
 pusher = Pusher(DATA_DIR, access.ADMIN)
 feed.alerts = alerts.Alerts(store, pusher, access.BASE_URL)
@@ -80,7 +80,8 @@ async def name_check_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    tasks = [] if os.environ.get("SOG_NO_POLL") else [asyncio.create_task(feed.loop()), asyncio.create_task(name_check_loop())]
+    tasks = [] if os.environ.get("SOG_NO_POLL") else [asyncio.create_task(feed.loop()), asyncio.create_task(name_check_loop()),
+                                                      asyncio.create_task(slow.loop(store, access.notify))]
     yield
     for task in tasks:
         task.cancel()
@@ -115,8 +116,10 @@ async def gate(request: Request, call_next):
     started = time.perf_counter()
     response = await call_next(request)
     took = time.perf_counter() - started
-    if path.startswith("/api/") and took > SLOW:
+    if path.startswith("/api/") and took > slow.SLOW:
         log.warning("slow request: %s %s %.0f ms", request.method, path, took * 1000)
+        route = getattr(request.scope.get("route"), "path", None) or "(no route)"   # /api/game/{gid}, not each game
+        asyncio.get_running_loop().run_in_executor(None, slow.add, route, round(took * 1000), feed.busy)
     if not path.startswith("/api/"):
         # Without this, Cloudflare caches .js/.css for hours and new versions don't show up.
         response.headers.setdefault("Cache-Control", "no-cache")
