@@ -151,10 +151,14 @@ Operating rules shared with the sibling app (standards, speed budget, shared par
   Leaders (#/leaders, League tab: Standings | Leaders) and Search (#/search, header icon: players from every roster
   via /api/search, filtered on the phone; teams; the top team's next and last game). Player pages and leaders follow
   spoiler-free like the team page and standings.
-- sog/images.py: /img/p/<league>/<team>/<id>-<96|192>.webp and /img/logo/<ABBR>-light|dark.svg (NHL) or
-  <PW-XXX>-96.webp (PWHL). Downloaded once, shrunk with Pillow (80 KB headshot -> 2 KB), kept in /data/img (photos
-  7 days, logos 30, misses remembered 1 day), sent with a week's Cache-Control; sw.js serves /img/ cache-first from
-  its own cache (600 entries). NHL photos use this season's mugs URL, else the player's landing `headshot`.
+- sog/images.py: photos at /img/p/<league>/<team>/<id>-<96|192>.webp, downloaded once, shrunk with Pillow (80 KB
+  headshot -> 2 KB), kept in /data/img (7 days, misses remembered 1 day), a week's Cache-Control; sw.js serves /img/
+  cache-first from its own cache (600 entries). NHL photos use this season's mugs URL, else the landing `headshot`.
+  Logos are ONE stylesheet, /img/logos.css?v=<hash> (from /api/me `logos` when marks=logos): `.mark.lg-<ABBR>` rules
+  with 56 px WebP data URLs (~77 KB gz for all 44 teams, dark versions only where they differ). NHL logos come from
+  ESPN's 500/500-dark PNGs (the NHL's SVGs are up to 35 KB each); until the sheet loads, marks stay badges.
+- Team page: header, next game as a full card, then Games (one line per game) | Players (roster merged with this
+  season's stats, per group, best first; milestones on top) | News. The tab is remembered (localStorage teamTab).
 - sog/moneypuck.py: MoneyPuck's season skaters/goalies CSVs (listed on moneypuck.com/data.htm; free for
   non-commercial use with credit, so the Advanced tab links MoneyPuck.com). Fetched every 6 h in the background; a
   player page only peeks at the saved copy (Feed.moneypuck_peek) and never waits on the 2 MB download.

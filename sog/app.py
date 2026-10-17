@@ -23,6 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from . import access, bugs, alerts, changes, home, ics, moneypuck, nhl, odds, picks, pwhl, slow, social, spoilers, teams, usage, watch, wire
 from .db import Store, parse_iso
 from .feed import PWHL_TEAM_IDS, Feed, eastern_today
+from . import images as images_mod
 from .images import SIZES, Images
 from .push import Pusher
 
@@ -178,11 +179,12 @@ async def my_bug_reports(request: Request):
     return {"reports": await bugs.mine(request.state.email), "repo": bugs.REPO, "filing": bugs.configured()}
 
 @app.get("/api/me")
-def me(request: Request):
+async def me(request: Request):
     email, user = request.state.email, request.state.user
     return {"email": email, "status": (user or {}).get("status", "none") if email else "signed-out",
             "admin": access.is_admin(email), "settings": _settings(request) if user else None,
-            "services": watch.services(), "teams": teams.as_list()}
+            "services": watch.services(), "teams": teams.as_list(),
+            "logos": logos_url() if user and (_settings(request).get("marks") == "logos") else None}
 
 
 @app.post("/api/request")
@@ -618,7 +620,6 @@ async def search_index(request: Request):
 IMG_CACHE = {"Cache-Control": "public, max-age=604800", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"}
 IMG_MISS = Response(status_code=404, headers={"Cache-Control": "public, max-age=86400"})
 PHOTO_NAME = re.compile(r"^(\d{1,8})-(\d+)\.webp$")
-LOGO_NAME = re.compile(r"^((?:PW-)?[A-Z]{2,3})-(light\.svg|dark\.svg|96\.webp)$")
 
 
 @app.get("/img/p/{league}/{team}/{name}")
@@ -631,21 +632,40 @@ async def player_photo(league: str, team: str, name: str):
     return FileResponse(path, media_type="image/webp", headers=IMG_CACHE) if path else IMG_MISS
 
 
-@app.get("/img/logo/{name}")
-async def team_logo(name: str):
-    """NHL: BOS-light.svg / BOS-dark.svg (the NHL's own SVGs). PWHL: PW-BOS-96.webp (shrunk from their PNG)."""
-    m = LOGO_NAME.match(name)
-    if not m:
+_logos = {"mtime": None, "v": None, "building": None}
+
+
+def logos_url() -> str | None:
+    """/img/logos.css?v=<content hash> once it's built (the phone keeps each version for good); None until then, and
+    the first ask starts the build in the background, so the app opens with badges and never waits for logos."""
+    path = DATA_DIR / "img" / "logos.css"
+    try:
+        mtime = path.stat().st_mtime
+    except FileNotFoundError:
+        mtime = None
+    if mtime is None or time.time() - mtime > images_mod.LOGO_TTL:
+        if not _logos["building"] or _logos["building"].done():
+            _logos["building"] = asyncio.get_running_loop().create_task(_build_logos())
+    if mtime is None:
+        return None
+    if _logos["mtime"] != mtime:
+        _logos.update(mtime=mtime, v=images_mod.css_version(path))
+    return f"/img/logos.css?v={_logos['v']}"
+
+
+async def _build_logos():
+    try:
+        return await images_mod.logos_css(images, list(teams.TEAMS), {pwhl.key(c): t for c, t in PWHL_TEAM_IDS.items()})
+    except Exception:
+        log.exception("logos.css build failed")
+
+
+@app.get("/img/logos.css")
+async def logos_css():
+    path = await _build_logos()
+    if not path:
         return IMG_MISS
-    abbr, kind = m[1], m[2]
-    code = abbr.removeprefix("PW-")
-    if abbr.startswith("PW-") and kind == "96.webp" and code in PWHL_TEAM_IDS:
-        path = await images.pwhl_logo(abbr, PWHL_TEAM_IDS[code])
-        return FileResponse(path, media_type="image/webp", headers=IMG_CACHE) if path else IMG_MISS
-    if abbr in teams.TEAMS and kind in ("light.svg", "dark.svg"):
-        path = await images.nhl_logo(abbr, kind.removesuffix(".svg"))
-        return FileResponse(path, media_type="image/svg+xml", headers=IMG_CACHE) if path else IMG_MISS
-    return IMG_MISS
+    return FileResponse(path, media_type="text/css", headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @app.get("/api/myteams")

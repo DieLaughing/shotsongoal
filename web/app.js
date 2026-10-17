@@ -111,15 +111,20 @@ setInterval(() => { if (!document.hidden) prefetch(); }, 90000);
 
 const favs = () => new Set(ME?.settings?.favorites || []);
 
-// A team's mark: its coloured badge, or (Settings > Display) its logo. A logo that can't load falls back to the badge.
+// A team's mark: its coloured badge, or (Settings > Display) its logo. Logos are one stylesheet (/img/logos.css, kept
+// by the phone) that turns each badge into its logo; until it has loaded, or for a team it has no logo for, the
+// badge stays.
 function mark(abbr, big = false) {
   const t = TEAMS[abbr] || {};
-  const cls = `mark${t.light ? " light" : ""}${big ? " big" : ""}`, code = esc(t.code || abbr);
-  if (ME?.settings?.marks !== "logos" || !TEAMS[abbr]) return `<span class="${cls}" style="--c:${esc(t.color || "#666")}">${code}</span>`;
-  const img = leagueOf(abbr) === "pwhl"
-    ? `<img src="/img/logo/${abbr}-96.webp" alt="" loading="lazy" decoding="async">`
-    : `<picture><source srcset="/img/logo/${abbr}-dark.svg" media="(prefers-color-scheme: dark)"><img src="/img/logo/${abbr}-light.svg" alt="" loading="lazy" decoding="async"></picture>`;
-  return `<span class="${cls} logo" style="--c:${esc(t.color || "#666")}" title="${esc(fullName(abbr))}"><span class="code">${code}</span>${img}</span>`;
+  const logo = ME?.settings?.marks === "logos" && TEAMS[abbr] ? ` lg-${abbr}` : "";
+  return `<span class="mark${t.light ? " light" : ""}${big ? " big" : ""}${logo}" style="--c:${esc(t.color || "#666")}"${logo ? ` title="${esc(fullName(abbr))}"` : ""}>${esc(t.code || abbr)}</span>`;
+}
+function applyLogos() {
+  let link = document.getElementById("logos-css");
+  if (ME?.settings?.marks !== "logos") { link?.remove(); return; }
+  const href = ME.logos || "/img/logos.css?v=new";   // not built yet: this one waits for the build
+  if (!link) { link = Object.assign(document.createElement("link"), { id: "logos-css", rel: "stylesheet" }); document.head.append(link); }
+  if (link.getAttribute("href") !== href) link.href = href;
 }
 
 const teamName = abbr => TEAMS[abbr]?.name || abbr;
@@ -1247,6 +1252,47 @@ async function standingsView(mode = "division") {
 const MS_WORD = { goals: ["goal", "goals"], assists: ["assist", "assists"], points: ["point", "points"], gp: ["game", "games"],
   wins: ["win", "wins"], shutouts: ["shutout", "shutouts"] };
 
+// One line per game on a team page: date, opponent, then the time, the live score or the result (spoiler-free aware).
+function teamGameRow(g, abbr) {
+  const home = g.home.abbr === abbr, opp = home ? g.away.abbr : g.home.abbr;
+  const us = home ? g.home : g.away, them = home ? g.away : g.home, extra = g.outcome && g.outcome !== "REG";
+  let right;
+  if (spoilerHidden(g)) right = `<span class="muted small">🙈 Hidden</span>`;
+  else if (g.state === "final") {
+    const won = us.score > them.score;
+    right = `<b class="${won ? "res-w" : "res-l"}">${won ? "W" : extra ? "OTL" : "L"}</b> ${us.score}–${them.score}${extra ? ` <span class="muted small">${esc(g.outcome)}</span>` : ""}`;
+  } else if (g.state === "live") right = `<span class="live">LIVE</span> ${us.score ?? 0}–${them.score ?? 0}`;
+  else if (g.state === "postponed") right = `<span class="muted small">Postponed</span>`;
+  else right = g.start ? esc(time(g.start)) : `<span class="muted small">TBD</span>`;
+  return `<a class="grow" href="${gameHref(g)}"><span class="grow-date">${esc(shortDate(g.date))}</span>
+    <span class="tm grow-opp">${home ? "vs" : "@"} ${mark(opp)} <span>${esc(teamName(opp))}</span></span><span class="grow-r">${right}</span></a>`;
+}
+
+// The roster and this season's numbers in one table per group, best first: who's who and how they're doing, together.
+function rosterTables(d, abbr, lg) {
+  const stats = new Map([...d.stats.skaters, ...d.stats.goalies].filter(p => p.pid).map(p => [String(p.pid), p]));
+  const who = (p, s) => `<td><span class="pcell">${photo(lg, abbr, p.id, 28)}<span>${plink(p.name, p.id, lg)}
+    <span class="muted small">${p.number != null ? `#${p.number}` : ""}${p.group !== "G" && p.pos ? ` ${esc(p.pos)}` : ""}</span></span></span></td>`;
+  const dash = `<td class="muted">–</td>`;
+  let html = "";
+  for (const [k, label] of [["F", "Forwards"], ["D", "Defense"], ["G", "Goalies"]]) {
+    const rows = d.roster.filter(p => p.group === k).map(p => ({ p, s: stats.get(String(p.id)) }));
+    if (!rows.length) continue;
+    if (k === "G") {
+      rows.sort((x, y) => (y.s?.gp ?? -1) - (x.s?.gp ?? -1));
+      html += `<h2>${label}</h2><div class="card scroll"><table class="roster"><tr><th>Player</th><th>GP</th><th>W-L-OT</th><th>GAA</th><th>SV%</th></tr>
+        ${rows.map(({ p, s }) => `<tr>${who(p, s)}${s ? `<td>${s.gp}</td><td>${s.w}-${s.l}-${s.otl}</td><td>${s.gaa.toFixed(2)}</td><td>${pct3(s.svpct)}</td>` : dash.repeat(4)}</tr>`).join("")}</table></div>`;
+    } else {
+      rows.sort((x, y) => (y.s?.p ?? -1) - (x.s?.p ?? -1) || (y.s?.g ?? 0) - (x.s?.g ?? 0) || (x.p.number || 99) - (y.p.number || 99));
+      html += `<h2>${label}</h2><div class="card scroll"><table class="roster"><tr><th>Player</th><th>GP</th><th>G</th><th>A</th><th>P</th><th>+/-</th></tr>
+        ${rows.map(({ p, s }) => `<tr>${who(p, s)}${s ? `<td>${s.gp}</td><td>${s.g}</td><td>${s.a}</td><td><b>${s.p}</b></td><td>${signed(s.pm)}</td>` : dash.repeat(5)}</tr>`).join("")}</table></div>`;
+    }
+  }
+  return html ? html + `<p class="help">This season. Tap a player for their page.</p>` : `<div class="card pad muted small">No roster yet.</div>`;
+}
+
+const TEAM_TABS = [["games", "Games"], ["players", "Players"], ["news", "News"]];
+
 async function teamView(abbr) {
   setNav("league");
   showLoading(`Loading ${esc(fullName(abbr))}…`);
@@ -1258,39 +1304,39 @@ async function teamView(abbr) {
   if (hid.length) { view.innerHTML = `<div style="margin-top:12px">${spoilCover(hid, `The ${teamName(abbr)} page`)}</div>`; return; }
   const st = rows.find(r => r.abbr === abbr);
   const fav = favs(), lg = leagueOf(abbr);
-  const done = d.schedule.filter(g => g.state === "final").slice(-5).reverse();
-  const next = d.schedule.filter(g => g.state !== "final").slice(0, 6);
-  const dated = g => `<div class="subhead">${esc(shortDate(g.date))}</div>${gameCard(g, fav)}`;
+  const done = d.schedule.filter(g => g.state === "final").reverse();
+  const ahead = d.schedule.filter(g => g.state !== "final");
+  const [next, ...later] = ahead;
   const isFav = fav.has(abbr);
-  let html = `${backLink("#/league", "League")}<div class="card pad" style="display:flex;align-items:center;gap:14px">
+  let tab = "games";
+  try { tab = localStorage.getItem("teamTab") || tab; } catch { /* fine */ }
+  if (!TEAM_TABS.some(([k]) => k === tab)) tab = "games";
+  const body = {
+    games: () => `${later.length ? `<h2>Coming up</h2><div class="card">${later.slice(0, 8).map(g => teamGameRow(g, abbr)).join("")}</div>` : ""}
+      ${done.length ? `<h2>Recent results</h2><div class="card">${done.slice(0, 10).map(g => teamGameRow(g, abbr)).join("")}</div>` : ""}
+      ${!later.length && !done.length ? `<div class="card pad muted small">No games scheduled.</div>` : ""}`,
+    players: () => `${d.milestones?.length ? `<h2>Close to a milestone</h2><div class="card">${d.milestones.map(m =>
+      `<div class="ms-row"><div><b>${plink(m.name, m.id)}</b><div class="muted small">${m.now.toLocaleString()} career ${MS_WORD[m.stat][1]} · next: ${m.target.toLocaleString()}</div></div>
+        <span class="pill info">${m.left} to go</span></div>`).join("")}</div>` : ""}${rosterTables(d, abbr, lg)}`,
+    news: () => d.wire?.length ? `<div class="card" style="margin-top:12px">${d.wire.slice(0, 12).map(i => wireItem(i, new Set(), hidden)).join("")}</div>`
+      : `<div class="card pad muted small">No news or moves lately.</div>`,
+  };
+  view.innerHTML = `${backLink("#/league", "League")}<div class="card pad team-head">
       ${mark(abbr, true)}
-      <div style="flex:1"><h1 style="margin:0">${esc(fullName(abbr))}</h1>
-      ${st && leagueOf(abbr) === "pwhl" ? `<div class="muted small">${st.w}-${st.otw}-${st.otl}-${st.l} · ${st.pts} pts · ${esc(ordinal(st.league_rank))} in the PWHL${st.season ? ` (${esc(st.season)})` : ""}</div>`
-        : st ? `<div class="muted small">${st.w}-${st.l}-${st.otl} · ${st.pts} pts · ${esc(ordinal(st.div_rank))} in the ${esc(st.div)}</div>` : ""}</div>
+      <div style="flex:1;min-width:0"><h1 style="margin:0">${esc(fullName(abbr))}</h1>
+      ${st && lg === "pwhl" ? `<div class="muted small">${st.w}-${st.otw}-${st.otl}-${st.l} · ${st.pts} pts · ${esc(ordinal(st.league_rank))} in the PWHL${st.season ? ` (${esc(st.season)})` : ""}</div>`
+        : st ? `<div class="muted small">${st.w}-${st.l}-${st.otl} · ${st.pts} pts · ${esc(ordinal(st.div_rank))} in the ${esc(st.div)}${st.streak ? ` · ${esc(st.streak)}` : ""}</div>` : ""}</div>
       <button class="btn small" id="fav">${isFav ? "★ Favorite" : "☆ Favorite"}</button>
-    </div>`;
-  if (next.length) html += `<h2>Coming up</h2><div class="card">${next.map(dated).join("")}</div>`;
-  if (done.length) html += `<h2>Recent results</h2><div class="card">${done.map(dated).join("")}</div>`;
-  if (d.milestones?.length) html += `<h2>Close to a milestone</h2><div class="card">${d.milestones.map(m =>
-    `<div class="ms-row"><div><b>${plink(m.name, m.id)}</b><div class="muted small">${m.now.toLocaleString()} career ${MS_WORD[m.stat][1]} · next: ${m.target.toLocaleString()}</div></div>
-      <span class="pill info">${m.left} to go</span></div>`).join("")}</div>`;
-  if (d.wire?.length) html += `<h2>News &amp; moves</h2><div class="card">${d.wire.slice(0, 8).map(i => wireItem(i, new Set(), hidden)).join("")}</div>`;
-  const sk = d.stats.skaters.slice(0, 10);
-  if (sk.length) {
-    html += `<h2>Leaders</h2><div class="card scroll"><table><tr><th>Skater</th><th>GP</th><th>G</th><th>A</th><th>P</th><th>+/-</th></tr>
-      ${sk.map(p => `<tr><td>${plink(p.name, p.pid, lg)} <span class="muted small">${esc(p.pos)}</span></td><td>${p.gp}</td><td>${p.g}</td><td>${p.a}</td><td><b>${p.p}</b></td><td>${p.pm > 0 ? "+" : ""}${p.pm}</td></tr>`).join("")}
-      </table>${d.stats.goalies.length ? `<table><tr><th>Goalie</th><th>GP</th><th>W-L-OT</th><th>GAA</th><th>SV%</th></tr>
-      ${d.stats.goalies.map(p => `<tr><td>${plink(p.name, p.pid, lg)}</td><td>${p.gp}</td><td>${p.w}-${p.l}-${p.otl}</td><td>${p.gaa.toFixed(2)}</td><td>${p.svpct.toFixed(3).replace(/^0/, "")}</td></tr>`).join("")}</table>` : ""}</div>`;
-  }
-  if (d.roster.length) {
-    const groups = { F: "Forwards", D: "Defense", G: "Goalies" };
-    html += `<h2>Roster</h2><div class="card scroll"><table><tr><th>#</th><th>Player</th><th>Pos</th><th>Shoots</th><th>Born</th></tr>
-      ${Object.entries(groups).map(([k, label]) => `<tr><td colspan="5" class="subhead">${label}</td></tr>` + d.roster.filter(p => p.group === k)
-        .sort((x, y) => (x.number || 99) - (y.number || 99))
-        .map(p => `<tr><td class="muted">${p.number ?? ""}</td><td><span class="pcell">${photo(lg, abbr, p.id, 28)}${plink(p.name, p.id, lg)}</span></td><td>${esc(p.pos)}</td><td>${esc(p.shoots || "")}</td><td class="muted">${esc((p.born || "").slice(0, 4))} ${esc(p.country || "")}</td></tr>`).join("")).join("")}
-      </table></div>`;
-  }
-  view.innerHTML = html;
+    </div>
+    ${next ? `<h2>${next.state === "live" ? "On now" : "Next game"}</h2><div class="card">${gameCard(next, fav)}</div>` : ""}
+    <div class="seg" role="tablist">${TEAM_TABS.map(([k, l]) => `<button data-ttab="${k}" class="${k === tab ? "on" : ""}">${l}</button>`).join("")}</div>
+    <div id="ttab">${body[tab]()}</div>`;
+  view.querySelectorAll("[data-ttab]").forEach(b => b.addEventListener("click", () => {
+    tab = b.dataset.ttab;
+    try { localStorage.setItem("teamTab", tab); } catch { /* fine */ }
+    view.querySelectorAll("[data-ttab]").forEach(x => x.classList.toggle("on", x === b));
+    document.getElementById("ttab").innerHTML = body[tab]();
+  }));
   document.getElementById("fav").addEventListener("click", async () => {
     const list = new Set(ME.settings.favorites);
     list.has(abbr) ? list.delete(abbr) : list.add(abbr);
@@ -1309,13 +1355,8 @@ function photo(league, team, pid, size = 32) {
   if (!photosOn() || !pid || !team) return "";
   return `<img class="ph" src="/img/p/${league}/${encodeURIComponent(team)}/${pid}-${size > 48 ? 192 : 96}.webp" width="${size}" height="${size}" alt="" loading="lazy" decoding="async">`;
 }
-// One listener for every image on every page: a logo that won't load turns back into the badge; a photo just goes.
-document.addEventListener("error", e => {
-  const img = e.target;
-  if (!(img instanceof HTMLImageElement)) return;
-  if (img.closest(".mark.logo")) img.closest(".mark.logo").classList.replace("logo", "nologo");
-  else if (img.classList.contains("ph")) img.classList.add("gone");
-}, true);
+// One listener for every photo on every page: one that won't load just leaves its spot empty.
+document.addEventListener("error", e => { if (e.target.classList?.contains("ph")) e.target.classList.add("gone"); }, true);
 
 const ageOf = born => {
   if (!born) return null;
@@ -1334,22 +1375,18 @@ function statLine(s, goalie) {
   return `<div class="statline">${cells.map(([k, v]) => `<div><b>${esc(v)}</b><span>${k}</span></div>`).join("")}</div>`;
 }
 
-// The last games as bars: points for skaters, save % for goalies. Oldest on the left, like reading a season.
+// The last games as bars: points for skaters, save % for goalies (from .800 up). Oldest on the left, like reading a
+// season. Plain boxes, not a drawing, so the labels stay text-sized at any screen width.
 function formChart(log, goalie) {
   const games = log.slice(0, 10).reverse();
   if (games.length < 2) return "";
-  const W = 300, H = 92, bw = W / games.length;
-  const val = g => goalie ? Math.max(0, (g.svpct || 0) - 0.8) / 0.2 : g.p;
-  const top = goalie ? 1 : Math.max(3, ...games.map(g => g.p));
-  const bars = games.map((g, i) => {
-    const v = val(g), h = Math.max(2, (v / top) * (H - 26));
-    const label = goalie ? pct3(g.svpct) : g.p;
-    return `<rect x="${i * bw + bw * 0.18}" y="${H - 16 - h}" width="${bw * 0.64}" height="${h}" rx="2" class="${goalie ? (g.dec === "W" ? "win" : "") : g.p ? "win" : ""}"/>
-      <text x="${i * bw + bw / 2}" y="${H - 20 - h}" text-anchor="middle" class="v">${label}</text>
-      <text x="${i * bw + bw / 2}" y="${H - 3}" text-anchor="middle">${esc(TEAMS[g.opp]?.code || g.opp)}</text>`;
-  }).join("");
+  const top = goalie ? 0.2 : Math.max(3, ...games.map(g => g.p));
+  const height = g => goalie ? Math.max(0, (g.svpct || 0) - 0.8) / top : g.p / top;
   return `<div class="card pad"><div class="muted small">${goalie ? "Save % — last games" : "Points — last games"}</div>
-    <svg class="form" viewBox="0 0 ${W} ${H}" role="img" aria-label="${goalie ? "Save percentage" : "Points"} in the last ${games.length} games">${bars}</svg></div>`;
+    <div class="form" role="img" aria-label="${goalie ? "Save percentage" : "Points"} in the last ${games.length} games">${games.map(g => `
+      <div class="form-col"><div class="form-area"><span class="form-v">${goalie ? pct3(g.svpct) : g.p}</span>
+        <span class="form-bar${(goalie ? g.dec === "W" : g.p) ? " hit" : ""}" style="height:${Math.max(3, Math.round(height(g) * 100))}%"></span></div>
+        <span class="form-x">${esc(TEAMS[g.opp]?.code || g.opp)}</span></div>`).join("")}</div></div>`;
 }
 
 function gameLogTable(log, goalie, league) {
@@ -1683,6 +1720,7 @@ function settingsView() {
   document.getElementById("photos").addEventListener("change", e => saveSettings({ photos: e.target.checked }));
   view.querySelectorAll("button[data-marks]").forEach(b => b.addEventListener("click", () => {
     saveSettings({ marks: b.dataset.marks });
+    applyLogos();
     settingsView();   // every mark on the page changes
   }));
   document.querySelectorAll("button[data-hand]").forEach(b => b.addEventListener("click", () => {
@@ -2084,6 +2122,7 @@ async function start() {
   try {
     ME = await api("/api/me");
     applyHand(ME.settings?.hand);
+    applyLogos();
   } catch {
     view.innerHTML = `<div class="notice error">Couldn't reach Shots on Goal. Check your connection and reload.</div>`;
     return;
