@@ -28,11 +28,13 @@ jobs:
       - run: python -m playwright install --with-deps chromium
       - name: speed budget
         env:
-          NOTES: ${{ github.event.release.body }}
+          GH_TOKEN: ${{ github.token }}
           OVERRIDE: ${{ inputs.perf_override }}
         run: |
           python tools/perfcheck.py && exit 0
-          reason=$(printf '%s\n' "$NOTES" | sed -n 's/^perf-override:[[:space:]]*//p' | head -1)
+          # The notes as they are now, not as published: editing them and re-running picks up a new override line.
+          notes=$(gh release view "$GITHUB_REF_NAME" --json body --jq .body 2>/dev/null || true)
+          reason=$(printf '%s\n' "$notes" | sed -n 's/^perf-override:[[:space:]]*//p' | head -1)
           if [ -n "$reason" ] || [ "$OVERRIDE" = "true" ]; then
             echo "::warning::Over the speed budget, built anyway: ${reason:-manual override}"
             exit 0
