@@ -14,6 +14,11 @@ Operating rules shared with the sibling app (standards, speed budget, shared par
 - `.venv/bin/python tools/release.py` creates/updates the day's GitHub Release (tag v<YYYY.MM.DD>) from the same
   entries; publishing a release builds the Docker image (.github/workflows/docker.yml).
 - Tests: `.venv/bin/python -m pytest -q`. Fixtures in tests/fixtures are trimmed real responses from 2026-10-11.
+- Speed budget: `.venv/bin/python tools/perfcheck.py` (needs `.venv/bin/pip install playwright` + a Chromium:
+  `.venv/bin/playwright install chromium`, or PERF_CHROMIUM=/usr/bin/chromium). It runs tools/perf_server.py (the app
+  with every league/news request answered from tests/fixtures), opens it in a phone-sized Chromium with 200 ms added
+  per request, and checks first visit < 1.5 s, revisits < 300 ms, API p95 < 200 ms. CI runs it on every push and
+  before every release image (blocks it; override: `tools/release.py --perf-override "why"`). Run it before staging.
 
 ## How it runs
 - One container (Dockerfile), port 8788, all state in /data (SQLite, VAPID key, link secret). Settings come from env
@@ -39,7 +44,7 @@ Operating rules shared with the sibling app (standards, speed budget, shared par
   draws once; only a slower answer draws the phone's copy (< 30 min) and re-renders once after any running animation
   if the data differs. Any POST/PUT/DELETE clears it. prefetch() 2.5 s after start and every 90 s while visible keeps
   Pick'em, Wire, standings and favourite team pages under ~90 s old. Tonight's banner slot keeps its last HTML
-  (BANNER) across re-renders so the page doesn't shift while it's re-checked. Test with a slow relay (200 ms per request) before shipping speed changes.
+  (BANNER) across re-renders so the page doesn't shift while it's re-checked. Check speed changes with tools/perfcheck.py (its slow relay adds 200 ms per request).
 - Page speed rules: each page makes its requests in parallel (hiddenToday() is one /api/hidden call, skipped without
   spoiler settings); showLoading() only paints "Loading…" after 350 ms.
 
