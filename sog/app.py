@@ -19,7 +19,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Red
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import access, bugs, alerts, changes, home, ics, odds, picks, pwhl, social, spoilers, teams, watch, wire
+from . import access, bugs, alerts, changes, home, ics, odds, picks, pwhl, social, spoilers, teams, usage, watch, wire
 from .db import Store, parse_iso
 from .feed import Feed
 from .push import Pusher
@@ -40,6 +40,7 @@ bugs.init(store.conn)
 picks.init(store.conn)
 odds.init(store.conn)
 social.init(store.conn)
+usage.init(store.conn)
 feed = Feed(store)
 pusher = Pusher(DATA_DIR, access.ADMIN)
 feed.alerts = alerts.Alerts(store, pusher, access.BASE_URL)
@@ -264,6 +265,21 @@ async def push_test(request: Request):
     return {"sent": n, "devices": len(subs)}
 
 
+@app.post("/api/views")
+async def page_views(request: Request):
+    """A phone's batch of page views ({views: {route: count}}). The owner's own views aren't counted."""
+    if access.is_admin(request.state.email):
+        return Response(status_code=204)
+    try:
+        body = await request.json()
+    except ValueError:
+        raise HTTPException(400, "bad JSON")
+    views = body.get("views") if isinstance(body, dict) else None
+    if isinstance(views, dict):
+        usage.add(views, request.state.email)
+    return Response(status_code=204)
+
+
 @app.post("/api/report")
 async def report(request: Request):
     """'Wrong channel?' on a game page: saved for /admin and pushed to the owner."""
@@ -331,7 +347,15 @@ def admin_overview(request: Request):
     base = access.BASE_URL
     return {"users": [{k: u[k] for k in ("email", "status", "requested", "decided")} for u in store.users()],
             "invites": [{**i, "link": f"{base}/invite/{i['code']}"} for i in store.invites()],
-            "sources": store.runs(), "insiders": store.insiders({"nhl": wire.DEFAULT_INSIDERS, "pwhl": wire.PWHL_INSIDERS}), "reports": store.reports()}
+            "sources": store.runs(), "insiders": store.insiders({"nhl": wire.DEFAULT_INSIDERS, "pwhl": wire.PWHL_INSIDERS}), "reports": store.reports(), "usage": usage.summary()}
+
+
+@app.get("/api/admin/usage")
+def admin_usage(since: str | None = None):
+    """Raw page-view counts per day and page (the monthly idea session reads these)."""
+    if since and not DATE.match(since):
+        raise HTTPException(400, "since must be YYYY-MM-DD")
+    return {"days": usage.days(since), "keep_days": usage.KEEP_DAYS}
 
 
 @app.post("/api/admin/reports/{rid}/resolve")

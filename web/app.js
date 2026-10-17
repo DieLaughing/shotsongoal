@@ -1609,6 +1609,17 @@ const ago = iso => {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 };
 
+// Page views (anonymous, your own not counted): which pages friends actually open.
+function usageBlock(u) {
+  if (!u?.pages.length) return `<h2>Page views</h2><div class="card"><div class="empty">No views counted yet.</div></div>`;
+  const month = u.pages.reduce((n, p) => n + p.month, 0);
+  return `<h2>Page views</h2>
+    <div class="card scroll"><table><tr><th>Page</th><th>7 days</th><th>30 days</th><th>Since ${esc(u.first)}</th></tr>
+      ${u.pages.map(p => `<tr><td>${esc(VIEW_NAME[p.route] || p.route)}</td><td>${p.week}</td><td>${p.month}</td><td>${p.all}</td></tr>`).join("")}
+    </table></div>
+    <p class="help">${month} views in the last 30 days. Counted per page and day, never who; your own views aren't counted.</p>`;
+}
+
 async function adminView() {
   setNav("settings");
   if (!ME.admin) { view.innerHTML = `<div class="empty">Admin only.</div>`; return; }
@@ -1647,6 +1658,7 @@ async function adminView() {
         <a class="btn small" href="https://bsky.app/profile/${esc(i.handle)}" target="_blank" rel="noopener">View</a>
         <button class="btn small" data-rmins="${esc(i.handle)}">Remove</button></div>`).join("")}
     </div>
+    ${usageBlock(d.usage)}
     <h2>Data sources</h2>
     <div class="card scroll"><table><tr><th>Source</th><th>Last success</th><th>Status</th></tr>
       ${Object.values(d.sources).map(s => `<tr><td>${esc(s.source)}</td><td>${esc(ago(s.last_ok))}</td><td>${s.error ? `<span class="pill need" title="${esc(s.error)}">Failing</span>` : `<span class="pill have">OK</span>`}</td></tr>`).join("")}
@@ -1714,7 +1726,36 @@ function shotFrom(prev, next) {
   return (NAV_ORDER[next] ?? 0) >= (NAV_ORDER[prev] ?? 0) ? 1 : -1;
 }
 
+// Page views for /admin: counted per page pattern on the phone, sent in batches (sendBeacon: never in a page's way).
+// Anonymous on the server; the owner's own views aren't counted.
+const VIEWS = {};
+// Same checks as renderRoute: a page whose argument it rejects is counted as what it shows instead.
+const VIEW_PAGE = { standings: "league", teams: "league" };
+const VIEW_ARG = { day: ["date", /^\d{4}-\d{2}-\d{2}$/], picks: ["date", /^\d{4}-\d{2}-\d{2}$/], game: ["id", /^\d+$/],
+  pgame: ["id", /^\d+$/], team: ["team", /^(PW-)?[A-Z]{2,3}$/] };
+const VIEW_PLAIN = new Set(["picks", "wire", "league", "settings", "app", "new", "report"]);   // fine without an argument
+const VIEW_NAME = { tonight: "Tonight", "day/:date": "Another day", "game/:id": "NHL game", "pgame/:id": "PWHL game",
+  picks: "Pick'em", "picks/:date": "Pick'em, another day", wire: "Wire", league: "League", "team/:team": "Team page",
+  settings: "Settings", app: "Get the app", new: "What's new", report: "Report a problem" };
+
+function countView() {
+  if (ME?.status !== "approved" || ME.admin) return;
+  const [, raw = "", arg = ""] = (location.hash || "#/").split("/");
+  const page = VIEW_PAGE[raw] || raw, [kind, ok] = VIEW_ARG[page] || [];
+  const key = ok?.test(arg) ? `${page}/:${kind}` : VIEW_PLAIN.has(page) ? page : "tonight";
+  VIEWS[key] = (VIEWS[key] || 0) + 1;
+}
+
+function sendViews() {
+  if (!Object.keys(VIEWS).length) return;
+  const body = JSON.stringify({ views: { ...VIEWS } });
+  for (const k in VIEWS) delete VIEWS[k];
+  const blob = new Blob([body], { type: "application/json" });
+  if (!navigator.sendBeacon?.("/api/views", blob)) fetch("/api/views", { method: "POST", body: blob, keepalive: true }).catch(() => {});
+}
+
 function route() {
+  if (location.hash !== lastHash) countView();   // a navigation, not a re-render (league switch, spoiler peek)
   const page = (location.hash || "#/").split("/")[1] || "";
   const changed = lastHash !== null && location.hash !== lastHash;
   pendingShot = changed && motionOn() && ME?.status === "approved" ? shotFrom(lastPage, page) : 0;
@@ -1800,11 +1841,12 @@ async function start() {
   // Phones keep the app's last page in memory for days: coming back after a while shows today, not last night.
   let hiddenAt = 0;
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) { hiddenAt = Date.now(); return; }
-    if (hiddenAt && Date.now() - hiddenAt > 5 * 60000) route();
+    if (document.hidden) { hiddenAt = Date.now(); sendViews(); return; }
+    if (hiddenAt && Date.now() - hiddenAt > 5 * 60000) { countView(); route(); }   // coming back = a fresh open
   });
   route();
   setTimeout(prefetch, 2500);  // the other tabs, quietly, once the first page is up
+  setInterval(sendViews, 60000);
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
 
