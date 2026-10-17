@@ -5,7 +5,7 @@ This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit th
 
 ## October 16, 2026
 
-- **Improved: Counting which pages get used.** The app now counts how often each kind of page is opened (Tonight, game pages, Pick'em, the Wire and so on), so the next features go where people actually spend time. It's a tally per page per day and never records who opened what. Counts are kept for six months.
+- **Improved: Counting which pages get used.** The app now keeps a simple tally of how often each kind of page is opened (Tonight, game pages, Pick'em, the Wire and so on). It isn't tracking you. It never records who opened what, so not even the person running the app can see who clicked anything, just totals like "game pages were opened 40 times this week". It's strictly for deciding what to build and improve next. Tallies are kept for six months.
 
 ## October 15, 2026
 
