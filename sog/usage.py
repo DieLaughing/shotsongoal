@@ -5,7 +5,6 @@ Pages are client-side #/ routes, so the phone counts its own navigation and send
 counting can never slow a page down."""
 from __future__ import annotations
 
-import re
 import sqlite3
 import threading
 from datetime import date as Date, timedelta
@@ -19,7 +18,8 @@ CREATE TABLE IF NOT EXISTS page_view (
 """
 
 KEEP_DAYS = 180
-ROUTE = re.compile(r"^[a-z]{1,16}(/:[a-z]{1,8})?$")   # "tonight", "game/:id", "picks/:date"
+ROUTES = frozenset({"tonight", "day/:date", "game/:id", "pgame/:id", "picks", "picks/:date", "wire", "league",
+                    "team/:team", "settings", "app", "new", "report"})   # what countView() in web/app.js sends
 MAX_ROUTES = 30      # per batch
 MAX_VIEWS = 200      # per route per batch
 PER_DAY = 3000       # per person per day, held in memory only: one phone (or a stuck loop) can't flood the counts
@@ -31,6 +31,8 @@ _sent: dict[str, int] = {}    # who -> views counted today (memory only, never s
 
 
 def init(conn: sqlite3.Connection) -> None:
+    """`conn` is usage's own connection (the app opens one to its database file), so these commits never land in
+    the middle of another module's transaction."""
     global _conn
     _conn = conn
     with _lock, conn:
@@ -49,11 +51,11 @@ def _clean(day: str) -> None:
 
 
 def add(views: dict, who: str, day: str | None = None) -> int:
-    """Add one batch from a phone ({route: count}) to the app's day (the slate's: last night stays until 6 am).
+    """Add one batch from a phone ({route: count}) of pages in ROUTES to the app's day (the slate's: last night stays until 6 am).
     Bad keys and counts are dropped; `who` only meters PER_DAY. Returns the views counted."""
     day = day or slate_date()
-    rows = [(day, r, min(n, MAX_VIEWS)) for r, n in list(views.items())[:MAX_ROUTES]
-            if isinstance(r, str) and ROUTE.match(r) and isinstance(n, int) and not isinstance(n, bool) and n > 0]
+    rows = [(day, r, min(n, MAX_VIEWS)) for r, n in views.items()
+            if r in ROUTES and isinstance(n, int) and not isinstance(n, bool) and n > 0][:MAX_ROUTES]
     with _lock:
         _clean(day)
         room, counted = PER_DAY - _sent.get(who, 0), []
@@ -74,8 +76,8 @@ def days(since: str | None = None) -> list[dict]:
     """Every kept row (or from `since`), oldest first: the raw counts for /api/admin/usage."""
     with _lock:
         _clean(slate_date())
-    cur = _conn.execute("SELECT day, route, views FROM page_view WHERE day >= ? ORDER BY day, route", (since or "",))
-    return [{"day": d, "route": r, "views": v} for d, r, v in cur]
+        cur = _conn.execute("SELECT day, route, views FROM page_view WHERE day >= ? ORDER BY day, route", (since or "",))
+        return [{"day": d, "route": r, "views": v} for d, r, v in cur]
 
 
 def summary(day: str | None = None) -> dict:
@@ -83,11 +85,11 @@ def summary(day: str | None = None) -> dict:
     day = day or slate_date()
     with _lock:
         _clean(day)
-    end = Date.fromisoformat(day)
-    d7, d30 = (end - timedelta(days=6)).isoformat(), (end - timedelta(days=29)).isoformat()
-    cur = _conn.execute("SELECT route, SUM(CASE WHEN day >= ? THEN views ELSE 0 END), "
-                        "SUM(CASE WHEN day >= ? THEN views ELSE 0 END), SUM(views) "
-                        "FROM page_view GROUP BY route", (d7, d30))
-    pages = sorted(({"route": r, "week": w, "month": m, "all": a} for r, w, m, a in cur),
-                   key=lambda p: (-p["month"], -p["all"], p["route"]))
-    return {"pages": pages, "first": _conn.execute("SELECT MIN(day) FROM page_view").fetchone()[0]}
+        end = Date.fromisoformat(day)
+        d7, d30 = (end - timedelta(days=6)).isoformat(), (end - timedelta(days=29)).isoformat()
+        cur = _conn.execute("SELECT route, SUM(CASE WHEN day >= ? THEN views ELSE 0 END), "
+                            "SUM(CASE WHEN day >= ? THEN views ELSE 0 END), SUM(views) "
+                            "FROM page_view GROUP BY route", (d7, d30))
+        pages = sorted(({"route": r, "week": w, "month": m, "all": a} for r, w, m, a in cur),
+                       key=lambda p: (-p["month"], -p["all"], p["route"]))
+        return {"pages": pages, "first": _conn.execute("SELECT MIN(day) FROM page_view").fetchone()[0]}
