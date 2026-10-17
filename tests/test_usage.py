@@ -13,7 +13,7 @@ def _setup():
 def test_batches_add_up_and_bad_keys_are_dropped():
     _setup()
     assert usage.add({"tonight": 3, "game/:id": 2}, "a", day="2026-10-16") == 5
-    assert usage.add({"tonight": 1, "Bad Route": 4, "wire": -2, "picks": True, "league": "x",
+    assert usage.add({"tonight": 1, "Bad Route": 4, "made/:up": 4, "wire\n": 4, "wire": -2, "picks": True, "league": "x",
                       "game/:id": 10_000}, "a", day="2026-10-16") == 1 + usage.MAX_VIEWS
     rows = {r["route"]: r["views"] for r in usage.days()}
     assert rows == {"tonight": 4, "game/:id": 2 + usage.MAX_VIEWS}

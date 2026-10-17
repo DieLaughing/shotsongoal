@@ -1746,12 +1746,16 @@ function countView() {
   VIEWS[key] = (VIEWS[key] || 0) + 1;
 }
 
-function sendViews() {
+// Leaving the app: sendBeacon (survives the page going away). Otherwise a fetch, and a batch that doesn't land
+// (offline, an expired sign-in redirecting to the login page) goes back in the count for next time.
+function sendViews(leaving = false) {
   if (!Object.keys(VIEWS).length) return;
-  const body = JSON.stringify({ views: { ...VIEWS } });
+  const batch = { ...VIEWS }, body = JSON.stringify({ views: batch });
   for (const k in VIEWS) delete VIEWS[k];
-  const blob = new Blob([body], { type: "application/json" });
-  if (!navigator.sendBeacon?.("/api/views", blob)) fetch("/api/views", { method: "POST", body: blob, keepalive: true }).catch(() => {});
+  const putBack = () => { for (const k in batch) VIEWS[k] = (VIEWS[k] || 0) + batch[k]; };
+  if (leaving && navigator.sendBeacon?.("/api/views", new Blob([body], { type: "application/json" }))) return;
+  fetch("/api/views", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true, redirect: "error" })
+    .then(res => { if (!res.ok) putBack(); }, putBack);
 }
 
 function route() {
@@ -1841,7 +1845,7 @@ async function start() {
   // Phones keep the app's last page in memory for days: coming back after a while shows today, not last night.
   let hiddenAt = 0;
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) { hiddenAt = Date.now(); sendViews(); return; }
+    if (document.hidden) { hiddenAt = Date.now(); sendViews(true); return; }
     if (hiddenAt && Date.now() - hiddenAt > 5 * 60000) { countView(); route(); }   // coming back = a fresh open
   });
   route();

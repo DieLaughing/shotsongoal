@@ -9,6 +9,7 @@ import logging
 import os
 import re
 import secrets
+import sqlite3
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -40,7 +41,7 @@ bugs.init(store.conn)
 picks.init(store.conn)
 odds.init(store.conn)
 social.init(store.conn)
-usage.init(store.conn)
+usage.init(sqlite3.connect(store.path, check_same_thread=False, timeout=10))   # its own: see usage.init
 feed = Feed(store)
 pusher = Pusher(DATA_DIR, access.ADMIN)
 feed.alerts = alerts.Alerts(store, pusher, access.BASE_URL)
@@ -276,7 +277,7 @@ async def page_views(request: Request):
         raise HTTPException(400, "bad JSON")
     views = body.get("views") if isinstance(body, dict) else None
     if isinstance(views, dict):
-        usage.add(views, request.state.email)
+        await asyncio.to_thread(usage.add, views, request.state.email)   # a SQLite write: off the event loop
     return Response(status_code=204)
 
 
