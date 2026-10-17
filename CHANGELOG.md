@@ -3,6 +3,10 @@
 Every update to [Shots on Goal](https://github.com/DieLaughing/shotsongoal), newest first. The same list is on the app's What's new page.
 This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit that file, not this one.
 
+## October 16, 2026
+
+- **Improved: Counting which pages get used.** The app now counts how often each kind of page is opened (Tonight, game pages, Pick'em, the Wire and so on), so the next features go where people actually spend time. It's a tally per page per day and never records who opened what. Counts are kept for six months.
+
 ## October 15, 2026
 
 - **Improved: Game previews before puck drop.** Open any upcoming NHL game for the matchup. Each team's record, division place, streak and recent results; how they compare this season (goals for and against, power play, penalty kill, faceoffs, with league ranks); who's hot over the last 5 games; each team's goalies this season; and the season series so far. It all steps aside once the game starts.
