@@ -5,6 +5,8 @@ Self-hosted NHL + PWHL hub for a person and their friends: scores, game pages wi
 Built with Claude Code; these notes are how it works. Personal deployment notes (if any) live in CLAUDE.local.md,
 which is not committed.
 
+Operating rules shared with the sibling app (standards, speed budget, shared parts, ideas): docs/operating.md.
+
 ## Shipping a feature (do this every time)
 - Add an entry at the top of `sog/data/changes.yaml` (date, kind new|improved|fixed, title, text written for the
   people who use the app, link to try it). It feeds the What's new page (#/new), the dot on Settings and the home banner.
@@ -56,7 +58,7 @@ which is not committed.
 
 ## Features
 - Bug reports (#/report, footer link on every page, Settings > Your reports): sog/bugs.py files anonymous GitHub
-  issues (labels from-app + bug|enhancement; @mentions broken; page/device/version table) with SOG_GITHUB_TOKEN
+  issues (labels from-app + bug|enhancement + needs-triage; @mentions broken; page/device/version table) with SOG_GITHUB_TOKEN
   (fine-grained, Issues read/write); bug_report table keeps who sent what; /api/bugs refreshes state + the
   owner's latest comment every 10 min. 5 a day per person. No token = GitHub's prefilled new-issue link.
 - "Your team" cards (top of Tonight, default slate only): /api/myteams -> sog/home.py team_summary per favourite from
@@ -137,7 +139,6 @@ which is not committed.
   pushes the admin via ntfy once per change (new nickname, rename, unknown team).
 - Tickets: NHL games carry `tickets` = the feed's ticketsLink (Ticketmaster event); PWHL = the scorebar's TicketUrl,
   else the league's tickets page for upcoming games. Shown only before puck drop.
-- Ideas not started: playoff bracket, trade-deadline mode, friends in other markets.
 
 ## Wire notes
 - NHL.com news RSS answers 403 even to a Chrome fingerprint: not used. ESPN previews/recaps/videos are filtered out.
