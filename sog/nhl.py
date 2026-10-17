@@ -174,9 +174,10 @@ def parse_detail(landing: dict, rail: dict | None, box: dict | None) -> dict:
             goals.append({
                 "time": g.get("timeInPeriod"),
                 "team": _t(g.get("teamAbbrev")),
-                "scorer": _player_name(g),
+                "scorer": _player_name(g), "pid": g.get("playerId"),
                 "total": g.get("goalsToDate"),
-                "assists": [{"name": _player_name(a), "total": a.get("assistsToDate")} for a in g.get("assists") or []],
+                "assists": [{"name": _player_name(a), "pid": a.get("playerId"), "total": a.get("assistsToDate")}
+                            for a in g.get("assists") or []],
                 "strength": (g.get("strength") or "ev").upper(),
                 "modifier": g.get("goalModifier") if g.get("goalModifier") not in (None, "none") else None,
                 "away": g.get("awayScore"), "home": g.get("homeScore"),
@@ -205,7 +206,7 @@ def parse_detail(landing: dict, rail: dict | None, box: dict | None) -> dict:
             line = f"{s.get('savePctg', 0):.3f} SV%".lstrip("0")
         else:
             line = f"{s.get('goals', 0)}G {s.get('assists', 0)}A"
-        stars.append({"star": s.get("star"), "team": s.get("teamAbbrev"), "name": _player_name(s),
+        stars.append({"star": s.get("star"), "team": s.get("teamAbbrev"), "name": _player_name(s), "pid": s.get("playerId"),
                       "pos": s.get("position"), "line": line})
 
     rail = rail or {}
@@ -228,12 +229,12 @@ def parse_detail(landing: dict, rail: dict | None, box: dict | None) -> dict:
     players = {}
     for side in ("away", "home"):
         t = ((box or {}).get("playerByGameStats") or {}).get(f"{side}Team") or {}
-        skaters = [{"number": p.get("sweaterNumber"), "name": _player_name(p), "pos": p.get("position"),
+        skaters = [{"number": p.get("sweaterNumber"), "name": _player_name(p), "pid": p.get("playerId"), "pos": p.get("position"),
                     "g": p.get("goals", 0), "a": p.get("assists", 0), "p": p.get("points", 0),
                     "pm": p.get("plusMinus", 0), "sog": p.get("sog", 0), "hits": p.get("hits", 0),
                     "toi": p.get("toi")} for p in (t.get("forwards") or []) + (t.get("defense") or [])]
         skaters.sort(key=lambda p: (-p["p"], -p["g"], -p["sog"]))
-        goalies = [{"number": p.get("sweaterNumber"), "name": _player_name(p), "sa": p.get("shotsAgainst", 0),
+        goalies = [{"number": p.get("sweaterNumber"), "name": _player_name(p), "pid": p.get("playerId"), "sa": p.get("shotsAgainst", 0),
                     "saves": p.get("saves", 0), "ga": p.get("goalsAgainst", 0), "toi": p.get("toi"),
                     "starter": bool(p.get("starter"))}
                    for p in t.get("goalies") or [] if p.get("toi") not in (None, "00:00")]
@@ -348,11 +349,11 @@ def parse_career(data: dict, player: dict) -> dict:
 
 
 def parse_club_stats(data: dict) -> dict:
-    skaters = [{"name": _player_name(p), "pos": p.get("positionCode"), "gp": p.get("gamesPlayed", 0),
+    skaters = [{"name": _player_name(p), "pid": p.get("playerId"), "pos": p.get("positionCode"), "gp": p.get("gamesPlayed", 0),
                 "g": p.get("goals", 0), "a": p.get("assists", 0), "p": p.get("points", 0),
                 "pm": p.get("plusMinus", 0)} for p in data.get("skaters") or []]
     skaters.sort(key=lambda p: (-p["p"], -p["g"]))
-    goalies = [{"name": _player_name(p), "gp": p.get("gamesPlayed", 0), "w": p.get("wins", 0),
+    goalies = [{"name": _player_name(p), "pid": p.get("playerId"), "gp": p.get("gamesPlayed", 0), "w": p.get("wins", 0),
                 "l": p.get("losses", 0), "otl": p.get("overtimeLosses", 0),
                 "gaa": round(p.get("goalsAgainstAverage") or 0, 2), "svpct": round(p.get("savePercentage") or 0, 3)}
                for p in data.get("goalies") or []]
@@ -431,3 +432,101 @@ def recap(detail: dict) -> str | None:
         if more["sog"] != fewer["sog"]:
             parts.append(f"{more.get('code') or more['abbr']} outshot {fewer.get('code') or fewer['abbr']} {more['sog']}-{fewer['sog']}.")
     return " ".join(parts)
+
+
+# ---- players ------------------------------------------------------------------------------------
+def season_label(season) -> str:
+    """20262027 -> "2026-27"."""
+    s = str(season or "")
+    return f"{s[:4]}-{s[6:]}" if len(s) == 8 else s
+
+
+def current_season(today: str) -> str:
+    """The season id for a date: a new season's photos and numbers start in July."""
+    y, m = int(today[:4]), int(today[5:7])
+    return f"{y}{y + 1}" if m >= 7 else f"{y - 1}{y}"
+
+
+def _feet(inches) -> str | None:
+    return f"{inches // 12}'{inches % 12}\"" if isinstance(inches, int) and inches else None
+
+
+def _skater_line(x: dict) -> dict:
+    return {"gp": x.get("gamesPlayed", 0), "g": x.get("goals", 0), "a": x.get("assists", 0), "p": x.get("points", 0),
+            "pm": x.get("plusMinus", 0), "pim": x.get("pim", 0), "shots": x.get("shots", 0),
+            "ppg": x.get("powerPlayGoals", 0), "toi": x.get("avgToi")}
+
+
+def _goalie_line(x: dict) -> dict:
+    return {"gp": x.get("gamesPlayed", 0), "w": x.get("wins", 0), "l": x.get("losses", 0), "otl": x.get("otLosses", 0),
+            "gaa": round(x.get("goalsAgainstAvg") or 0, 2), "svpct": round(x.get("savePctg") or 0, 3),
+            "so": x.get("shutouts", 0)}
+
+
+def parse_player(landing: dict) -> dict:
+    """player/<id>/landing: who they are, this season, career, season by season."""
+    goalie = landing.get("position") == "G"
+    line = _goalie_line if goalie else _skater_line
+    place = ", ".join(x for x in (_t(landing.get("birthCity")), _t(landing.get("birthStateProvince")),
+                                  landing.get("birthCountry")) if x)
+    d = landing.get("draftDetails") or {}
+    draft = (f"{d['year']} · Round {d.get('round')} · #{d.get('overallPick')} overall ({d.get('teamAbbrev')})"
+             if d.get("year") else None)
+    awards = [{"name": _t(a.get("trophy")), "seasons": [season_label(s.get("seasonId")) for s in a.get("seasons") or []]}
+              for a in landing.get("awards") or []]
+    feat = (landing.get("featuredStats") or {}).get("regularSeason") or {}
+    career = landing.get("careerTotals") or {}
+    rows = [r for r in landing.get("seasonTotals") or [] if r.get("gameTypeId") == 2]
+    seasons = [{"season": season_label(r.get("season")), "league": r.get("leagueAbbrev"), "team": _t(r.get("teamName")),
+                **line(r)} for r in reversed(rows)]
+    cur = (landing.get("featuredStats") or {}).get("season")
+    now = [r for r in rows if r.get("season") == cur and r.get("leagueAbbrev") == "NHL"]
+    season = {"label": season_label(cur), **line(feat["subSeason"])} if feat.get("subSeason") and cur else None
+    if season and not goalie and len(now) == 1:   # traded mid-season: two rows, and no one average for both
+        season["toi"] = now[0].get("avgToi")
+    return {
+        "league": "nhl", "id": landing.get("playerId"), "name": _player_name(landing),
+        "number": landing.get("sweaterNumber"), "pos": landing.get("position"), "goalie": goalie,
+        "team": landing.get("currentTeamAbbrev") if landing.get("isActive") else None,
+        "active": bool(landing.get("isActive")),
+        "facts": {"born": landing.get("birthDate"), "birthplace": place or None, "country": landing.get("birthCountry"),
+                  "height": _feet(landing.get("heightInInches")), "weight": landing.get("weightInPounds"),
+                  "shoots": landing.get("shootsCatches")},
+        "draft": draft, "awards": awards,
+        "season": season,
+        "career": {"regular": line(career["regularSeason"]) if career.get("regularSeason") else None,
+                   "playoffs": line(career["playoffs"]) if career.get("playoffs") else None},
+        "seasons": seasons,
+    }
+
+
+def parse_game_log(data: dict, goalie: bool) -> list[dict]:
+    """player/<id>/game-log/now, newest first."""
+    out = []
+    for x in data.get("gameLog") or []:
+        row = {"date": x.get("gameDate"), "game": x.get("gameId"), "opp": x.get("opponentAbbrev"),
+               "home": x.get("homeRoadFlag") == "H", "toi": x.get("toi")}
+        if goalie:
+            row.update(dec=x.get("decision"), sa=x.get("shotsAgainst", 0), ga=x.get("goalsAgainst", 0),
+                       svpct=round(x.get("savePctg") or 0, 3))
+        else:
+            row.update(g=x.get("goals", 0), a=x.get("assists", 0), p=x.get("points", 0), pm=x.get("plusMinus", 0),
+                       shots=x.get("shots", 0))
+        out.append(row)
+    return out
+
+
+LEADER_CATS = {"points": "Points", "goals": "Goals", "assists": "Assists",
+               "wins": "Wins", "savePctg": "Save %", "goalsAgainstAverage": "GAA"}
+
+
+def parse_leaders(skaters: dict, goalies: dict) -> dict:
+    """skater-stats-leaders + goalie-stats-leaders: {category: [{pid, name, team, pos, value}]}."""
+    out = {}
+    for src in (skaters or {}, goalies or {}):
+        for cat, rows in src.items():
+            if cat not in LEADER_CATS or not isinstance(rows, list):
+                continue
+            out[cat] = [{"pid": r.get("id"), "name": _player_name(r), "team": r.get("teamAbbrev"),
+                         "pos": r.get("position"), "value": r.get("value")} for r in rows]
+    return out

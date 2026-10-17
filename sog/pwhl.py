@@ -165,8 +165,10 @@ def parse_detail(summary: dict, pxp: dict | None, base: dict | None) -> dict:
         strength = "PP" if x.get("power_play") == "1" else "SH" if x.get("short_handed") == "1" else "EV"
         scoring.setdefault(plabel(x.get("period_id")), []).append({
             "time": x.get("time"), "team": key(code_of.get(str(x.get("team_id")), "")),
-            "scorer": _short(x.get("goal_scorer")), "total": _int(x.get("scorer_goal_num"), None),
-            "assists": [{"name": _short(p), "total": None} for p in assists], "strength": strength,
+            "scorer": _short(x.get("goal_scorer")), "pid": _int((x.get("goal_scorer") or {}).get("player_id"), None),
+            "total": _int(x.get("scorer_goal_num"), None),
+            "assists": [{"name": _short(p), "pid": _int(p.get("player_id"), None), "total": None} for p in assists],
+            "strength": strength,
             "modifier": "empty-net" if x.get("empty_net") == "1" else None, "away": a, "home": h, "clip": None})
     penalties: dict[str, list] = {}
     for x in g.get("penalties") or []:
@@ -190,7 +192,8 @@ def parse_detail(summary: dict, pxp: dict | None, base: dict | None) -> dict:
             line = f"{sv / sa:.3f} SV%".lstrip("0") if sa else "Goalie"
         else:
             line = f"{_int(p.get('goals'))}G {_int(p.get('assists'))}A"
-        stars.append({"star": i, "team": team, "name": _short(m), "pos": p.get("position_str"), "line": line})
+        stars.append({"star": i, "team": team, "name": _short(m), "pid": _int(m.get("player_id"), None),
+                      "pos": p.get("position_str"), "line": line})
 
     gbp, sbp = g.get("goalsByPeriod") or {}, g.get("shotsByPeriod") or {}
     keys = sorted(set((gbp.get("home") or {}) | (gbp.get("visitor") or {})), key=_int)
@@ -211,12 +214,12 @@ def parse_detail(summary: dict, pxp: dict | None, base: dict | None) -> dict:
 
     players = {}
     for side, lu in lineup.items():
-        skaters = [{"number": p.get("jersey_number"), "name": _short(p), "pos": p.get("position_str"),
+        skaters = [{"number": p.get("jersey_number"), "name": _short(p), "pid": _int(p.get("player_id"), None), "pos": p.get("position_str"),
                     "g": _int(p.get("goals")), "a": _int(p.get("assists")), "p": _int(p.get("goals")) + _int(p.get("assists")),
                     "pm": _int(p.get("plusminus")), "sog": _int(p.get("shots_on")), "hits": _int(p.get("hits")), "toi": None}
                    for p in lu.get("players") or []]
         skaters.sort(key=lambda p: (-p["p"], -p["g"], -p["sog"]))
-        goalies = [{"number": p.get("jersey_number"), "name": _short(p), "sa": _int(p.get("shots_against")),
+        goalies = [{"number": p.get("jersey_number"), "name": _short(p), "pid": _int(p.get("player_id"), None), "sa": _int(p.get("shots_against")),
                     "saves": _int(p.get("saves")), "ga": _int(p.get("goals_against")),
                     "toi": f"{_int(p.get('seconds')) // 60}:{_int(p.get('seconds')) % 60:02d}", "starter": p.get("start") == "1"}
                    for p in lu.get("goalies") or [] if _int(p.get("seconds"))]
@@ -283,7 +286,7 @@ def parse_roster(data) -> list[dict]:
         pos = (p.get("position") or "").upper()
         if not p.get("last_name") or pos not in group:
             continue  # coaches and staff are on the same list
-        out.append({"id": p.get("player_id") or p.get("id"), "number": _int(p.get("tp_jersey_number"), None),
+        out.append({"id": _int(p.get("player_id") or p.get("id"), None), "number": _int(p.get("tp_jersey_number"), None),
                     "name": _name(p), "pos": pos, "group": group[pos], "shoots": p.get("shoots"),
                     "born": p.get("birthdate") or p.get("rawbirthdate"), "height": None,
                     "country": p.get("birthcntry") or p.get("homecntry")})
@@ -291,14 +294,113 @@ def parse_roster(data) -> list[dict]:
 
 
 def parse_scorers(skaters, goalies) -> dict:
-    sk = [{"name": p.get("name"), "pos": p.get("position"), "gp": _int(p.get("games_played")), "g": _int(p.get("goals")),
+    sk = [{"name": p.get("name"), "pid": _int(p.get("player_id"), None), "team": key(p.get("team_code") or ""),
+           "pos": p.get("position"), "gp": _int(p.get("games_played")), "g": _int(p.get("goals")),
            "a": _int(p.get("assists")), "p": _int(p.get("points")), "pm": _int(p.get("plus_minus"))} for p in skaters or []]
     sk.sort(key=lambda p: (-p["p"], -p["g"]))
-    gl = [{"name": p.get("name"), "gp": _int(p.get("games_played")), "w": _int(p.get("wins")), "l": _int(p.get("losses")),
+    gl = [{"name": p.get("name"), "pid": _int(p.get("player_id"), None), "team": key(p.get("team_code") or ""),
+           "gp": _int(p.get("games_played")), "w": _int(p.get("wins")), "l": _int(p.get("losses")),
            "otl": _int(p.get("ot_losses")), "gaa": float(p.get("goals_against_average") or 0),
            "svpct": float(p.get("save_percentage") or 0)} for p in goalies or []]
     gl.sort(key=lambda p: -p["gp"])
     return {"skaters": sk, "goalies": gl}
+
+
+# ---- players ------------------------------------------------------------------------------------
+POS = {"F": "F", "C": "C", "LW": "L", "RW": "R", "D": "D", "LD": "D", "RD": "D", "G": "G"}
+COUNTRY = {"United States": "USA", "Canada": "CAN", "Sweden": "SWE", "Finland": "FIN", "Czechia": "CZE",
+           "Czech Republic": "CZE", "Switzerland": "SUI", "Germany": "GER", "Japan": "JPN", "Austria": "AUT",
+           "Hungary": "HUN", "Denmark": "DEN", "France": "FRA", "Norway": "NOR", "Slovakia": "SVK"}
+
+
+def _season_short(name: str) -> str:
+    """"2025-26 Regular Season" -> "2025-26"; "2024 Regular Season" -> "2024"."""
+    return (name or "").replace(" Regular Season", "").strip()
+
+
+def _sk(x: dict) -> dict:
+    return {"gp": _int(x.get("games_played")), "g": _int(x.get("goals")), "a": _int(x.get("assists")),
+            "p": _int(x.get("points")), "pm": _int(x.get("plus_minus")), "pim": _int(x.get("penalty_minutes")),
+            "shots": _int(x.get("shots")), "ppg": _int(x.get("power_play_goals")), "toi": None}
+
+
+def _gk(x: dict) -> dict:
+    def num(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return 0.0
+    return {"gp": _int(x.get("games_played")), "w": _int(x.get("wins")), "l": _int(x.get("losses")),
+            "otl": _int(x.get("ot_losses")) + _int(x.get("shootout_losses")),
+            "gaa": round(num(x.get("goals_against_average") or x.get("gaa")), 2),
+            "svpct": round(num(x.get("savepct")), 3), "so": _int(x.get("shutouts"))}
+
+
+def parse_player(profile: dict, stats: dict, log: dict, pid: int) -> dict:
+    """HockeyTech's player profile, seasonstats and gamebygame, in nhl.parse_player's shape (plus the game log)."""
+    p = ((profile or {}).get("SiteKit") or {}).get("Player") or {}
+    pos = (p.get("position") or "").upper()
+    goalie = pos == "G"
+    line = _gk if goalie else _sk
+    regular = (((stats or {}).get("SiteKit") or {}).get("Player") or {}).get("regular") or []
+    rows = [r for r in regular if r.get("season_name") != "Total" and r.get("career") != "0"]
+    total = next((r for r in regular if r.get("season_name") == "Total"), None)
+    playoff = (((stats or {}).get("SiteKit") or {}).get("Player") or {}).get("playoff") or []
+    ptotal = next((r for r in playoff if r.get("season_name") == "Total"), None)
+    seasons = [{"season": _season_short(r.get("season_name")), "league": "PWHL", "team": r.get("team_name"), **line(r)}
+               for r in rows]
+    games = (((log or {}).get("SiteKit") or {}).get("Player") or {}).get("games") or []
+    out_log = []
+    for g in reversed(games):
+        home = str(g.get("home")) == "1"
+        row = {"date": g.get("date_played"), "game": _int(g.get("id"), None),
+               "opp": key(g.get("visiting_team_code") if home else g.get("home_team_code")), "home": home}
+        if goalie:
+            sa, ga = _int(g.get("shots_against")), _int(g.get("goals_against"))
+            row.update(dec="W" if g.get("win") == "1" else "OT" if _int(g.get("ot_loss")) or _int(g.get("shootout_loss"))
+                       else "L" if g.get("loss") == "1" else None, sa=sa, ga=ga,
+                       svpct=round((sa - ga) / sa, 3) if sa else 0, toi=g.get("minutes"))
+        else:
+            row.update(g=_int(g.get("goals")), a=_int(g.get("assists")), p=_int(g.get("points")),
+                       pm=_int(g.get("plus_minus") or g.get("plusminus")), shots=_int(g.get("shots")),
+                       toi=g.get("ice_time_minutes_seconds"))
+        out_log.append(row)
+    country = p.get("birthcntry") or ""
+    born = p.get("birthdate") if (p.get("birthdate") or "")[:4].isdigit() else None
+    return {
+        "league": "pwhl", "id": pid, "name": p.get("name") or f"{p.get('first_name', '')} {p.get('last_name', '')}".strip(),
+        "number": _int(p.get("jersey_number"), None), "pos": POS.get(pos, pos), "goalie": goalie,
+        "team": key(p.get("most_recent_team_code") or "") or None, "active": p.get("active") == "1",
+        "facts": {"born": born, "country": COUNTRY.get(country, country[:3].upper() or None),
+                  "birthplace": ", ".join(x for x in (p.get("birthtown"), p.get("birthprov"), country) if x) or None,
+                  "height": p.get("height") or None, "weight": _int(p.get("weight"), None) or None,
+                  "shoots": p.get("catches" if goalie else "shoots") or None},
+        "draft": None, "awards": [],
+        "season": {"label": seasons[0]["season"], **{k: v for k, v in seasons[0].items() if k not in ("season", "league", "team")}} if seasons else None,
+        "career": {"regular": line(total) if total else None, "playoffs": line(ptotal) if ptotal else None},
+        "seasons": seasons, "log": out_log,
+    }
+
+
+def parse_leaders(scorers: dict, goalies: dict) -> dict:
+    """League-wide topscorers + topgoalies, in nhl.parse_leaders' shape."""
+    sk = ((scorers or {}).get("SiteKit") or {}).get("Statviewtype") or []
+    gl = ((goalies or {}).get("SiteKit") or {}).get("Statviewtype") or []
+
+    def row(p, value):
+        return {"pid": _int(p.get("player_id"), None), "name": p.get("name"), "team": key(p.get("team_code") or ""),
+                "pos": POS.get((p.get("position") or "").upper(), p.get("position")), "value": value}
+    sk = [p for p in sk if p.get("player_id")]
+    gl = [p for p in gl if p.get("player_id") and _int(p.get("games_played"))]
+    out = {cat: [row(p, _int(p.get(field))) for p in sorted(sk, key=lambda p: (-_int(p.get(field)), -_int(p.get("points"))))]
+           for cat, field in (("points", "points"), ("goals", "goals"), ("assists", "assists"))}
+    most = max((_int(p.get("games_played")) for p in gl), default=0)
+    qualified = [p for p in gl if _int(p.get("games_played")) >= most / 3]   # a few starts can't top save %
+    out["wins"] = [row(p, _int(p.get("wins"))) for p in sorted(gl, key=lambda p: -_int(p.get("wins")))]
+    out["savePctg"] = [row(p, float(p.get("save_percentage") or 0)) for p in sorted(qualified, key=lambda p: -float(p.get("save_percentage") or 0))]
+    out["goalsAgainstAverage"] = [row(p, float(p.get("goals_against_average") or 0))
+                                  for p in sorted(qualified, key=lambda p: float(p.get("goals_against_average") or 99))]
+    return out
 
 
 def name_changes(data: dict, ours: dict[str, tuple[str, str, str]]) -> list[dict]:

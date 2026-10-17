@@ -1,5 +1,5 @@
-"""Shots on Goal with fake leagues, for tools/perfcheck.py and CI: every NHL, PWHL, ESPN and news request is answered
-from tests/fixtures, so timings measure this app's own code and nothing waits on (or bothers) the real sources.
+"""Shots on Goal with fake leagues, for tools/perfcheck.py and CI: every NHL, PWHL, ESPN, MoneyPuck and news request is
+answered from tests/fixtures (photos and logos come back "not found"), so timings measure this app's own code and nothing waits on (or bothers) the real sources.
 
     .venv/bin/python tools/perf_server.py --port 8790 --data /tmp/sog-perf
 
@@ -15,11 +15,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 FIX = ROOT / "tests" / "fixtures"
 
-NHL = [("score/", "score"), ("standings", "standings"), ("/landing", "landing_final"), ("/right-rail", "rail"),
+NHL = [("game-log", "player_gamelog"), ("player/", "player_landing"), ("skater-stats-leaders", "leaders_skaters"),
+       ("goalie-stats-leaders", "leaders_goalies"), ("score/", "score"), ("standings", "standings"), ("/landing", "landing_final"), ("/right-rail", "rail"),
        ("/boxscore", "box"), ("/play-by-play", "pbp_min"), ("club-schedule", "clubsched"), ("roster/", "roster"),
        ("club-stats", "clubstats")]
 PWHL = {"scorebar": "pwhl_scorebar", "standings": "pwhl_standings", "roster": "pwhl_roster",
-        "gamesummary": "pwhl_summary", "pxpverbose": "pwhl_pxp"}
+        "gamesummary": "pwhl_summary", "pxpverbose": "pwhl_pxp", "profile": "pwhl_player_profile",
+        "seasonstats": "pwhl_player_seasonstats", "gamebygame": "pwhl_player_gamebygame", "topscorers": "pwhl_topscorers",
+        "topgoalies": "pwhl_topgoalies"}
 WIRE = [("transactions", "espn_moves.json"), ("/news", "espn_news.json"), ("bsky", "bsky.json"),
         ("sportsnet", "sportsnet.xml"), ("rss", "sportsnet.xml"), ("feed", "sportsnet.xml")]   # any RSS: Sportsnet's
 
@@ -41,7 +44,7 @@ class _Reply:
 
 
 def install() -> None:
-    from sog import nhl, odds, pwhl, wire
+    from sog import images, moneypuck, nhl, odds, pwhl, wire
 
     async def nhl_get(path: str) -> dict:
         for part, name in NHL:
@@ -51,7 +54,7 @@ def install() -> None:
 
     async def pwhl_get(**params) -> dict:
         for part, name in PWHL.items():
-            if part in (params.get("view"), params.get("type"), params.get("tab")):
+            if part in (params.get("category"), params.get("view"), params.get("type"), params.get("tab")):
                 return _json(name)
         raise Missing(str(params))
 
@@ -61,7 +64,14 @@ def install() -> None:
                 return _Reply((FIX / name).read_text())
         raise Missing(url)
 
+    async def moneypuck_get(url: str) -> str:
+        return (FIX / ("moneypuck_goalies.csv" if "goalies" in url else "moneypuck_skaters.csv")).read_text()
+
+    async def no_images(self, url: str) -> bytes:   # photos and logos: "not found", so pages draw without them
+        raise images.Missing(url)
+
     nhl.get, pwhl.get, wire._get, odds.get_url = nhl_get, pwhl_get, wire_get, wire_get
+    moneypuck.get, images.Images._get = moneypuck_get, no_images
 
 
 def main() -> None:
