@@ -140,6 +140,7 @@ def _user_settings(user: dict | None, email: str | None) -> dict:
         s = {"favorites": list(watch.DEFAULT_LOCAL), "services": ["espn_plus", "regional", "espn", "abc", "tnt"]}
     s.setdefault("favorites", [])
     s.setdefault("local", list(watch.DEFAULT_LOCAL))
+    s.setdefault("country", "US")
     s.setdefault("marks", "logos")   # people who never picked get logos; picking badges is saved
     s["notify"] = alerts.prefs(s)
     s["spoilers"] = spoilers.clean(s.get("spoilers"), teams.ALL)
@@ -230,6 +231,7 @@ async def save_settings(request: Request):
     clean = {
         "favorites": [t for t in body.get("favorites") or [] if t in teams.ALL][:44],
         "local": [t for t in body.get("local") or [] if t in teams.TEAMS][:8],  # blackouts are an NHL thing
+        "country": "CA" if body.get("country") == "CA" else "US",  # where-to-watch rules and services
         "services": [s for s in body.get("services") or [] if s in watch.services()],
         "notify": alerts.prefs(body),
         "seen_changes": str(body.get("seen_changes") or "")[:120],  # newest What's new entry this person has seen
@@ -301,7 +303,8 @@ async def report(request: Request):
         raise HTTPException(400)
     detail = await _upstream(feed.game(gid))
     g = dict(detail["game"])
-    w = watch.watch_for(g, _settings(request)["local"], _settings(request).get("services"))
+    s = _settings(request)
+    w = watch.watch_for(g, s["local"], s.get("services"), s.get("country"))
     game = f"{g['away']['abbr']} at {g['home']['abbr']}, {g['date']}"
     shown = f"{w.get('app') or 'nothing'} ({w.get('why')})"
     note = str(body.get("note") or "").strip()[:300]
@@ -443,7 +446,7 @@ def _with_watch(games: list[dict], s: dict) -> list[dict]:
         if g.get("league") == "pwhl":
             g["watch"] = dict(PWHL_WATCH)  # the feed lists no broadcasters; the league's page does
             continue
-        g["watch"] = watch.watch_for(g, s["local"], have)
+        g["watch"] = watch.watch_for(g, s["local"], have, s.get("country"))
         if have is None:
             g["watch"]["have"] = None  # services not set yet: don't claim they're missing
     return games

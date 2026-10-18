@@ -35,3 +35,41 @@ regional:
   NESN:        { app: "NESN 360", url: "https://watch.nesn.com/" }
   Prime Video: { app: "Prime Video", url: "https://www.primevideo.com/" }
   SCRIPPS:     { app: "Scripps (free, over the air)" }
+
+# ---- Canada (settings.country = CA) ------------------------------------------------------------------------------
+# Built from every 2026-27 regular-season game's Canadian tvBroadcasts (surveyed 2026-10-18) and the 2026-27 deals:
+# Sportsnet (Rogers) has 550+ national games, no blackouts anywhere in Canada; Monday Night Hockey streams only on
+# Sportsnet+; Prime Video has Wednesday Night Hockey; TVA Sports is the French national; CBC carries no games from
+# 2026-27. Regional games (TSN, RDS, Sportsnet regionals) only play inside the team's region; outside it, and for every
+# game no Canadian broadcaster lists (US teams only), it's Sportsnet+ Premium (out-of-market).
+canada:
+  services:
+    sn_tv:          { label: "Sportsnet on TV (cable or satellite login)", url: "https://watch.sportsnet.ca/" }
+    snplus:         { label: "Sportsnet+ Standard (or the Monday Night Hockey add-on)", url: "https://watch.sportsnet.ca/" }
+    snplus_premium: { label: "Sportsnet+ Premium (adds out-of-market games)", url: "https://watch.sportsnet.ca/" }
+    tsn:            { label: "TSN (TV login or a TSN subscription)", url: "https://www.tsn.ca/live/" }
+    rds:            { label: "RDS (en français)", url: "https://www.rds.ca/emissions/en-direct/" }
+    tva:            { label: "TVA Sports (en français)", url: "https://www.tvasports.ca/" }
+    prime_ca:       { label: "Prime Video", url: "https://www.primevideo.com/" }
+  # Each network: the app to name, the services that carry it (any one will do), french: listed after English ones.
+  networks:
+    SN:      { app: "Sportsnet",          services: [sn_tv, snplus, snplus_premium] }
+    SN1:     { app: "Sportsnet One",      services: [sn_tv, snplus, snplus_premium] }
+    SN360:   { app: "Sportsnet 360",      services: [sn_tv, snplus, snplus_premium] }
+    SNP:     { app: "Sportsnet Pacific",  services: [sn_tv, snplus, snplus_premium] }
+    SNW:     { app: "Sportsnet West",     services: [sn_tv, snplus, snplus_premium] }
+    SNO:     { app: "Sportsnet Ontario",  services: [sn_tv, snplus, snplus_premium] }
+    SNE:     { app: "Sportsnet East",     services: [sn_tv, snplus, snplus_premium] }
+    SN+:     { app: "Sportsnet+",         services: [snplus, snplus_premium] }
+    Prime:   { app: "Prime Video",        services: [prime_ca] }
+    TSN2:    { app: "TSN2",               services: [tsn] }
+    TSN3:    { app: "TSN3",               services: [tsn] }
+    TSN4:    { app: "TSN4",               services: [tsn] }
+    TSN5:    { app: "TSN5",               services: [tsn] }
+    RDS:     { app: "RDS",                services: [rds], french: true }
+    RDS2:    { app: "RDS2",               services: [rds], french: true }
+    RDSI:    { app: "RDS Info",           services: [rds], french: true }
+    TVAS:    { app: "TVA Sports",         services: [tva], french: true }
+    TVAS2:   { app: "TVA Sports 2",       services: [tva], french: true }
+    TVAS-D:  { app: "TVA Sports Direct",  services: [tva], french: true }
+  out_of_market: { app: "Sportsnet+ Premium", services: [snplus_premium] }
