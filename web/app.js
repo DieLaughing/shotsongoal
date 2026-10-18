@@ -1623,6 +1623,7 @@ function settingsView() {
   const open = editingTeams || !fav.length;
   const local = (s.local || [])[0] || "";
   const services = s.services || [];
+  const country = s.country || "US", ca = country === "CA";
   const guess = !local && fav.find(a => leagueOf(a) === "nhl");
   const nhlGroups = teamGroups().filter(([g]) => g !== "PWHL");
 
@@ -1647,15 +1648,20 @@ function settingsView() {
 
     <h2>Where you watch</h2>
     <div class="card">
-      <label class="row-field"><span><b>Home market</b><span class="muted small">Whose games are blacked out on ESPN+ for you and shown on local TV instead</span></span>
+      <label class="row-field"><span><b>Country</b><span class="muted small">TV deals and blackouts differ</span></span>
+        <select id="country" class="field">${[["US", "United States"], ["CA", "Canada"]].map(([k, l]) =>
+          `<option value="${k}" ${k === country ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      <label class="row-field"><span><b>${ca ? "Home region" : "Home market"}</b><span class="muted small">${ca
+        ? "Whose regional games (TSN, RDS, Sportsnet regional) you get on TV. Other regions' games are on Sportsnet+ Premium"
+        : "Whose games are blacked out on ESPN+ for you and shown on local TV instead"}</span></span>
         <select id="local" class="field"><option value="">None</option>${nhlGroups.map(([g, list]) => `<optgroup label="${esc(g)}">${list.map(a =>
           `<option value="${a}" ${a === local ? "selected" : ""}>${esc(fullName(a))}</option>`).join("")}</optgroup>`).join("")}</select></label>
       ${guess ? `<div class="pad small suggest">Live near ${esc(TEAMS[guess].place)}? <button class="btn small" id="useguess">Use the ${esc(teamName(guess))}</button></div>` : ""}
       <div class="subhead">What you can watch with</div>
-      <div class="checks">${Object.entries(ME.services).map(([k, v]) =>
+      <div class="checks">${Object.entries(ME.services).filter(([, v]) => (v.country || "US") === country).map(([k, v]) =>
         `<label><input type="checkbox" name="services" value="${k}" ${services.includes(k) ? "checked" : ""}>${esc(v.label)}</label>`).join("")}</div>
     </div>
-    <p class="help">Each game then says whether you have it. In Massachusetts the home market is the Bruins.</p>
+    <p class="help">Each game then says whether you have it. ${ca ? "In Winnipeg the home region is the Jets." : "In Massachusetts the home market is the Bruins."}</p>
 
     <div class="group-title">Alerts &amp; spoilers</div>
     <h2>Alerts</h2>
@@ -1709,6 +1715,7 @@ function settingsView() {
       .then(showCalendar);
     if (!had !== !now.size) settingsView();  // first pick / last removal: the Done button and the home-market hint change
   }));
+  document.getElementById("country").addEventListener("change", e => { saveSettings({ country: e.target.value }); settingsView(); });
   document.getElementById("local").addEventListener("change", e => {
     saveSettings({ local: e.target.value ? [e.target.value] : [] });
     document.querySelector(".suggest")?.remove();

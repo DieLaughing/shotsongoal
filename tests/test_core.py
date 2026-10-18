@@ -61,6 +61,50 @@ def game(away, home, *casts):
             "broadcasts": [{"network": n, "market": m, "country": c} for n, m, c in casts]}
 
 
+def test_canada_national_sportsnet_not_blacked_out_and_english_first():
+    from sog.watch import watch_for
+    w = watch_for(game("TOR", "MTL", ("TVAS", "N", "CA"), ("SN", "N", "CA"), ("ESPN", "N", "US")), ["WPG"], ["sn_tv"], "CA")
+    assert (w["app"], w["why"], w["have"]) == ("Sportsnet", "National broadcast", True)
+    # Only the French service: TVA Sports, and it's yours.
+    w = watch_for(game("TOR", "MTL", ("SN", "N", "CA"), ("TVAS", "N", "CA")), [], ["tva"], "CA")
+    assert (w["app"], w["have"]) == ("TVA Sports", True)
+    # Only TVA Sports has it: English viewers get it out of market.
+    w = watch_for(game("NSH", "DAL", ("TVAS", "N", "CA")), [], ["sn_tv"], "CA")
+    assert w["app"] == "Sportsnet+ Premium" and "TVA Sports in French" in w["why"]
+
+
+def test_canada_monday_and_wednesday_streams():
+    from sog.watch import watch_for
+    w = watch_for(game("BOS", "CGY", ("SN+", "N", "CA")), ["CGY"], ["sn_tv"], "CA")
+    assert (w["app"], w["have"]) == ("Sportsnet+", False) and "Monday" in w["why"]
+    w = watch_for(game("NYI", "TOR", ("Prime", "N", "CA")), ["TOR"], ["prime_ca"], "CA")
+    assert (w["app"], w["why"], w["have"]) == ("Prime Video", "Wednesday Night Hockey", True)
+
+
+def test_canada_regional_only_in_your_region():
+    from sog.watch import watch_for
+    g = game("BOS", "WPG", ("TSN3", "H", "CA"), ("ESPN+", "N", "US"))
+    w = watch_for(g, ["WPG"], ["tsn"], "CA")
+    assert (w["app"], w["why"], w["have"]) == ("TSN3", "WPG regional broadcast", True)
+    w = watch_for(g, ["EDM"], ["tsn", "snplus_premium"], "CA")
+    assert (w["app"], w["service"], w["have"]) == ("Sportsnet+ Premium", "snplus_premium", True)
+    # Habs: TSN2 in English, RDS in French; an English speaker with TSN gets TSN2.
+    w = watch_for(game("MTL", "BOS", ("RDS", "A", "CA"), ("TSN2", "A", "CA")), ["MTL"], ["tsn"], "CA")
+    assert w["app"] == "TSN2"
+
+
+def test_canada_us_only_game_is_sportsnet_plus_premium():
+    from sog.watch import watch_for
+    w = watch_for(game("NSH", "SJS", ("NBCSCA", "H", "US"), ("ESPN+", "N", "US")), ["VAN"], ["sn_tv"], "CA")
+    assert (w["app"], w["have"], w["url"]) == ("Sportsnet+ Premium", False, "https://watch.sportsnet.ca/")
+
+
+def test_services_carry_their_country():
+    from sog.watch import services
+    s = services()
+    assert s["espn_plus"]["country"] == "US" and s["snplus_premium"]["country"] == "CA"
+
+
 def test_watch_bruins_on_nesn_even_with_espn_national():
     from sog.watch import watch_for
     w = watch_for(game("BOS", "SJS", ("ESPN", "N", "US"), ("SN+", "N", "CA"), ("NESN", "A", "US")),

@@ -19,8 +19,9 @@ It installs on a phone like an app (no app store), and you host it yourself for 
 
 - **Tonight:** every game with live scores, power-play and goalie-pulled banners, and where to watch.
 - **Game pages:** a shot map of every shot on a rink, the box score, team stats and a short recap after the final horn.
-- **Where to watch (US):** each person picks their services (ESPN+/Hulu, ESPN, ABC, TNT/HBO Max, their local team channel...) and the
-  teams whose home market they live in. Blackouts are worked out for them, and service names link straight to the
+- **Where to watch (US and Canada):** each person picks their country, their services (ESPN+/Hulu, ESPN, ABC, TNT/HBO Max,
+  their local team channel... or Sportsnet/Sportsnet+, TSN, RDS, TVA Sports, Prime Video) and the teams whose home market
+  they live in. Blackouts are worked out for them, and service names link straight to the
   service.
 - **Standings and team pages:** schedules, rosters, team news and moves.
 - **The Wire:** trades and roster moves, headlines, and hockey insiders from Bluesky (editable list) in one feed.
