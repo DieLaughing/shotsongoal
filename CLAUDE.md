@@ -1,7 +1,7 @@
 # Shots on Goal: notes for Claude
 
 Self-hosted NHL + PWHL hub for a person and their friends: scores, game pages with shot maps, standings, the Wire
-(trades and news), alerts, calendar feeds, ticket links and US where-to-watch. Sibling app of Lights Out (racing).
+(trades and news), alerts, calendar feeds, ticket links and US/Canada where-to-watch. Sibling app of Lights Out (racing).
 Built with Claude Code; these notes are how it works. Personal deployment notes (if any) live in CLAUDE.local.md,
 which is not committed.
 
@@ -172,8 +172,13 @@ Operating rules shared with the sibling app (standards, speed budget, shared par
 - api-web.nhle.com 307-redirects and 403s Python's default client: fetch with curl_cffi impersonate="chrome".
 - tvBroadcasts: market H/A/N + countryCode. A US "N" listing with no US H/A = national exclusive.
   2026-27 survey: TNT/truTV/HBO MAX 59 exclusive, ESPN+/HULU/Disney+ 47, ESPN 36, ABC 16; NHLN never exclusive.
-- Where-to-watch is US-only; each person picks their services and the teams whose home market they live in (blackouts).
-  Networks/rules in sog/watch.py + sog/data/networks.yaml; recheck every October.
+- Where-to-watch: settings.country US (default) or CA; each person picks their services (shown for their country:
+  services() tags each with one) and the teams whose home market/region they live in (blackouts). Rules in
+  sog/watch.py (US: watch_for; Canada: _canada, from the CA tvBroadcasts) + sog/data/networks.yaml (top = US,
+  `canada:` = CA services/networks/out_of_market). Canada 2026-27: Sportsnet nationals never blacked out, SN+ =
+  Monday Night Hockey (streaming only), Prime = Wednesday, TVA Sports = French national (a TVA-only game is out of
+  market in English), TSN/RDS/SN regionals in-region only, everything else Sportsnet+ Premium; no CBC from 2026-27.
+  Recheck both every October (issue #5 asked for Canada).
 - Game page = landing + right-rail (linescore, shots, team stats) + boxscore.
 - Player page = player/<id>/landing + player/<id>/game-log/now. Leaders = skater-stats-leaders/current and
   goalie-stats-leaders/current. PWHL players = HockeyTech view=player category=profile|seasonstats|gamebygame

@@ -3,6 +3,10 @@
 Every update to [Shots on Goal](https://github.com/DieLaughing/shotsongoal), newest first. The same list is on the app's What's new page.
 This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit that file, not this one.
 
+## October 18, 2026
+
+- **New: Where to watch in Canada.** Watching from Canada? Settings → Where you watch now has a Country switch. Pick Canada, your home region (say, the Jets) and what you have (Sportsnet on TV, Sportsnet+ Standard or Premium, TSN, RDS, TVA Sports, Prime Video), and every game shows the right Canadian channel. That covers Sportsnet's national games, Monday Night Hockey on Sportsnet+, Wednesday Night Hockey on Prime, and your team's regional games on TSN, RDS or Sportsnet. Games from other regions, and US-only matchups, show as Sportsnet+ Premium. Thanks to whoever sent the 🇨🇦📺🤌 report.
+
 ## October 17, 2026
 
 - **New: Player pages, leaders and search.** Tap any player's name (goal scorers, assists, three stars, box scores, rosters, team leaders) for their own page. It has their photo, age, size and draft spot, this season's numbers, a chart and log of their last games, their whole career season by season, and awards. NHL players also get an Advanced tab with expected goals and shot share from MoneyPuck.com, showing how they rank against the league. The League tab now has Leaders (points, goals, assists, wins, save % and GAA, for the NHL and PWHL), and the magnifying glass at the top searches every player and team. Team pages are tidier too, with the next game up top and then Games, Players and News tabs, with the roster and this season's numbers in one table. Teams now show their own logos. Prefer the old coloured badges? Settings → Display has a switch, and player photos can be turned off there too.
