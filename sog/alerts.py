@@ -170,7 +170,7 @@ class Alerts:
                 if e["kind"] == "start" and e["game"].get("league") == "pwhl":
                     body = "Where to watch: thepwhl.com"
                 elif e["kind"] == "start":
-                    w = watch.watch_for(e["game"], settings.get("local"), settings.get("services"))
+                    w = watch.watch_for(e["game"], settings.get("local"), settings.get("services"), settings.get("country"))
                     body = f"Watch: {w['app']}" if w.get("app") else w.get("why")
                 elif e["kind"] == "final":
                     body = (body or "") + rivalry_line(email, e["game"], fav, friends)
