@@ -3,6 +3,10 @@
 Every update to [Shots on Goal](https://github.com/DieLaughing/shotsongoal), newest first. The same list is on the app's What's new page.
 This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit that file, not this one.
 
+## October 19, 2026
+
+- **Improved: Pages stay quick after a pick.** Making a pick, reacting to a goal or changing a setting used to make every other page reload from scratch the next time you opened it. Now only what actually changed reloads (a pick refreshes Pick'em, new favourite teams refresh the Wire), so the Wire, Leaders, standings and team pages still open instantly on a slow connection.
+
 ## October 18, 2026
 
 - **New: Where to watch in Canada.** Watching from Canada? Settings → Where you watch now has a Country switch. Pick Canada, your home region (say, the Jets) and what you have (Sportsnet on TV, Sportsnet+ Standard or Premium, TSN, RDS, TVA Sports, Prime Video), and every game shows the right Canadian channel. That covers Sportsnet's national games, Monday Night Hockey on Sportsnet+, Wednesday Night Hockey on Prime, and your team's regional games on TSN, RDS or Sportsnet. Games from other regions, and US-only matchups, show as Sportsnet+ Premium. Thanks to whoever sent the 🇨🇦📺🤌 report.
