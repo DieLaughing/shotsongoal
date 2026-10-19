@@ -42,8 +42,9 @@ Operating rules shared with the sibling app (standards, speed budget, shared par
   from the 10-second scoreboard (_freshen), so a 2-minute-old game copy (GAME_STALE_OK) still shows the live score.
 - Phone side: api() keeps GET_CACHE; fast(path, rerender, quiet) waits up to FRESH_WAIT (150 ms) for fresh data and
   draws once; only a slower answer draws the phone's copy (< 30 min) and re-renders once after any running animation
-  if the data differs. Any POST/PUT/DELETE clears it. prefetch() 2.5 s after start and every 90 s while visible keeps
-  Pick'em, Wire, standings and favourite team pages under ~90 s old. Tonight's banner slot keeps its last HTML
+  if the data differs. A write drops only the copies it changes (WRITE_DROPS; settings per changed field,
+  SETTING_DROPS); an unlisted write or field drops them all. tests/test_cache_drops.py checks every route/field is
+  listed. prefetch() 2.5 s after start and every 90 s while visible keeps Pick'em, Wire, standings and favourite team pages under ~90 s old. Tonight's banner slot keeps its last HTML
   (BANNER) across re-renders so the page doesn't shift while it's re-checked. Check speed changes with tools/perfcheck.py (its slow relay adds 200 ms per request).
 - Page speed rules: each page makes its requests in parallel (hiddenToday() is one /api/hidden call, skipped without
   spoiler settings); showLoading() only paints "Loading…" after 350 ms.

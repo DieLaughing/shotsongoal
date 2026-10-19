@@ -50,7 +50,7 @@ const PI_DOWN = status => [502, 503, 504, 520, 521, 522, 523, 524, 530].includes
 const goOffline = () => location.replace(`/offline.html?back=${encodeURIComponent(location.href)}`);
 
 // The phone's own copy of every page's data (path -> {at, data}). Tabs open from it instantly and refresh behind
-// the scenes; anything that changes data (a pick, a setting, a reaction) clears it so nothing old shows.
+// the scenes; a write (a pick, a setting, a reaction) drops the copies it changes (dropCopies) so nothing old shows.
 const GET_CACHE = new Map();
 const SHOW_COPY_FOR = 30 * 60000;   // older copies wait for fresh data instead
 const FRESH_WAIT = 150;             // ms a page waits for fresh data before drawing the phone's copy
@@ -66,8 +66,40 @@ async function api(path, opts = {}) {
   }
   const data = await r.json();
   if (!opts.method || opts.method === "GET") GET_CACHE.set(path, { at: Date.now(), data });
-  else GET_CACHE.clear();
+  else dropCopies(path, data);
+  if (path === "/api/me") settingsOnServer = data.settings;
   return data;
+}
+
+// What each write can change, as GET_CACHE key prefixes: those copies go, every other page keeps its copy. A write
+// that isn't listed (tests/test_cache_drops.py checks they all are) drops every copy: never stale, only slower.
+const GAME_KEYS = ["/api/game", "/api/pwhl/game"];   // the day lists (/api/games) and game pages
+const WRITE_DROPS = {
+  "/api/pickem": ["/api/pickem"], "/api/watching": GAME_KEYS, "/api/react": GAME_KEYS, "/api/report": [],
+  "/api/request": ["/api/me"], "/api/bug": ["/api/bugs"], "/api/push": ["/api/push"], "/api/admin": ["/api/admin"],
+};
+// Settings the server builds page data from. The rest (alerts, display, seen changes) only change what the phone
+// draws; a field in neither list drops every copy.
+const WATCH_KEYS = [...GAME_KEYS, "/api/team"];      // where-to-watch lines on games and team schedules
+const SETTING_DROPS = {
+  favorites: ["/api/wire", "/api/myteams"], local: WATCH_KEYS, country: WATCH_KEYS, services: WATCH_KEYS,
+  spoilers: ["/api/hidden"], nickname: ["/api/pickem"],
+  notify: [], seen_changes: [], hand: [], odds: [], animations: [], marks: [], photos: [],
+};
+let settingsOnServer = null;   // the settings the copies were built with (from /api/me, then each save)
+
+function dropCopies(path, data) {
+  let drops = Object.entries(WRITE_DROPS).find(([k]) => path === k || path.startsWith(k + "/"))?.[1];
+  if (path === "/api/settings") {
+    const changed = Object.keys({ ...settingsOnServer, ...data })
+      .filter(k => JSON.stringify(settingsOnServer?.[k]) !== JSON.stringify(data[k]));
+    drops = settingsOnServer && changed.every(k => SETTING_DROPS[k]) ? changed.flatMap(k => SETTING_DROPS[k]) : undefined;
+    settingsOnServer = data;
+  }
+  if (!drops) { GET_CACHE.clear(); drops = ["/"]; }
+  for (const k of GET_CACHE.keys()) if (drops.some(p => k.startsWith(p))) GET_CACHE.delete(k);
+  if (drops.some(p => "/api/myteams".startsWith(p))) myTeams = { at: 0, data: null };   // their own short-lived copies
+  if (drops.some(p => "/api/hidden".startsWith(p))) hiddenCache = { at: 0, list: [] };
 }
 
 // A page's data, fast: the phone's copy straight away (then `rerender` once if the fresh data differs), or the

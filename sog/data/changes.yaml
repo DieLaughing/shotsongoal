@@ -3,6 +3,12 @@
 # After editing: `.venv/bin/python tools/changelog.py` rewrites CHANGELOG.md (a test checks they match),
 # and `.venv/bin/python tools/release.py` publishes the day's GitHub Release.
 
+- date: 2026-10-19
+  kind: improved
+  title: Pages stay quick after a pick
+  text: Making a pick, reacting to a goal or changing a setting used to make every other page reload from scratch the next time you opened it. Now only what actually changed reloads (a pick refreshes Pick'em, new favourite teams refresh the Wire), so the Wire, Leaders, standings and team pages still open instantly on a slow connection.
+  link: "#/picks"
+
 - date: 2026-10-18
   kind: new
   title: Where to watch in Canada
