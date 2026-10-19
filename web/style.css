@@ -548,3 +548,6 @@ table.log .tm { display: inline-flex; align-items: center; gap: 6px; }
 table.roster th:first-child, table.roster td:first-child { text-align: left; }
 table.roster td:first-child { white-space: normal; }
 table.roster .pcell > span { display: flex; flex-direction: column; line-height: 1.25; }
+.board td.upsets, .board td:nth-child(4) { white-space: nowrap; }
+.board td.upsets span[aria-hidden] { color: var(--accent); }
+@media (max-width: 480px) { .board th, .board td { padding-left: 6px; padding-right: 6px; } .board td:nth-child(2) { overflow-wrap: anywhere; } }

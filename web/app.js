@@ -716,8 +716,8 @@ async function pickemView(date, quiet = false) {
       ${upset}
     </div>`;
   }).join("");
-  const table = list => list.length ? `<div class="card"><table class="board"><tr><th></th><th>Name</th><th>Pts</th><th>Right–wrong</th></tr>
-    ${list.map((r, i) => `<tr class="${r.me ? "me" : ""}"><td class="muted">${i + 1}</td><td>${esc(r.name)}${r.me ? " (you)" : ""}</td><td><b>${r.pts}</b></td><td>${r.w}–${r.l}${r.upsets ? ` <span class="muted">· ⚡${r.upsets}</span>` : ""}</td></tr>`).join("")}</table></div>`
+  const table = list => list.length ? `<div class="card"><table class="board"><tr><th></th><th>Name</th><th>Pts</th><th>Right–<wbr>wrong</th><th title="Right picks on an underdog that won">Upsets</th></tr>
+    ${list.map((r, i) => `<tr class="${r.me ? "me" : ""}"><td class="muted">${i + 1}</td><td>${esc(r.name)}${r.me ? " (you)" : ""}</td><td><b>${r.pts}</b></td><td>${r.w}–${r.l}</td><td class="upsets">${r.upsets ? `<span aria-hidden="true">⚡</span> ${r.upsets}` : `<span class="muted">–</span>`}</td></tr>`).join("")}</table></div>`
     : `<div class="card"><div class="empty">No results yet. Make some picks!</div></div>`;
   const b = d.board, last = b.last?.table || [];
   const best = last[0], meLast = last.find(r => r.me);
