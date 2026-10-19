@@ -5,6 +5,7 @@ This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit th
 
 ## October 19, 2026
 
+- **Improved: Upsets get their own column in Pick'em.** The ⚡ number in the Pick'em tables was easy to read as a streak. It counts your upsets, right picks on an underdog that won, and now sits in its own Upsets column.
 - **Improved: Pages stay quick after a pick.** Making a pick, reacting to a goal or changing a setting used to make every other page reload from scratch the next time you opened it. Now only what actually changed reloads (a pick refreshes Pick'em, new favourite teams refresh the Wire), so the Wire, Leaders, standings and team pages still open instantly on a slow connection.
 
 ## October 18, 2026
