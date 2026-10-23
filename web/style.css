@@ -553,23 +553,11 @@ table.roster .pcell > span { display: flex; flex-direction: column; line-height:
 .board td.upsets span[aria-hidden] { color: var(--accent); }
 @media (max-width: 480px) { .board th, .board td { padding-left: 6px; padding-right: 6px; } .board td:nth-child(2) { overflow-wrap: anywhere; } }
 
-/* ---- Ask (prototype, web/app.js askView): OpenUI's answer cards in the app's colours and font ---- */
-.proto { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; vertical-align: middle;
-  padding: 3px 7px; border-radius: 6px; background: var(--info-bg); color: var(--info-fg); }
-.ask-bar { display: flex; gap: 8px; margin: 10px 0 8px; }
-.ask-bar .field { flex: 1; min-width: 0; font-size: 16px; }   /* 16 px: iOS doesn't zoom in on focus */
-.ask-try { display: flex; flex-wrap: wrap; gap: 6px; }
-.ask-chip { font-size: 13px; padding: 7px 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface);
-  color: var(--text); cursor: pointer; }
-.ask-item { margin: 14px 0 18px; }
-.ask-q { font-weight: 650; margin: 0 2px 8px; }
-.ask-wait { height: 120px; border-radius: 14px; border: 1px solid var(--border); color: var(--muted); font-size: 13px; padding: 14px;
-  background: linear-gradient(100deg, var(--surface) 40%, var(--bg) 50%, var(--surface) 60%) 0 0 / 300% 100%;
-  animation: ask-shimmer 1.4s linear infinite; }
-@keyframes ask-shimmer { to { background-position: -150% 0; } }
-@media (prefers-reduced-motion: reduce) { .ask-wait { animation: none; } }
-.ask-a { --openui-foreground: var(--surface); --openui-background: var(--bg); --openui-popover-background: var(--surface);
-  --openui-text-neutral-primary: var(--text); --openui-text-neutral-secondary: var(--muted); --openui-text-neutral-tertiary: var(--muted);
-  --openui-border-default: var(--border); --openui-border-interactive: var(--border);
-  --openui-interactive-accent-default: var(--accent); --openui-text-accent-primary: var(--accent); }
-.ask-a.ask-a * { font-family: inherit; }
+/* ---- switch pills (web/app.js placeSwitches): one highlight per .seg / league switch slides to the picked option ---- */
+.seg, .league { position: relative; isolation: isolate; }
+.seg-pill { position: absolute; left: 0; z-index: -1; pointer-events: none; background: var(--bg); }
+.league > .seg-pill { background: var(--text); }
+body.league-pwhl .league > .seg-pill { background: var(--accent); }
+.seg.has-pill > button.on, .seg.has-pill > a.on, .league.has-pill > button.on,
+body.league-pwhl .league.has-pill > button.on { background: transparent; box-shadow: none; }
+.seg button, .seg-top a, .league button { transition: color 160ms ease; }

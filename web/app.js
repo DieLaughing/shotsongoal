@@ -76,7 +76,7 @@ async function api(path, opts = {}) {
 const GAME_KEYS = ["/api/game", "/api/pwhl/game"];   // the day lists (/api/games) and game pages
 const WRITE_DROPS = {
   "/api/pickem": ["/api/pickem"], "/api/watching": GAME_KEYS, "/api/react": GAME_KEYS, "/api/report": [],
-  "/api/request": ["/api/me"], "/api/bug": ["/api/bugs"], "/api/ask": [], "/api/push": ["/api/push"], "/api/admin": ["/api/admin"],
+  "/api/request": ["/api/me"], "/api/bug": ["/api/bugs"], "/api/push": ["/api/push"], "/api/admin": ["/api/admin"],
 };
 // Settings the server builds page data from. The rest (alerts, display, seen changes) only change what the phone
 // draws; a field in neither list drops every copy.
@@ -370,29 +370,68 @@ window.addEventListener("scroll", () => {
 }, { passive: true });
 
 // The tab bar's highlight is one pill that slides (with a little spring) to the active tab.
+// Liquid highlight (from OpenUI's trip planner demo): the leading edge gets to the new spot first and the trailing
+// edge follows, so the pill stretches across and snaps to size with a small overshoot. Positions are {x, w} in px.
+function liquid(pill, from, to) {
+  if (from.x === to.x || !motionOn()) return;
+  const lead = to.x > from.x ? [from.x + (to.x - from.x) * .25, to.x + to.w] : [to.x, from.x + from.w - (from.x + from.w - to.x - to.w) * .25];
+  pill.animate([
+    { transform: `translateX(${from.x}px)`, width: `${from.w}px`, easing: "cubic-bezier(.45, 0, .55, 1)" },
+    { transform: `translateX(${lead[0]}px)`, width: `${lead[1] - lead[0]}px`, offset: .45, easing: "cubic-bezier(.3, 1.3, .5, 1)" },
+    { transform: `translateX(${to.x}px)`, width: `${to.w}px` },
+  ], { duration: 380 });
+}
+
+// Puts `pill` under `on` (an option of its parent) and slides it there from `from` (or from where it was).
+function placePill(pill, on, from) {
+  const to = { x: on.offsetLeft, w: on.offsetWidth };
+  from ||= pill.dataset.w ? { x: +pill.dataset.x, w: +pill.dataset.w } : null;
+  Object.assign(pill.style, { width: `${to.w}px`, transform: `translateX(${to.x}px)`, opacity: "1" });
+  Object.assign(pill.dataset, to);
+  if (from) liquid(pill, from, to);
+}
+
 function movePill() {
   const bar = document.getElementById("tabs"), on = bar?.querySelector("a.active");
   let pill = bar?.querySelector(".tab-pill");
   if (!bar) return;
   if (!pill) { pill = document.createElement("span"); pill.className = "tab-pill"; bar.prepend(pill); }
-  if (!on) { pill.style.opacity = "0"; return; }
-  pill.style.opacity = "1";
-  const x = on.offsetLeft, w = on.offsetWidth, x0 = +pill.dataset.x, w0 = +pill.dataset.w;
-  pill.style.width = `${w}px`;
-  pill.style.transform = `translateX(${x}px)`;
-  // Liquid: the leading edge gets to the new tab first and the trailing edge follows, so the pill stretches across
-  // and snaps to size with a small overshoot (from OpenUI's trip planner demo).
-  if (pill.dataset.placed && x !== x0 && motionOn()) {
-    const right = x > x0, lead = right ? [x0 + (x - x0) * .25, x + w] : [x, x0 + w0 - (x0 + w0 - x - w) * .25];
-    pill.animate([
-      { transform: `translateX(${x0}px)`, width: `${w0}px`, easing: "cubic-bezier(.45, 0, .55, 1)" },
-      { transform: `translateX(${lead[0]}px)`, width: `${lead[1] - lead[0]}px`, offset: .45, easing: "cubic-bezier(.3, 1.3, .5, 1)" },
-      { transform: `translateX(${x}px)`, width: `${w}px` },
-    ], { duration: 380 });
-  }
-  Object.assign(pill.dataset, { x, w, placed: "1" });
+  if (on) placePill(pill, on); else pill.style.opacity = "0";
 }
-window.addEventListener("resize", () => movePill());
+
+// Every switch (.seg: Wire kinds, standings modes, team/player tabs, settings; .league: NHL | PWHL | Both) gets the
+// same pill. Most redraw the page when tapped, so the spot being left is noted on pointerdown under the switch's
+// option labels, and the new switch's pill slides from there. Switches that only move .on slide from their old spot.
+const SWITCHES = ".seg, .league";
+const leaving = new Map();   // option labels -> {x, w, at}
+const switchKey = sw => [...sw.children].filter(c => c.matches("button, a")).map(c => c.textContent.trim()).join("|");
+document.addEventListener("pointerdown", e => {
+  const sw = e.target.closest(SWITCHES), on = sw?.querySelector(":scope > .on");
+  if (on) leaving.set(switchKey(sw), { x: on.offsetLeft, w: on.offsetWidth, at: Date.now() });
+}, true);
+function placeSwitches() {
+  for (const sw of document.querySelectorAll(SWITCHES)) {
+    const on = sw.querySelector(":scope > .on");
+    let pill = sw.querySelector(":scope > .seg-pill");
+    if (!on) { pill?.remove(); sw.classList.remove("has-pill"); continue; }
+    if (pill && +pill.dataset.x === on.offsetLeft && +pill.dataset.w === on.offsetWidth) continue;
+    let from = null;
+    if (!pill) {
+      pill = document.createElement("span");
+      pill.className = "seg-pill";
+      Object.assign(pill.style, { top: `${on.offsetTop}px`, height: `${on.offsetHeight}px`, borderRadius: getComputedStyle(on).borderRadius });
+      sw.prepend(pill);
+      sw.classList.add("has-pill");
+      const k = switchKey(sw), left = leaving.get(k);
+      if (left && Date.now() - left.at < 1500) from = left;
+      leaving.delete(k);
+    }
+    placePill(pill, on, from);
+  }
+}
+// Runs before the browser paints any change (a redraw, a morph, a class flip), so the pill is never a frame late.
+new MutationObserver(placeSwitches).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+window.addEventListener("resize", () => { movePill(); placeSwitches(); });
 
 // Live pages ask again this often (s). The server answers from memory; the NHL's own scoreboard moves every ~20 s.
 const LIVE_REFRESH = 10;
@@ -1562,8 +1601,6 @@ async function playerView(id, league = "nhl") {
 // League tab: Standings | Leaders, as one row above either page.
 const leagueTabs = current => `<div class="seg seg-top">${[["#/league", "standings", "Standings"], ["#/leaders", "leaders", "Leaders"]].map(([href, k, l]) =>
   `<a href="${href}" class="${k === current ? "on" : ""}">${l}</a>`).join("")}</div>`;
-const findTabs = current => `<div class="seg seg-top">${[["#/search", "search", "Search"], ["#/ask", "ask", "Ask"]].map(([href, k, l]) =>
-  `<a href="${href}" class="${k === current ? "on" : ""}">${l}</a>`).join("")}</div>`;
 const LEADER_CATS = [["points", "Points"], ["goals", "Goals"], ["assists", "Assists"], ["wins", "Wins"], ["savePctg", "SV%"], ["goalsAgainstAverage", "GAA"]];
 
 async function leadersView(quiet = false) {
@@ -1603,21 +1640,46 @@ async function leadersView(quiet = false) {
 let searchText = "";
 const fold = s => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
+// What fans call teams beyond city and nickname.
+const TEAM_ALIASES = { MTL: ["habs"], TOR: ["leafs"], BOS: ["bs"], PIT: ["pens"], WSH: ["caps"], TBL: ["bolts", "tampa"], COL: ["avs"],
+  CAR: ["canes"], OTT: ["sens"], NSH: ["preds"], VAN: ["nucks"], NYI: ["isles"], CHI: ["hawks"], CBJ: ["jackets"], VGK: ["knights"],
+  DET: ["wings"], LAK: ["la"], NJD: ["jersey"], PHI: ["philly"] };
+
+// Edit distance, giving up past `max` (typo matching only needs "is it within 1 or 2").
+function near(a, b, max) {
+  if (Math.abs(a.length - b.length) > max) return false;
+  let prev = [...Array(b.length + 1).keys()];
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    if (Math.min(...row) > max) return false;
+    prev = row;
+  }
+  return prev[b.length] <= max;
+}
+
 function searchResults(q, players) {
-  const f = fold(q.trim());
+  const plain = s => fold(s).replace(/['’.]/g, "");   // "B's", "St. Louis", "O'Reilly" typed either way
+  const f = plain(q.trim());
   if (f.length < 2) return { teams: [], players: [] };
-  const score = s => { const t = fold(s); return t.startsWith(f) ? 0 : t.split(/[\s-]/).some(w => w.startsWith(f)) ? 1 : t.includes(f) ? 2 : -1; };
-  const teams = Object.entries(TEAMS).map(([abbr, t]) => [abbr, Math.min(...[t.name, t.place, `${t.place} ${t.name}`, t.code || abbr].map(score).map(x => x < 0 ? 9 : x))])
+  const score = s => { const t = plain(s); return t.startsWith(f) ? 0 : t.split(/[\s-]/).some(w => w.startsWith(f)) ? 1 : t.includes(f) ? 2 : -1; };
+  const teams = Object.entries(TEAMS).map(([abbr, t]) => [abbr, Math.min(...[t.name, t.place, `${t.place} ${t.name}`, t.code || abbr, ...(TEAM_ALIASES[abbr] || [])]
+    .map(score).map(x => x < 0 ? 9 : x))])
     .filter(([, s]) => s < 9).sort((x, y) => x[1] - y[1] || teamName(x[0]).localeCompare(teamName(y[0]))).map(([a]) => a);
   const fav = favs();
-  const found = players.map(p => [p, score(p[1])]).filter(([, s]) => s >= 0)
-    .sort((x, y) => x[1] - y[1] || (fav.has(y[0][2]) - fav.has(x[0][2])) || x[0][1].localeCompare(y[0][1])).slice(0, 30).map(([p]) => p);
+  let found = players.map(p => [p, score(p[1])]).filter(([, s]) => s >= 0);
+  // A misspelling ("pastranak", "mcdavis"): names with a word within 1 letter (2 for long words) of what was typed.
+  if (found.length < 3 && f.length >= 4 && !f.includes(" ")) {
+    const max = f.length >= 7 ? 2 : 1, have = new Set(found.map(([p]) => p));
+    found = found.concat(players.filter(p => !have.has(p) && plain(p[1]).split(/[\s-]/).some(w => near(f, w, max))).map(p => [p, 3]));
+  }
+  found = found.sort((x, y) => x[1] - y[1] || (fav.has(y[0][2]) - fav.has(x[0][2])) || x[0][1].localeCompare(y[0][1])).slice(0, 30).map(([p]) => p);
   return { teams: teams.slice(0, 6), players: found };
 }
 
 async function searchView() {
   setNav("search");
-  view.innerHTML = `${findTabs("search")}<h1>Search</h1>
+  view.innerHTML = `<h1>Search</h1>
     <input class="field search-box" id="q" type="search" placeholder="Players and teams" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(searchText)}">
     <div id="results"></div>`;
   const box = document.getElementById("q"), out = document.getElementById("results");
@@ -1648,98 +1710,6 @@ async function searchView() {
   draw();
   try { players = (await fast("/api/search", () => {})).players; } catch (e) { out.innerHTML = failed(e); return; }
   draw();
-}
-
-// ---- Ask (prototype) -------------------------------------------------------------------------
-// A question in plain words -> an answer card. The server works out what was asked (a small local model, or none for
-// a plain name) and writes the card from the app's own data as OpenUI Lang (sog/ask.py); OpenUI's renderer
-// (openui.com: React inside, ~900 KB gzipped) draws it. Loaded only when this page opens, pinned and integrity-checked.
-const OPENUI = "https://cdn.jsdelivr.net/npm/@openuidev/browser-bundle@0.2.1/dist/";
-const OPENUI_SRI = { js: "sha384-GNNBzicRNkuscleA9e7/4cz6JwE9PE4BRKJ1udKWNzBh4DTD2/zpfOz4p91n8sW0",
-  css: "sha384-A2WnfysZ4D3GKsh9QIb/3l0NpcRI4dymzzey3lw1S+iOCb0oRr5rmGRSi2V2DNlp" };
-const ASK_TRY = ["How are the Bruins doing?", "Kings vs Ducks", "Who leads the league in goals?", "Atlantic standings", "Games tonight"];
-const ASKED = [];   // this visit's questions and answers, oldest first: {q, lang}
-let openui = null, askRoots = [];
-
-function loadOpenUI() {
-  return openui ||= new Promise((ok, fail) => {
-    const css = Object.assign(document.createElement("link"), { rel: "stylesheet", href: `${OPENUI}openui-styles.css`, integrity: OPENUI_SRI.css, crossOrigin: "anonymous" });
-    const js = Object.assign(document.createElement("script"), { src: `${OPENUI}openui-bundle.min.js`, integrity: OPENUI_SRI.js, crossOrigin: "anonymous" });
-    js.onload = () => ok(window.__OpenUI);
-    js.onerror = () => { openui = null; css.remove(); js.remove(); fail(new Error("OpenUI didn't load")); };
-    document.head.append(css, js);
-  });
-}
-
-function askView() {
-  setNav("search");
-  askRoots.forEach(r => r.unmount());
-  askRoots = [];
-  view.innerHTML = `${findTabs("ask")}<h1>Ask <span class="proto">Prototype</span></h1>
-    <form class="ask-bar" id="askf"><input class="field" id="askq" type="text" enterkeyhint="send" maxlength="200" autocomplete="off"
-      placeholder="How are the Bruins doing?" aria-label="Your question"><button class="btn">Ask</button></form>
-    <div class="ask-try" id="asktry">${ASKED.length ? "" : ASK_TRY.map(q => `<button class="ask-chip" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>
-    <div id="thread"></div>
-    <p class="help">Teams, players, two of either side by side, leaders, standings or a day's NHL games. Every number comes from the app's own data.</p>`;
-  loadOpenUI().catch(() => {});   // start the download while the person types
-  const box = document.getElementById("askq");
-  document.getElementById("askf").addEventListener("submit", e => {
-    e.preventDefault();
-    const q = box.value.trim();
-    if (q) { box.value = ""; box.blur(); askOne(q); }
-  });
-  document.getElementById("asktry").addEventListener("click", e => {
-    const b = e.target.closest("[data-q]");
-    if (b) askOne(b.dataset.q);
-  });
-  for (const a of ASKED) drawAnswer(askItem(a.q), a.lang, false);
-  if (!ASKED.length) box.focus();
-}
-
-function askItem(q) {
-  const item = document.createElement("section");
-  item.className = "ask-item";
-  item.innerHTML = `<div class="ask-q">${esc(q)}</div><div class="ask-a"><div class="ask-wait">Reading your question…</div></div>`;
-  document.getElementById("thread")?.prepend(item);   // newest on top, under the box
-  return item;
-}
-
-async function askOne(q) {
-  document.getElementById("asktry")?.replaceChildren();
-  const item = askItem(q);
-  let lang;
-  try { lang = (await api("/api/ask", { method: "POST", body: JSON.stringify({ q }) })).lang; } catch (e) {
-    item.querySelector(".ask-a").innerHTML = failed(e);
-    return;
-  }
-  ASKED.push({ q, lang });
-  drawAnswer(item, lang, true);
-}
-
-async function drawAnswer(item, lang, fresh) {
-  const box = item.querySelector(".ask-a");
-  let ui;
-  try { ui = await loadOpenUI(); } catch {
-    box.innerHTML = `<div class="notice error">Couldn't load the answer card. Check your connection and try again.</div>`;
-    return;
-  }
-  const { React, createRoot, Renderer, openuiChatLibrary } = ui;
-  box.replaceChildren();
-  const root = createRoot(box);
-  askRoots.push(root);
-  const onAction = e => {
-    const url = e.params?.url;
-    if (e.type === "open_url" && url?.startsWith("#")) location.hash = url;
-    else if (e.type === "continue_conversation" && e.humanFriendlyMessage) askOne(e.humanFriendlyMessage);
-  };
-  const paint = (text, streaming) => root.render(React.createElement(Renderer, { response: text, library: openuiChatLibrary, isStreaming: streaming, onAction }));
-  if (!fresh || !motionOn()) return paint(lang, false);
-  // Hand OpenUI the answer a statement at a time, the way a model streams: the outline draws first, then fills in.
-  const lines = lang.split("\n");
-  for (let i = 1; i <= lines.length; i++) {
-    paint(lines.slice(0, i).join("\n"), i < lines.length);
-    await new Promise(r => setTimeout(r, 40));
-  }
 }
 
 function ordinal(n) {
@@ -2207,11 +2177,11 @@ const VIEWS = {};
 const VIEW_PAGE = { standings: "league", teams: "league" };
 const VIEW_ARG = { day: ["date", /^\d{4}-\d{2}-\d{2}$/], picks: ["date", /^\d{4}-\d{2}-\d{2}$/], game: ["id", /^\d+$/],
   pgame: ["id", /^\d+$/], team: ["team", /^(PW-)?[A-Z]{2,3}$/], player: ["id", /^\d+$/], pplayer: ["id", /^\d+$/] };
-const VIEW_PLAIN = new Set(["picks", "wire", "league", "settings", "app", "new", "report", "leaders", "search", "ask"]);   // fine without an argument
+const VIEW_PLAIN = new Set(["picks", "wire", "league", "settings", "app", "new", "report", "leaders", "search"]);   // fine without an argument
 const VIEW_NAME = { tonight: "Tonight", "day/:date": "Another day", "game/:id": "NHL game", "pgame/:id": "PWHL game",
   picks: "Pick'em", "picks/:date": "Pick'em, another day", wire: "Wire", league: "League", "team/:team": "Team page",
   settings: "Settings", app: "Get the app", new: "What's new", report: "Report a problem",
-  "player/:id": "NHL player", "pplayer/:id": "PWHL player", leaders: "Leaders", search: "Search", ask: "Ask" };
+  "player/:id": "NHL player", "pplayer/:id": "PWHL player", leaders: "Leaders", search: "Search" };
 
 function countView() {
   if (ME?.status !== "approved" || ME.admin) return;
@@ -2303,7 +2273,6 @@ function renderRoute() {
   if (page === "pplayer" && /^\d+$/.test(arg || "")) return playerView(arg, "pwhl");
   if (page === "leaders") return leadersView();
   if (page === "search") return searchView();
-  if (page === "ask") return askView();
   if (page === "settings") return settingsView();
   if (page === "app") return appView();
   if (page === "new") return whatsNewView();
