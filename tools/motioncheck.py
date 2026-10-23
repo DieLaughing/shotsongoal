@@ -35,8 +35,8 @@ STILL = [
     ("#/team/TBL", '[data-ttab="players"]', ["#view .seg"]),
     ("#/player/8478402", '[data-ptab="career"]', ["#view .seg"]),
 ]
-# Shared-element page changes (View Transitions): (page, card to tap, what it must land on, transition name).
-MORPH = [("#/", "#view a.body", ".scorebug", "matchup")]
+# Shared-element page changes (View Transitions): (page, card to tap, address it must land on, transition name).
+MORPH = [("#/", "#view a.body", "#/game/", "matchup")]
 SWITCHES, ON, PILL = ".seg, .league", ".on", ".seg-pill"
 
 # ---- the checks (the same in both apps) ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ def check(url: str) -> list[tuple[str, str, str, bool]]:
             page, errors = fresh(hash_)
             got = page.evaluate(MORPHS, tap)
             page.wait_for_timeout(300)
-            landed = page.query_selector(lands) is not None
+            landed = page.evaluate("location.hash").startswith(lands)
             left = page.evaluate("() => document.querySelectorAll('[style*=view-transition-name]').length")
             played = not got or not got["vt"] or f"::view-transition-group({name})" in got["seen"]
             ok = bool(got) and played and landed and not left and not errors
