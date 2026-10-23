@@ -5,6 +5,7 @@ This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit th
 
 ## October 23, 2026
 
+- **Improved: Games grow out of their cards.** Tap a game on Tonight and its card grows into the scoreboard at the top of the game page; go back and it shrinks back into place. Works in Chrome, Safari and Firefox; anywhere else the page just opens as before.
 - **Improved: Smoother moves around the app.** Pages now build in from the top when you open them, and the highlight on the tab bar and on every switch (Wire filters, NHL / PWHL / Both, standings views, team and player tabs) stretches across to what you picked. Prefer the old slide-in? Settings › Display › Slapshot.
 - **Improved: Search forgives typos.** Search now knows what fans call teams (Habs, B's, Bolts, Pens…), ignores accents and apostrophes, and still finds players when a name is misspelled, like "pastranak" or "mcdavis".
 - **Improved: Live games stay put while they update.** During live games, Tonight and the game page now change only the scores, clocks and stats that moved every 10 seconds, instead of redrawing the whole page. Your team cards stay on the team you swiped to, the shot map keeps the period you picked, an open reaction picker stays open, and the player tables keep their place when you've scrolled them sideways.
