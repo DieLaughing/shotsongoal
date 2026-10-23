@@ -33,6 +33,10 @@ body {
   color: var(--text);
   font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  /* At least as tall as the screen: in an installed iPhone app a page shorter than the screen (Tonight with two games)
+     got a shorter frame, and the tab bar pinned to its bottom sat above the bottom of the display. */
+  min-height: 100vh;
+  min-height: 100lvh;
 }
 a { color: inherit; }
 button { font: inherit; }
@@ -416,7 +420,11 @@ html, body { overflow-x: clip; }
 .tabs.compact .tab-ico { height: 0; opacity: 0; }
 /* The top bar slides away too (keeping the strip behind the phone's status bar), and comes back on any scroll up. */
 .top { transition: transform 200ms ease; will-change: transform; }
-.top.tucked { transform: translateY(calc(-100% + env(safe-area-inset-top, 0px))); }
+.top.tucked { transform: translateY(-100%); }
+/* The status bar area (notch, Dynamic Island) keeps a solid strip in the top bar's colour, and the top bar slides
+   fully away underneath it. Leaving a slice of the bar showing instead put half its buttons under the island. */
+body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top, 0px); z-index: 6;
+  background: var(--surface); pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .tabs a, .tab-ico, .top { transition: none; } }
 .tabs a.active .tab-ico { color: var(--accent); }
 .top-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text); background: var(--surface);
