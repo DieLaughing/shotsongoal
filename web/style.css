@@ -561,3 +561,8 @@ body.league-pwhl .league > .seg-pill { background: var(--accent); }
 .seg.has-pill > button.on, .seg.has-pill > a.on, .league.has-pill > button.on,
 body.league-pwhl .league.has-pill > button.on { background: transparent; box-shadow: none; }
 .seg button, .seg-top a, .league button { transition: color 160ms ease; }
+
+/* ---- shared-element page changes (web/app.js navigate): a game card grows into the game page's scoreboard ---- */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 200ms; }
+::view-transition-group(matchup) { animation-duration: 340ms; animation-timing-function: cubic-bezier(.2, .9, .3, 1); }
+::view-transition-old(matchup), ::view-transition-new(matchup) { animation-duration: 340ms; height: 100%; object-fit: contain; }
