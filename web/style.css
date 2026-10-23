@@ -416,7 +416,11 @@ html, body { overflow-x: clip; }
 .tabs.compact .tab-ico { height: 0; opacity: 0; }
 /* The top bar slides away too (keeping the strip behind the phone's status bar), and comes back on any scroll up. */
 .top { transition: transform 200ms ease; will-change: transform; }
-.top.tucked { transform: translateY(calc(-100% + env(safe-area-inset-top, 0px))); }
+.top.tucked { transform: translateY(-100%); }
+/* The status bar area (notch, Dynamic Island) keeps a solid strip in the top bar's colour, and the top bar slides
+   fully away underneath it. Leaving a slice of the bar showing instead put half its buttons under the island. */
+body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top, 0px); z-index: 6;
+  background: var(--surface); pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .tabs a, .tab-ico, .top { transition: none; } }
 .tabs a.active .tab-ico { color: var(--accent); }
 .top-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text); background: var(--surface);
