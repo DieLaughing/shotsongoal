@@ -122,7 +122,9 @@ Operating rules shared with the sibling app (standards, speed budget, shared par
   trailing edge follows, small overshoot, 380 ms); labels/icons cross-fade colour; the toast springs out from the middle.
   Every switch (.seg, .league) gets the same pill (placeSwitches, run by a MutationObserver before paint; liquid() is
   shared). Switches that redraw the page on tap are matched by their option labels: pointerdown notes the spot being
-  left, and the redrawn switch's new pill slides from it (within 1.5 s).
+  left, and the redrawn switch's new pill slides from it (within 1.5 s). placeSwitches only writes when something changed and drops
+  its own mutation records (takeRecords): any class write, even removing an absent class, wakes the observer, and a
+  switch with nothing picked once froze the page in an endless loop.
 - Navigation chrome: tab bar = icon (20 px) + label (web/index.html inline SVGs); scrolling down adds .compact (icons fold
   away, ~39 px bar) and .tucked on the header (slides up, keeping the safe-area strip); any scroll up / top of page /
   new page restores both. Settings = outlined button with a gear,
