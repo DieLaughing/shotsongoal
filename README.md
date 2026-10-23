@@ -157,6 +157,7 @@ Everything is in `.env`. `.env.example` explains each line.
 | `SOG_GITHUB_TOKEN`, `SOG_GITHUB_REPO` | In-app bug reports filed as GitHub issues (optional; see `.env.example`) |
 | `TUNNEL_TOKEN` | Cloudflare Tunnel token (with `--profile tunnel`) |
 | `TZ` | Server time zone (logs) |
+| `SOG_LLM_URL` | Ask (prototype): a llama.cpp server that reads questions, e.g. `http://llm:8080` (optional; see `.env.example`) |
 | `SOG_DEFAULT_LOCAL` | Home-market team(s) new people start with, e.g. `BOS` for a New England group |
 
 Favorite teams, services, home market and alerts are chosen by each person in the app. For example, someone in
