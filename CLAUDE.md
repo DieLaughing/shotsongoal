@@ -111,12 +111,15 @@ Operating rules shared with the sibling app (standards, speed budget, shared par
   reads gamecenter/<id>/landing penalties ("Fighting"); first look per game only records.
 - Speed: GZip on responses; /api/team sends the last 10 results + next 10 games; non-live game pages refresh in the
   background (_game_stale_ok); Tonight warms the team cards' game pages after it renders.
-- Page transitions (web/app.js route -> renderRoute, slapshot): Web Animations API. The old page goes at once; when
-  a navigation's real content lands in #view (MutationObserver, not the Loading placeholder) the page flies in from
-  the side (+1 right: forward tabs in NAV_ORDER, game/team pages; -1 left: back), overshoots and snaps back
-  (~280 ms). Whole-pixel translate only: scale/skew made text re-render and jump when the animation ended.
+- Page transitions (web/app.js route -> renderRoute, rise/slapshot; Settings > Display picks, per device in
+  localStorage `motion`, default rise): Web Animations API. The old page goes at once; when a navigation's real
+  content lands in #view (MutationObserver, not the Loading placeholder) either #view's blocks fade up 14 px one after
+  another (rise: 340 ms each, 35 ms apart, first 8 staggered, h1 un-blurs) or the page flies in from
+  the side (slapshot: +1 right: forward tabs in NAV_ORDER, game/team pages; -1 left: back), overshoots and snaps back
+  (~280 ms). Both are from / like OpenUI's trip planner demo. Whole-pixel translate only: scale/skew made text re-render and jump when the animation ended.
   Same address re-shown and quiet refreshes never animate; off with settings.animations =
-  false or prefers-reduced-motion. The tab highlight is one .tab-pill moved by movePill() (CSS spring transition).
+  false or prefers-reduced-motion. The tab highlight is one .tab-pill moved by movePill(): Web Animations "liquid" stretch (leading edge first,
+  trailing edge follows, small overshoot, 380 ms); labels/icons cross-fade colour; the toast springs out from the middle.
 - Navigation chrome: tab bar = icon (20 px) + label (web/index.html inline SVGs); scrolling down adds .compact (icons fold
   away, ~39 px bar) and .tucked on the header (slides up, keeping the safe-area strip); any scroll up / top of page /
   new page restores both. Settings = outlined button with a gear,
@@ -163,6 +166,15 @@ Operating rules shared with the sibling app (standards, speed budget, shared par
 - sog/moneypuck.py: MoneyPuck's season skaters/goalies CSVs (listed on moneypuck.com/data.htm; free for
   non-commercial use with credit, so the Advanced tab links MoneyPuck.com). Fetched every 6 h in the background; a
   player page only peeks at the saved copy (Feed.moneypuck_peek) and never waits on the 2 MB download.
+- Ask (prototype, #/ask, Search | Ask tabs; sog/ask.py, POST /api/ask): a question -> an answer card drawn by OpenUI
+  (openui.com browser bundle 0.2.1 from jsDelivr with SRI, loaded only on that page; React inside, ~900 KB gz). The model
+  never writes the answer: a local llama.cpp server (SOG_LLM_URL, Qwen3-4B-Instruct Q4 on the VPS, json_schema output)
+  fills a form {kind about|leaders|standings|games|other, names, stat, group, day}; names go through find_team/
+  find_players (teams.py + aliases, the search index; NHL only), data comes from Feed copies, and ask.py writes the
+  OpenUI Lang (root Card first, one statement per block; Page/c()/lit()). Plain names skip the model (quick()); plans
+  are cached per wording; warm() reads the prompt at start-up (first call otherwise ~10 s). Spoiler-free: answers that
+  would show a hidden game's team/standings/leaders get spoiler_wall(). 100 asks a day per person; /api/ask is left
+  out of the slow log. The phone hands OpenUI the answer a line at a time (40 ms) so it builds like a stream.
 
 ## Wire notes
 - NHL.com news RSS answers 403 even to a Chrome fingerprint: not used. ESPN previews/recaps/videos are filtered out.

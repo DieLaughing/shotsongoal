@@ -76,7 +76,7 @@ async function api(path, opts = {}) {
 const GAME_KEYS = ["/api/game", "/api/pwhl/game"];   // the day lists (/api/games) and game pages
 const WRITE_DROPS = {
   "/api/pickem": ["/api/pickem"], "/api/watching": GAME_KEYS, "/api/react": GAME_KEYS, "/api/report": [],
-  "/api/request": ["/api/me"], "/api/bug": ["/api/bugs"], "/api/push": ["/api/push"], "/api/admin": ["/api/admin"],
+  "/api/request": ["/api/me"], "/api/bug": ["/api/bugs"], "/api/ask": [], "/api/push": ["/api/push"], "/api/admin": ["/api/admin"],
 };
 // Settings the server builds page data from. The rest (alerts, display, seen changes) only change what the phone
 // draws; a field in neither list drops every copy.
@@ -115,7 +115,7 @@ async function fast(path, rerender, quiet = false) {
   if (first) return first.d;
   fresh.then(async d => {
     if (location.hash !== route || JSON.stringify(d) === JSON.stringify(hit.data)) return;
-    await Promise.all(view.getAnimations().map(a => a.finished.catch(() => {})));  // never redraw mid-animation
+    await Promise.all(view.getAnimations({ subtree: true }).map(a => a.finished.catch(() => {})));  // never redraw mid-animation
     if (location.hash === route) rerender();
   }).catch(() => {});
   return hit.data;
@@ -375,12 +375,22 @@ function movePill() {
   let pill = bar?.querySelector(".tab-pill");
   if (!bar) return;
   if (!pill) { pill = document.createElement("span"); pill.className = "tab-pill"; bar.prepend(pill); }
-  pill.classList.toggle("still", !motionOn() || !pill.dataset.placed);
   if (!on) { pill.style.opacity = "0"; return; }
   pill.style.opacity = "1";
-  pill.style.width = `${on.offsetWidth}px`;
-  pill.style.transform = `translateX(${on.offsetLeft}px)`;
-  pill.dataset.placed = "1";
+  const x = on.offsetLeft, w = on.offsetWidth, x0 = +pill.dataset.x, w0 = +pill.dataset.w;
+  pill.style.width = `${w}px`;
+  pill.style.transform = `translateX(${x}px)`;
+  // Liquid: the leading edge gets to the new tab first and the trailing edge follows, so the pill stretches across
+  // and snaps to size with a small overshoot (from OpenUI's trip planner demo).
+  if (pill.dataset.placed && x !== x0 && motionOn()) {
+    const right = x > x0, lead = right ? [x0 + (x - x0) * .25, x + w] : [x, x0 + w0 - (x0 + w0 - x - w) * .25];
+    pill.animate([
+      { transform: `translateX(${x0}px)`, width: `${w0}px`, easing: "cubic-bezier(.45, 0, .55, 1)" },
+      { transform: `translateX(${lead[0]}px)`, width: `${lead[1] - lead[0]}px`, offset: .45, easing: "cubic-bezier(.3, 1.3, .5, 1)" },
+      { transform: `translateX(${x}px)`, width: `${w}px` },
+    ], { duration: 380 });
+  }
+  Object.assign(pill.dataset, { x, w, placed: "1" });
 }
 window.addEventListener("resize", () => movePill());
 
@@ -1552,6 +1562,8 @@ async function playerView(id, league = "nhl") {
 // League tab: Standings | Leaders, as one row above either page.
 const leagueTabs = current => `<div class="seg seg-top">${[["#/league", "standings", "Standings"], ["#/leaders", "leaders", "Leaders"]].map(([href, k, l]) =>
   `<a href="${href}" class="${k === current ? "on" : ""}">${l}</a>`).join("")}</div>`;
+const findTabs = current => `<div class="seg seg-top">${[["#/search", "search", "Search"], ["#/ask", "ask", "Ask"]].map(([href, k, l]) =>
+  `<a href="${href}" class="${k === current ? "on" : ""}">${l}</a>`).join("")}</div>`;
 const LEADER_CATS = [["points", "Points"], ["goals", "Goals"], ["assists", "Assists"], ["wins", "Wins"], ["savePctg", "SV%"], ["goalsAgainstAverage", "GAA"]];
 
 async function leadersView(quiet = false) {
@@ -1605,7 +1617,7 @@ function searchResults(q, players) {
 
 async function searchView() {
   setNav("search");
-  view.innerHTML = `<h1>Search</h1>
+  view.innerHTML = `${findTabs("search")}<h1>Search</h1>
     <input class="field search-box" id="q" type="search" placeholder="Players and teams" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(searchText)}">
     <div id="results"></div>`;
   const box = document.getElementById("q"), out = document.getElementById("results");
@@ -1636,6 +1648,98 @@ async function searchView() {
   draw();
   try { players = (await fast("/api/search", () => {})).players; } catch (e) { out.innerHTML = failed(e); return; }
   draw();
+}
+
+// ---- Ask (prototype) -------------------------------------------------------------------------
+// A question in plain words -> an answer card. The server works out what was asked (a small local model, or none for
+// a plain name) and writes the card from the app's own data as OpenUI Lang (sog/ask.py); OpenUI's renderer
+// (openui.com: React inside, ~900 KB gzipped) draws it. Loaded only when this page opens, pinned and integrity-checked.
+const OPENUI = "https://cdn.jsdelivr.net/npm/@openuidev/browser-bundle@0.2.1/dist/";
+const OPENUI_SRI = { js: "sha384-GNNBzicRNkuscleA9e7/4cz6JwE9PE4BRKJ1udKWNzBh4DTD2/zpfOz4p91n8sW0",
+  css: "sha384-A2WnfysZ4D3GKsh9QIb/3l0NpcRI4dymzzey3lw1S+iOCb0oRr5rmGRSi2V2DNlp" };
+const ASK_TRY = ["How are the Bruins doing?", "Kings vs Ducks", "Who leads the league in goals?", "Atlantic standings", "Games tonight"];
+const ASKED = [];   // this visit's questions and answers, oldest first: {q, lang}
+let openui = null, askRoots = [];
+
+function loadOpenUI() {
+  return openui ||= new Promise((ok, fail) => {
+    const css = Object.assign(document.createElement("link"), { rel: "stylesheet", href: `${OPENUI}openui-styles.css`, integrity: OPENUI_SRI.css, crossOrigin: "anonymous" });
+    const js = Object.assign(document.createElement("script"), { src: `${OPENUI}openui-bundle.min.js`, integrity: OPENUI_SRI.js, crossOrigin: "anonymous" });
+    js.onload = () => ok(window.__OpenUI);
+    js.onerror = () => { openui = null; css.remove(); js.remove(); fail(new Error("OpenUI didn't load")); };
+    document.head.append(css, js);
+  });
+}
+
+function askView() {
+  setNav("search");
+  askRoots.forEach(r => r.unmount());
+  askRoots = [];
+  view.innerHTML = `${findTabs("ask")}<h1>Ask <span class="proto">Prototype</span></h1>
+    <form class="ask-bar" id="askf"><input class="field" id="askq" type="text" enterkeyhint="send" maxlength="200" autocomplete="off"
+      placeholder="How are the Bruins doing?" aria-label="Your question"><button class="btn">Ask</button></form>
+    <div class="ask-try" id="asktry">${ASKED.length ? "" : ASK_TRY.map(q => `<button class="ask-chip" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>
+    <div id="thread"></div>
+    <p class="help">Teams, players, two of either side by side, leaders, standings or a day's NHL games. Every number comes from the app's own data.</p>`;
+  loadOpenUI().catch(() => {});   // start the download while the person types
+  const box = document.getElementById("askq");
+  document.getElementById("askf").addEventListener("submit", e => {
+    e.preventDefault();
+    const q = box.value.trim();
+    if (q) { box.value = ""; box.blur(); askOne(q); }
+  });
+  document.getElementById("asktry").addEventListener("click", e => {
+    const b = e.target.closest("[data-q]");
+    if (b) askOne(b.dataset.q);
+  });
+  for (const a of ASKED) drawAnswer(askItem(a.q), a.lang, false);
+  if (!ASKED.length) box.focus();
+}
+
+function askItem(q) {
+  const item = document.createElement("section");
+  item.className = "ask-item";
+  item.innerHTML = `<div class="ask-q">${esc(q)}</div><div class="ask-a"><div class="ask-wait">Reading your question…</div></div>`;
+  document.getElementById("thread")?.prepend(item);   // newest on top, under the box
+  return item;
+}
+
+async function askOne(q) {
+  document.getElementById("asktry")?.replaceChildren();
+  const item = askItem(q);
+  let lang;
+  try { lang = (await api("/api/ask", { method: "POST", body: JSON.stringify({ q }) })).lang; } catch (e) {
+    item.querySelector(".ask-a").innerHTML = failed(e);
+    return;
+  }
+  ASKED.push({ q, lang });
+  drawAnswer(item, lang, true);
+}
+
+async function drawAnswer(item, lang, fresh) {
+  const box = item.querySelector(".ask-a");
+  let ui;
+  try { ui = await loadOpenUI(); } catch {
+    box.innerHTML = `<div class="notice error">Couldn't load the answer card. Check your connection and try again.</div>`;
+    return;
+  }
+  const { React, createRoot, Renderer, openuiChatLibrary } = ui;
+  box.replaceChildren();
+  const root = createRoot(box);
+  askRoots.push(root);
+  const onAction = e => {
+    const url = e.params?.url;
+    if (e.type === "open_url" && url?.startsWith("#")) location.hash = url;
+    else if (e.type === "continue_conversation" && e.humanFriendlyMessage) askOne(e.humanFriendlyMessage);
+  };
+  const paint = (text, streaming) => root.render(React.createElement(Renderer, { response: text, library: openuiChatLibrary, isStreaming: streaming, onAction }));
+  if (!fresh || !motionOn()) return paint(lang, false);
+  // Hand OpenUI the answer a statement at a time, the way a model streams: the outline draws first, then fills in.
+  const lines = lang.split("\n");
+  for (let i = 1; i <= lines.length; i++) {
+    paint(lines.slice(0, i).join("\n"), i < lines.length);
+    await new Promise(r => setTimeout(r, 40));
+  }
 }
 
 function ordinal(n) {
@@ -1740,7 +1844,9 @@ function settingsView() {
     <div class="group-title">More</div>
     <h2>Display</h2>
     <div class="card checks"><label><input type="checkbox" id="animations" ${s.animations !== false ? "checked" : ""}>Animations between pages</label></div>
-    <p class="help">Quick slides between tabs and pages. Turn them off for instant switching. They're also off whenever your phone's Reduce Motion setting is on.</p>
+    <div class="seg" role="group" aria-label="Page motion">${[["rise", "Rise"], ["slapshot", "Slapshot"]].map(([k, l]) =>
+      `<button data-motion="${k}" class="${motionStyle() === k ? "on" : ""}">${l}</button>`).join("")}</div>
+    <p class="help">Rise: each page builds in from the top. Slapshot: the page flies in from the side. Turn animations off for instant switching. They're also off whenever your phone's Reduce Motion setting is on.</p>
     <div class="seg" role="group" aria-label="Team marks">${[["badges", "Team badges"], ["logos", "Team logos"]].map(([k, l]) =>
       `<button data-marks="${k}" class="${(s.marks || "logos") === k ? "on" : ""}">${l}</button>`).join("")}</div>
     <p class="help">How teams show up everywhere: the teams' own logos, or coloured badges with their letters (the leanest).</p>
@@ -1784,6 +1890,11 @@ function settingsView() {
   document.getElementById("useguess")?.addEventListener("click", () => { saveSettings({ local: [guess] }); settingsView(); });
   view.querySelectorAll("input[name=services]").forEach(i => i.addEventListener("change", () => saveSettings({ services: picked("services") })));
   document.getElementById("animations").addEventListener("change", e => saveSettings({ animations: e.target.checked }));
+  document.querySelectorAll("[data-motion]").forEach(b => b.addEventListener("click", () => {
+    try { localStorage.setItem("motion", b.dataset.motion); } catch { /* fine */ }
+    document.querySelectorAll("[data-motion]").forEach(x => x.classList.toggle("on", x === b));
+    if (motionOn()) b.dataset.motion === "rise" ? rise() : slapshot(1);   // a taste of it
+  }));
   document.getElementById("odds").addEventListener("change", e => saveSettings({ odds: e.target.checked }));
   document.getElementById("photos").addEventListener("change", e => saveSettings({ photos: e.target.checked }));
   view.querySelectorAll("button[data-marks]").forEach(b => b.addEventListener("click", () => {
@@ -2096,11 +2207,11 @@ const VIEWS = {};
 const VIEW_PAGE = { standings: "league", teams: "league" };
 const VIEW_ARG = { day: ["date", /^\d{4}-\d{2}-\d{2}$/], picks: ["date", /^\d{4}-\d{2}-\d{2}$/], game: ["id", /^\d+$/],
   pgame: ["id", /^\d+$/], team: ["team", /^(PW-)?[A-Z]{2,3}$/], player: ["id", /^\d+$/], pplayer: ["id", /^\d+$/] };
-const VIEW_PLAIN = new Set(["picks", "wire", "league", "settings", "app", "new", "report", "leaders", "search"]);   // fine without an argument
+const VIEW_PLAIN = new Set(["picks", "wire", "league", "settings", "app", "new", "report", "leaders", "search", "ask"]);   // fine without an argument
 const VIEW_NAME = { tonight: "Tonight", "day/:date": "Another day", "game/:id": "NHL game", "pgame/:id": "PWHL game",
   picks: "Pick'em", "picks/:date": "Pick'em, another day", wire: "Wire", league: "League", "team/:team": "Team page",
   settings: "Settings", app: "Get the app", new: "What's new", report: "Report a problem",
-  "player/:id": "NHL player", "pplayer/:id": "PWHL player", leaders: "Leaders", search: "Search" };
+  "player/:id": "NHL player", "pplayer/:id": "PWHL player", leaders: "Leaders", search: "Search", ask: "Ask" };
 
 function countView() {
   if (ME?.status !== "approved" || ME.admin) return;
@@ -2132,6 +2243,19 @@ function route() {
   return renderRoute();
 }
 
+// Page motion: "rise" (default) or "slapshot", per device (Settings > Display).
+const motionStyle = () => { try { return localStorage.getItem("motion") || "rise"; } catch { return "rise"; } };
+
+// "Rise" (from OpenUI's trip planner demo): the new page's blocks fade up into place one after another, 35 ms apart,
+// so it assembles top-down; the heading comes into focus. Only the first 8 stagger (the rest arrive with the 8th), so
+// the whole page is in place within ~0.6 s and the top of it at once.
+function rise() {
+  [...view.children].slice(0, 16).forEach((el, i) => el.animate([
+    { transform: "translate3d(0, 14px, 0)", opacity: 0, filter: el.tagName === "H1" ? "blur(4px)" : "none" },
+    { transform: "translate3d(0, 0, 0)", opacity: 1, filter: "none" },
+  ], { duration: 340, delay: Math.min(i, 7) * 35, easing: "cubic-bezier(.2, .9, .3, 1)", fill: "backwards" }));
+}
+
 function slapshot(d) {
   view.animate([
     // Whole-pixel sideways moves only: no scaling or skew, so the text drawn while moving is the same as the text at
@@ -2150,7 +2274,7 @@ new MutationObserver(() => {
   if (!first || (first.classList.contains("empty") && /^Loading/.test(first.textContent))) return;
   const d = pendingShot;
   pendingShot = 0;
-  slapshot(d);
+  if (motionStyle() === "rise") rise(); else slapshot(d);
 }).observe(view, { childList: true });
 
 function renderRoute() {
@@ -2179,6 +2303,7 @@ function renderRoute() {
   if (page === "pplayer" && /^\d+$/.test(arg || "")) return playerView(arg, "pwhl");
   if (page === "leaders") return leadersView();
   if (page === "search") return searchView();
+  if (page === "ask") return askView();
   if (page === "settings") return settingsView();
   if (page === "app") return appView();
   if (page === "new") return whatsNewView();

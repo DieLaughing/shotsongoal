@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import access, bugs, alerts, changes, home, ics, moneypuck, nhl, odds, picks, pwhl, slow, social, spoilers, teams, usage, watch, wire
+from . import access, ask, bugs, alerts, changes, home, ics, moneypuck, nhl, odds, picks, pwhl, slow, social, spoilers, teams, usage, watch, wire
 from .db import Store, parse_iso
 from .feed import PWHL_TEAM_IDS, Feed, eastern_today
 from . import images as images_mod
@@ -84,7 +84,8 @@ async def name_check_loop() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     tasks = [] if os.environ.get("SOG_NO_POLL") else [asyncio.create_task(feed.loop()), asyncio.create_task(name_check_loop()),
-                                                      asyncio.create_task(slow.loop(store, access.notify))]
+                                                      asyncio.create_task(slow.loop(store, access.notify)),
+                                                      asyncio.create_task(ask.warm())]
     yield
     for task in tasks:
         task.cancel()
@@ -119,7 +120,7 @@ async def gate(request: Request, call_next):
     started = time.perf_counter()
     response = await call_next(request)
     took = time.perf_counter() - started
-    if path.startswith("/api/") and took > slow.SLOW:
+    if path.startswith("/api/") and took > slow.SLOW and path != "/api/ask":   # Ask waits on a model by design
         log.warning("slow request: %s %s %.0f ms", request.method, path, took * 1000)
         route = getattr(request.scope.get("route"), "path", None) or "(no route)"   # /api/game/{gid}, not each game
         asyncio.get_running_loop().run_in_executor(None, slow.add, route, round(took * 1000), feed.busy)
@@ -745,9 +746,12 @@ async def react_save(request: Request):
 async def hidden_games(request: Request):
     """Games spoiler-free is hiding for this person right now (today's and the previous slate, both leagues), so
     Wire, League and team pages can cover what would give them away. One call instead of four from the page."""
-    sp = _settings(request)["spoilers"]
+    return {"games": await _hidden(_settings(request)["spoilers"])}
+
+
+async def _hidden(sp: dict) -> list[dict]:
     if not sp["teams"] and not sp["games"]:
-        return {"games": []}
+        return []
     today = feed.opening_day()
     found = []
     for lg in ("nhl", "pwhl"):
@@ -758,8 +762,31 @@ async def hidden_games(request: Request):
             continue
         found += [dict(g, league=lg) for g in day["games"] + prev["games"] if spoilers.hidden(dict(g, league=lg), sp, today)]
     keep = ("id", "league", "date", "start", "state")
-    return {"games": [{**{k: g.get(k) for k in keep}, "away": {"abbr": g["away"]["abbr"]}, "home": {"abbr": g["home"]["abbr"]}}
-                      for g in found]}
+    return [{**{k: g.get(k) for k in keep}, "away": {"abbr": g["away"]["abbr"]}, "home": {"abbr": g["home"]["abbr"]}}
+            for g in found]
+
+
+# ---- Ask (prototype): a question -> an answer card drawn with OpenUI on the phone (sog/ask.py) --------------
+ASKS_PER_DAY = 100
+_asks: dict[str, list] = {}   # email -> [day, count], in memory like usage.PER_DAY
+
+
+@app.post("/api/ask")
+async def ask_question(request: Request):
+    body = await request.json()
+    q = " ".join(str(body.get("q") or "").split())[:ask.MAX_QUESTION]
+    if not q:
+        raise HTTPException(400, "Ask a question")
+    day, n = _asks.get(request.state.email) or [None, 0]
+    n = n + 1 if day == eastern_today() else 1
+    if n > ASKS_PER_DAY:
+        raise HTTPException(429, "That's a lot of questions for one day. Try again tomorrow.")
+    _asks[request.state.email] = [eastern_today(), n]
+    sp = _settings(request)["spoilers"]
+    started = time.perf_counter()
+    lang, plan = await ask.answer(q, feed, sp, await _hidden(sp))
+    log.info("ask %.0f ms: %r -> %s", (time.perf_counter() - started) * 1000, q, plan)
+    return {"lang": lang}
 
 
 def _day_before(day: str) -> str:
