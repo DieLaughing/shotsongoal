@@ -470,13 +470,6 @@ function newBanner() {
     <a class="btn small" href="#/new">See what's new</a><button class="x" id="newbar-x" aria-label="Dismiss">×</button></div>`;
 }
 
-function bindNewBanner() {
-  document.getElementById("newbar-x")?.addEventListener("click", async e => {
-    e.target.closest(".newbar")?.remove();
-    BANNER = "";
-    await markChangesSeen();
-  });
-}
 
 const KIND_NAME = { new: "New", improved: "Improved", fixed: "Fixed" };
 
@@ -615,12 +608,13 @@ function heroes(data, leagues, slateGames) {
   if (!cards.length) return "";
   const live = c => slateGames.find(x => x.away.abbr === c.abbr || x.home.abbr === c.abbr);
   return `<div class="heroes${cards.length > 1 ? " many" : ""}">${cards.map(c => heroCard(c, live(c))).join("")}</div>`
-    + (cards.length > 1 ? `<div class="hero-dots" aria-hidden="true">${cards.map((_, i) => `<span${i ? "" : ' class="on"'}></span>`).join("")}</div>` : "");
+    + (cards.length > 1 ? `<div class="hero-dots" aria-hidden="true">${cards.map((_, i) => `<span${i === Math.min(heroAt, cards.length - 1) ? ' class="on"' : ""}></span>`).join("")}</div>` : "");
 }
+let heroAt = 0;   // the team card swiped into view, kept across the live refresh
 
 async function tonightView(date, quiet = false) {
   setNav("tonight");
-  if (!quiet) showLoading(`Loading games…`);
+  if (!quiet) { showLoading(`Loading games…`); heroAt = 0; }
   const leagues = LEAGUE === "both" ? ["nhl", "pwhl"] : [LEAGUE];
   let days, mineData = null;
   try {
@@ -653,7 +647,7 @@ async function tonightView(date, quiet = false) {
   const day = { date: days[0].date || dates[0],
     // Arrows step to the nearest day with a game in any shown league.
     prev: days.map(d => d.prev).filter(Boolean).sort().pop(), next: days.map(d => d.next).filter(Boolean).sort()[0] };
-  view.innerHTML = `
+  paint(`
     <div id="getapp">${BANNER}</div>
     ${heroes(mineData, leagues, days.flatMap(d => d.games || []))}
     ${(n => n ? `<div class="spoil-note">🙈 Spoiler-free: ${n} game${n > 1 ? "s" : ""} hidden. Open one to reveal it when you've watched.</div>` : "")(days.flatMap(d => d.games || []).filter(spoilerHidden).length)}
@@ -662,21 +656,22 @@ async function tonightView(date, quiet = false) {
       <h1>${esc(day.date ? dayTitle(day.date) : "Games")}</h1>
       ${day.next ? `<a href="#/day/${day.next}" aria-label="Next day">→</a>` : "<span></span>"}
     </div>
-    ${days.map((d, i) => slate(d, leagues[i])).join("")}`;
-  // The dots under swipeable team cards follow the card in view.
-  const strip = view.querySelector(".heroes.many");
-  if (strip) strip.addEventListener("scroll", () => {
-    const i = Math.round(strip.scrollLeft / (strip.firstElementChild.offsetWidth + 10));
-    view.querySelectorAll(".hero-dots span").forEach((d, j) => d.classList.toggle("on", i === j));
-  }, { passive: true });
+    ${days.map((d, i) => slate(d, leagues[i])).join("")}`, quiet);
+  const on = listen();
+  // The dots under swipeable team cards follow the card in view. scroll doesn't bubble: listen on its way down.
+  view.addEventListener("scroll", e => {
+    const strip = e.target;
+    if (!strip.matches?.(".heroes.many")) return;
+    heroAt = Math.round(strip.scrollLeft / (strip.firstElementChild.offsetWidth + 10));
+    view.querySelectorAll(".hero-dots span").forEach((d, j) => d.classList.toggle("on", heroAt === j));
+  }, { ...on, capture: true, passive: true });
+  bannerClicks(on);
   // One banner at a time: getting the app / alerts first, otherwise what's new.
-  bindBanner();
   getAppBanner().then(html => {
     const next = html || newBanner(), box = document.getElementById("getapp");
     if (!box || next === BANNER) return;
     BANNER = next;
     box.innerHTML = next;
-    bindBanner();
   });
   const all = days.flatMap(d => d.games || []);
   // Warm your team cards' game pages on the server, so tapping one opens straight away.
@@ -781,14 +776,18 @@ async function pickemView(date, quiet = false) {
 // Tonight's one banner slot: getting the app / alerts first, otherwise what's new. BANNER is the last one shown, so a
 // re-render paints it straight away instead of blanking the slot and shifting the page while it's re-checked.
 let BANNER = "";
-function bindBanner() {
-  const box = document.getElementById("getapp");
-  box?.querySelector(".getapp .x")?.addEventListener("click", () => {
-    try { localStorage.setItem("getappHidden", "1"); } catch { /* fine */ }
-    BANNER = "";
-    box.innerHTML = "";
-  });
-  bindNewBanner();
+function bannerClicks(on) {
+  view.addEventListener("click", async e => {
+    if (e.target.closest("#getapp .getapp .x")) {
+      try { localStorage.setItem("getappHidden", "1"); } catch { /* fine */ }
+      BANNER = "";
+      document.getElementById("getapp").innerHTML = "";
+    } else if (e.target.closest("#newbar-x")) {
+      e.target.closest(".newbar")?.remove();
+      BANNER = "";
+      await markChangesSeen();
+    }
+  }, on);
 }
 
 async function getAppBanner() {
