@@ -3,6 +3,12 @@
 # After editing: `.venv/bin/python tools/changelog.py` rewrites CHANGELOG.md (a test checks they match),
 # and `.venv/bin/python tools/release.py` publishes the day's GitHub Release.
 
+- date: 2026-10-23
+  kind: improved
+  title: Live games stay put while they update
+  text: During live games, Tonight and the game page now change only the scores, clocks and stats that moved every 10 seconds, instead of redrawing the whole page. Your team cards stay on the team you swiped to, the shot map keeps the period you picked, an open reaction picker stays open, and the player tables keep their place when you've scrolled them sideways.
+  link: "#/"
+
 - date: 2026-10-19
   kind: improved
   title: Upsets get their own column in Pick'em

@@ -3,6 +3,10 @@
 Every update to [Shots on Goal](https://github.com/DieLaughing/shotsongoal), newest first. The same list is on the app's What's new page.
 This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit that file, not this one.
 
+## October 23, 2026
+
+- **Improved: Live games stay put while they update.** During live games, Tonight and the game page now change only the scores, clocks and stats that moved every 10 seconds, instead of redrawing the whole page. Your team cards stay on the team you swiped to, the shot map keeps the period you picked, an open reaction picker stays open, and the player tables keep their place when you've scrolled them sideways.
+
 ## October 19, 2026
 
 - **Improved: Upsets get their own column in Pick'em.** The ⚡ number in the Pick'em tables was easy to read as a streak. It counts your upsets, right picks on an underdog that won, and now sits in its own Upsets column.
