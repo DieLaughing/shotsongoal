@@ -433,8 +433,15 @@ function placeSwitches() {
   }
   switchWatch.takeRecords();   // our own changes aren't news: never wake ourselves up
 }
-// Runs before the browser paints any change (a redraw, a morph, a class flip), so the pill is never a frame late.
-const switchWatch = new MutationObserver(placeSwitches);
+// Any change to a switch (a redraw, a morph, a class flip) places its pill once, in the next frame: a page built in
+// several steps is measured once, not after every step. Until then a new switch shows its own .on highlight
+// (has-pill isn't on yet), so the frame in between looks the same. Changes elsewhere are skipped without measuring.
+const touchesSwitch = r => r.target.closest?.(SWITCHES) ||
+  [...r.addedNodes].some(n => n.nodeType === 1 && (n.matches(SWITCHES) || n.querySelector(SWITCHES)));
+let switchFrame = 0;
+const switchWatch = new MutationObserver(records => {
+  if (!switchFrame && records.some(touchesSwitch)) switchFrame = requestAnimationFrame(() => { switchFrame = 0; placeSwitches(); });
+});
 switchWatch.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
 window.addEventListener("resize", () => { movePill(); placeSwitches(); });
 
