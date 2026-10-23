@@ -5,7 +5,7 @@ This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit th
 
 ## October 23, 2026
 
-- **Improved: Live game pages stay put while they update.** During a live game, the game page now changes only the score, clock and stats that moved every 10 seconds, instead of redrawing the whole page. The shot map keeps the period you picked, an open reaction picker stays open, and the player tables keep their place when you've scrolled them sideways.
+- **Improved: Live games stay put while they update.** During live games, Tonight and the game page now change only the scores, clocks and stats that moved every 10 seconds, instead of redrawing the whole page. Your team cards stay on the team you swiped to, the shot map keeps the period you picked, an open reaction picker stays open, and the player tables keep their place when you've scrolled them sideways.
 
 ## October 19, 2026
 
