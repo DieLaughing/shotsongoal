@@ -413,7 +413,10 @@ function placeSwitches() {
   for (const sw of document.querySelectorAll(SWITCHES)) {
     const on = sw.querySelector(":scope > .on");
     let pill = sw.querySelector(":scope > .seg-pill");
-    if (!on) { pill?.remove(); sw.classList.remove("has-pill"); continue; }
+    if (!on) {   // nothing picked: only touch the switch if it had a pill (any class write wakes the observer again)
+      if (pill) { pill.remove(); sw.classList.remove("has-pill"); }
+      continue;
+    }
     if (pill && +pill.dataset.x === on.offsetLeft && +pill.dataset.w === on.offsetWidth) continue;
     let from = null;
     if (!pill) {
@@ -428,9 +431,11 @@ function placeSwitches() {
     }
     placePill(pill, on, from);
   }
+  switchWatch.takeRecords();   // our own changes aren't news: never wake ourselves up
 }
 // Runs before the browser paints any change (a redraw, a morph, a class flip), so the pill is never a frame late.
-new MutationObserver(placeSwitches).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+const switchWatch = new MutationObserver(placeSwitches);
+switchWatch.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
 window.addEventListener("resize", () => { movePill(); placeSwitches(); });
 
 // Live pages ask again this often (s). The server answers from memory; the NHL's own scoreboard moves every ~20 s.
