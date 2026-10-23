@@ -6,6 +6,8 @@ Built with Claude Code; these notes are how it works. Personal deployment notes 
 which is not committed.
 
 Operating rules shared with the sibling app (standards, speed budget, shared parts, ideas): docs/operating.md.
+How the app moves (what animates, what must hold still, timings, rules for new UI): docs/motion.md, checked by
+`.venv/bin/python tools/motioncheck.py` (PERF_CHROMIUM=/usr/bin/chromium locally; CI on every push).
 
 ## Shipping a feature (do this every time)
 - Add an entry at the top of `sog/data/changes.yaml` (date, kind new|improved|fixed, title, text written for the
