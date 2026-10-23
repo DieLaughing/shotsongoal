@@ -126,7 +126,12 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   reacts to changes touching a switch places pills once per frame (rAF): a page built in steps is measured once. Switches that redraw the page on tap are matched by their option labels: pointerdown notes the spot being
   left, and the redrawn switch's new pill slides from it (within 1.5 s).
   League's Standings | Leaders (data-swaps: two addresses that look like one switch) keep the scroll and page height
-  and cross-fade (200 ms, no movement) instead of the page animation, which read as a bounce there. placeSwitches only writes when something changed and drops
+  and cross-fade (200 ms, no movement) instead of the page animation, which read as a bounce there.
+- Card -> game morph (navigate() wraps hash changes in document.startViewTransition): between a list and a game page
+  the tapped (or first on-screen) a.body / a.hero-top and the game page's .scorebug share view-transition-name
+  "matchup" (inline, cleared on vt.finished), so the card grows into the scoreboard and back. route() runs inside the
+  callback with `morphing` set (no Rise), capped at MORPH_WAIT 800 ms. Without the API, motion off or the card off
+  screen, plain route(). Timings in style.css (::view-transition-*). Works in Chromium and Firefox 144+ (checked). placeSwitches only writes when something changed and drops
   its own mutation records (takeRecords): any class write, even removing an absent class, wakes the observer, and a
   switch with nothing picked once froze the page in an endless loop.
 - Navigation chrome: tab bar = icon (20 px) + label (web/index.html inline SVGs); scrolling down adds .compact (icons fold

@@ -2228,7 +2228,7 @@ function route() {
   if (location.hash !== lastHash) countView();   // a navigation, not a re-render (league switch, spoiler peek)
   const page = (location.hash || "#/").split("/")[1] || "";
   const changed = lastHash !== null && location.hash !== lastHash;
-  pendingShot = changed && !inPage && motionOn() && ME?.status === "approved" ? shotFrom(lastPage, page) : 0;
+  pendingShot = changed && !inPage && !morphing && motionOn() && ME?.status === "approved" ? shotFrom(lastPage, page) : 0;
   pendingFade = changed && inPage && motionOn();
   keepScroll = changed && inPage;
   if (!keepScroll) view.style.minHeight = "";
@@ -2249,6 +2249,36 @@ function rise() {
     { transform: "translate3d(0, 14px, 0)", opacity: 0, filter: el.tagName === "H1" ? "blur(4px)" : "none" },
     { transform: "translate3d(0, 0, 0)", opacity: 1, filter: "none" },
   ], { duration: 340, delay: Math.min(i, 7) * 35, easing: "cubic-bezier(.2, .9, .3, 1)", fill: "backwards" }));
+}
+
+// ---- shared-element page changes (View Transitions; docs/motion.md) ------------------------------------------
+// A game card grows into the game page's scoreboard, and the scoreboard shrinks back into its card on the way back.
+// Progressive enhancement: browsers without document.startViewTransition (or with motion off) navigate as before.
+// The browser shows the old page until the new one is drawn, as the app already does while a page loads; a page that
+// takes longer than MORPH_WAIT just lands without the morph.
+const MORPH_WAIT = 800;
+const GAME_HASH = /^#\/p?game\/\d+$/;
+let morphing = false, lastTap = null;
+document.addEventListener("click", e => { lastTap = e.target.closest("a[href]"); }, true);
+const onScreen = el => { const r = el?.getBoundingClientRect(); return !!r && r.bottom > 0 && r.top < innerHeight && r.height > 0; };
+// The card on this page that opens `hash`: the one just tapped if it does, else the first one on screen.
+const cardFor = hash => [lastTap, ...view.querySelectorAll(`a.body[href="${hash}"], a.hero-top[href="${hash}"]`)]
+  .find(a => a?.isConnected && a.getAttribute("href") === hash && view.contains(a) && onScreen(a));
+
+function navigate() {
+  const from = lastHash || "", to = location.hash;
+  const toGame = GAME_HASH.test(to) && !GAME_HASH.test(from), fromGame = GAME_HASH.test(from) && !GAME_HASH.test(to);
+  const old = toGame ? cardFor(to) : fromGame ? view.querySelector(".scorebug") : null;
+  if (!old || !document.startViewTransition || !motionOn() || ME?.status !== "approved") return route();
+  old.style.viewTransitionName = "matchup";
+  const named = [old];
+  const vt = document.startViewTransition(async () => {
+    morphing = true;
+    try { await Promise.race([route(), new Promise(r => setTimeout(r, MORPH_WAIT))]); } finally { morphing = false; }
+    const next = toGame ? view.querySelector(".scorebug") : cardFor(from);
+    if (next && onScreen(next)) { next.style.viewTransitionName = "matchup"; named.push(next); }
+  });
+  vt.finished.finally(() => named.forEach(el => { el.style.viewTransitionName = ""; }));
 }
 
 function slapshot(d) {
@@ -2328,7 +2358,7 @@ async function start() {
   if (["nhl", "pwhl", "both"].includes(asked)) { LEAGUE = asked; try { localStorage.setItem("league", asked); } catch { /* fine */ } }
   applyLeague();
   document.querySelectorAll("[data-league]").forEach(b => b.addEventListener("click", () => setLeague(b.dataset.league)));
-  window.addEventListener("hashchange", route);
+  window.addEventListener("hashchange", navigate);
   // Spoiler-free buttons can sit on any page (cards, game page, covers); one listener handles them all.
   view.addEventListener("click", e => {
     if (e.target.closest("[data-back]") && cameFromApp) { e.preventDefault(); history.back(); return; }

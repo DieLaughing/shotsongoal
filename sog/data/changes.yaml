@@ -5,6 +5,12 @@
 
 - date: 2026-10-23
   kind: improved
+  title: Games grow out of their cards
+  text: Tap a game on Tonight and its card grows into the scoreboard at the top of the game page; go back and it shrinks back into place. Works in Chrome, Safari and Firefox; anywhere else the page just opens as before.
+  link: "#/"
+
+- date: 2026-10-23
+  kind: improved
   title: Smoother moves around the app
   text: Pages now build in from the top when you open them, and the highlight on the tab bar and on every switch (Wire filters, NHL / PWHL / Both, standings views, team and player tabs) stretches across to what you picked. Prefer the old slide-in? Settings › Display › Slapshot.
   link: "#/settings"
