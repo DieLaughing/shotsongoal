@@ -120,6 +120,9 @@ Operating rules shared with the sibling app (standards, speed budget, shared par
   Same address re-shown and quiet refreshes never animate; off with settings.animations =
   false or prefers-reduced-motion. The tab highlight is one .tab-pill moved by movePill(): Web Animations "liquid" stretch (leading edge first,
   trailing edge follows, small overshoot, 380 ms); labels/icons cross-fade colour; the toast springs out from the middle.
+  Every switch (.seg, .league) gets the same pill (placeSwitches, run by a MutationObserver before paint; liquid() is
+  shared). Switches that redraw the page on tap are matched by their option labels: pointerdown notes the spot being
+  left, and the redrawn switch's new pill slides from it (within 1.5 s).
 - Navigation chrome: tab bar = icon (20 px) + label (web/index.html inline SVGs); scrolling down adds .compact (icons fold
   away, ~39 px bar) and .tucked on the header (slides up, keeping the safe-area strip); any scroll up / top of page /
   new page restores both. Settings = outlined button with a gear,
@@ -153,7 +156,9 @@ Operating rules shared with the sibling app (standards, speed budget, shared par
   season by season with other leagues hidden behind a button, awards) and Advanced (NHL only, MoneyPuck). Every name
   in scoring, three stars, box scores, team leaders, rosters and milestones links here (parsers carry `pid`).
   Leaders (#/leaders, League tab: Standings | Leaders) and Search (#/search, header icon: players from every roster
-  via /api/search, filtered on the phone; teams; the top team's next and last game). Player pages and leaders follow
+  via /api/search, filtered on the phone; teams; the top team's next and last game). Search ignores accents,
+  apostrophes and periods, knows fan nicknames (TEAM_ALIASES: habs, B's, bolts…) and, when fewer than 3 players match,
+  takes names with a word within 1 letter (2 for 7+ letters) of what was typed (near()). Player pages and leaders follow
   spoiler-free like the team page and standings.
 - sog/images.py: photos at /img/p/<league>/<team>/<id>-<96|192>.webp, downloaded once, shrunk with Pillow (80 KB
   headshot -> 2 KB), kept in /data/img (7 days, misses remembered 1 day), a week's Cache-Control; sw.js serves /img/
@@ -166,15 +171,6 @@ Operating rules shared with the sibling app (standards, speed budget, shared par
 - sog/moneypuck.py: MoneyPuck's season skaters/goalies CSVs (listed on moneypuck.com/data.htm; free for
   non-commercial use with credit, so the Advanced tab links MoneyPuck.com). Fetched every 6 h in the background; a
   player page only peeks at the saved copy (Feed.moneypuck_peek) and never waits on the 2 MB download.
-- Ask (prototype, #/ask, Search | Ask tabs; sog/ask.py, POST /api/ask): a question -> an answer card drawn by OpenUI
-  (openui.com browser bundle 0.2.1 from jsDelivr with SRI, loaded only on that page; React inside, ~900 KB gz). The model
-  never writes the answer: a local llama.cpp server (SOG_LLM_URL, Qwen3-4B-Instruct Q4 on the VPS, json_schema output)
-  fills a form {kind about|leaders|standings|games|other, names, stat, group, day}; names go through find_team/
-  find_players (teams.py + aliases, the search index; NHL only), data comes from Feed copies, and ask.py writes the
-  OpenUI Lang (root Card first, one statement per block; Page/c()/lit()). Plain names skip the model (quick()); plans
-  are cached per wording; warm() reads the prompt at start-up (first call otherwise ~10 s). Spoiler-free: answers that
-  would show a hidden game's team/standings/leaders get spoiler_wall(). 100 asks a day per person; /api/ask is left
-  out of the slow log. The phone hands OpenUI the answer a line at a time (40 ms) so it builds like a stream.
 
 ## Wire notes
 - NHL.com news RSS answers 403 even to a Chrome fingerprint: not used. ESPN previews/recaps/videos are filtered out.
