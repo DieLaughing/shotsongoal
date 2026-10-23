@@ -111,12 +111,20 @@ Operating rules shared with the sibling app (standards, speed budget, shared par
   reads gamecenter/<id>/landing penalties ("Fighting"); first look per game only records.
 - Speed: GZip on responses; /api/team sends the last 10 results + next 10 games; non-live game pages refresh in the
   background (_game_stale_ok); Tonight warms the team cards' game pages after it renders.
-- Page transitions (web/app.js route -> renderRoute, slapshot): Web Animations API. The old page goes at once; when
-  a navigation's real content lands in #view (MutationObserver, not the Loading placeholder) the page flies in from
-  the side (+1 right: forward tabs in NAV_ORDER, game/team pages; -1 left: back), overshoots and snaps back
-  (~280 ms). Whole-pixel translate only: scale/skew made text re-render and jump when the animation ended.
+- Page transitions (web/app.js route -> renderRoute, rise/slapshot; Settings > Display picks, per device in
+  localStorage `motion`, default rise): Web Animations API. The old page goes at once; when a navigation's real
+  content lands in #view (MutationObserver, not the Loading placeholder) either #view's blocks fade up 14 px one after
+  another (rise: 340 ms each, 35 ms apart, first 8 staggered, h1 un-blurs) or the page flies in from
+  the side (slapshot: +1 right: forward tabs in NAV_ORDER, game/team pages; -1 left: back), overshoots and snaps back
+  (~280 ms). Both are from / like OpenUI's trip planner demo. Whole-pixel translate only: scale/skew made text re-render and jump when the animation ended.
   Same address re-shown and quiet refreshes never animate; off with settings.animations =
-  false or prefers-reduced-motion. The tab highlight is one .tab-pill moved by movePill() (CSS spring transition).
+  false or prefers-reduced-motion. The tab highlight is one .tab-pill moved by movePill(): Web Animations "liquid" stretch (leading edge first,
+  trailing edge follows, small overshoot, 380 ms); labels/icons cross-fade colour; the toast springs out from the middle.
+  Every switch (.seg, .league) gets the same pill (placeSwitches, run by a MutationObserver before paint; liquid() is
+  shared). Switches that redraw the page on tap are matched by their option labels: pointerdown notes the spot being
+  left, and the redrawn switch's new pill slides from it (within 1.5 s). placeSwitches only writes when something changed and drops
+  its own mutation records (takeRecords): any class write, even removing an absent class, wakes the observer, and a
+  switch with nothing picked once froze the page in an endless loop.
 - Navigation chrome: tab bar = icon (20 px) + label (web/index.html inline SVGs); scrolling down adds .compact (icons fold
   away, ~39 px bar) and .tucked on the header (slides up, keeping the safe-area strip); any scroll up / top of page /
   new page restores both. Settings = outlined button with a gear,
@@ -150,7 +158,9 @@ Operating rules shared with the sibling app (standards, speed budget, shared par
   season by season with other leagues hidden behind a button, awards) and Advanced (NHL only, MoneyPuck). Every name
   in scoring, three stars, box scores, team leaders, rosters and milestones links here (parsers carry `pid`).
   Leaders (#/leaders, League tab: Standings | Leaders) and Search (#/search, header icon: players from every roster
-  via /api/search, filtered on the phone; teams; the top team's next and last game). Player pages and leaders follow
+  via /api/search, filtered on the phone; teams; the top team's next and last game). Search ignores accents,
+  apostrophes and periods, knows fan nicknames (TEAM_ALIASES: habs, B's, bolts…) and, when fewer than 3 players match,
+  takes names with a word within 1 letter (2 for 7+ letters) of what was typed (near()). Player pages and leaders follow
   spoiler-free like the team page and standings.
 - sog/images.py: photos at /img/p/<league>/<team>/<id>-<96|192>.webp, downloaded once, shrunk with Pillow (80 KB
   headshot -> 2 KB), kept in /data/img (7 days, misses remembered 1 day), a week's Cache-Control; sw.js serves /img/
