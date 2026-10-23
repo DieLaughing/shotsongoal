@@ -120,8 +120,8 @@ Operating rules shared with the sibling app (standards, speed budget, shared par
   Same address re-shown and quiet refreshes never animate; off with settings.animations =
   false or prefers-reduced-motion. The tab highlight is one .tab-pill moved by movePill(): Web Animations "liquid" stretch (leading edge first,
   trailing edge follows, small overshoot, 380 ms); labels/icons cross-fade colour; the toast springs out from the middle.
-  Every switch (.seg, .league) gets the same pill (placeSwitches, run by a MutationObserver before paint; liquid() is
-  shared). Switches that redraw the page on tap are matched by their option labels: pointerdown notes the spot being
+  Every switch (.seg, .league) gets the same pill (placeSwitches; liquid() is shared). A MutationObserver that only
+  reacts to changes touching a switch places pills once per frame (rAF): a page built in steps is measured once. Switches that redraw the page on tap are matched by their option labels: pointerdown notes the spot being
   left, and the redrawn switch's new pill slides from it (within 1.5 s). placeSwitches only writes when something changed and drops
   its own mutation records (takeRecords): any class write, even removing an absent class, wakes the observer, and a
   switch with nothing picked once froze the page in an endless loop.
