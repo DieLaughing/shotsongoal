@@ -1611,7 +1611,7 @@ async function playerView(id, league = "nhl") {
 }
 
 // League tab: Standings | Leaders, as one row above either page.
-const leagueTabs = current => `<div class="seg seg-top">${[["#/league", "standings", "Standings"], ["#/leaders", "leaders", "Leaders"]].map(([href, k, l]) =>
+const leagueTabs = current => `<div class="seg seg-top" data-swaps>${[["#/league", "standings", "Standings"], ["#/leaders", "leaders", "Leaders"]].map(([href, k, l]) =>
   `<a href="${href}" class="${k === current ? "on" : ""}">${l}</a>`).join("")}</div>`;
 const LEADER_CATS = [["points", "Points"], ["goals", "Goals"], ["assists", "Assists"], ["wins", "Wins"], ["savePctg", "SV%"], ["goalsAgainstAverage", "GAA"]];
 
@@ -2169,6 +2169,15 @@ async function adminView() {
 const NAV_ORDER = { "": 0, day: 0, picks: 1, wire: 2, league: 3, standings: 3, teams: 3, settings: 4, new: 5, app: 5, report: 5, admin: 5 };
 const DETAIL = new Set(["game", "pgame", "team"]);
 let lastHash = null, lastPage = null, pendingShot = 0, cameFromApp = false;   // pendingShot: +1 from the right, -1 from the left
+// Switches between sibling addresses (League's Standings | Leaders, marked data-swaps) feel like one page: the tap
+// keeps the scroll and the page height, and the content cross-fades instead of the page animation (which read as a
+// bounce there).
+let inPage = false, pendingFade = false, keepScroll = false;
+view.addEventListener("click", e => {
+  if (!e.target.closest("[data-swaps] > a:not(.on)")) return;
+  inPage = true;
+  view.style.minHeight = `${view.offsetHeight}px`;   // a shorter page mustn't pull the scroll up; cleared on the next page
+}, true);
 const applyHand = hand => { document.documentElement.dataset.hand = hand === "left" ? "left" : "right"; };
 const motionOn = () => ME?.settings?.animations !== false && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -2219,7 +2228,11 @@ function route() {
   if (location.hash !== lastHash) countView();   // a navigation, not a re-render (league switch, spoiler peek)
   const page = (location.hash || "#/").split("/")[1] || "";
   const changed = lastHash !== null && location.hash !== lastHash;
-  pendingShot = changed && motionOn() && ME?.status === "approved" ? shotFrom(lastPage, page) : 0;
+  pendingShot = changed && !inPage && motionOn() && ME?.status === "approved" ? shotFrom(lastPage, page) : 0;
+  pendingFade = changed && inPage && motionOn();
+  keepScroll = changed && inPage;
+  if (!keepScroll) view.style.minHeight = "";
+  inPage = false;
   if (changed) cameFromApp = true; else if (lastHash === null) cameFromApp = false;
   lastHash = location.hash; lastPage = page;
   return renderRoute();
@@ -2251,9 +2264,14 @@ function slapshot(d) {
 
 // Fire when a navigation's real content lands in the page (not the "Loading…" placeholder).
 new MutationObserver(() => {
-  if (!pendingShot) return;
+  if (!pendingShot && !pendingFade) return;
   const first = view.firstElementChild;
   if (!first || (first.classList.contains("empty") && /^Loading/.test(first.textContent))) return;
+  if (pendingFade) {
+    pendingFade = false;
+    view.animate([{ opacity: .45 }, { opacity: 1 }], { duration: 200, easing: "ease-out" });
+    return;
+  }
   const d = pendingShot;
   pendingShot = 0;
   if (motionStyle() === "rise") rise(); else slapshot(d);
@@ -2269,7 +2287,8 @@ function renderRoute() {
   if (page !== "settings") editingTeams = false;
   if (page !== "report") reportFrom = location.hash || "#/";
   document.getElementById("foot").hidden = page === "report";
-  window.scrollTo(0, 0);
+  if (!keepScroll) window.scrollTo(0, 0);
+  keepScroll = false;
   if (page === "day" && /^\d{4}-\d{2}-\d{2}$/.test(arg || "")) return tonightView(arg);
   if (page === "game" && /^\d+$/.test(arg || "")) return gameView(arg);
   if (page === "pgame" && /^\d+$/.test(arg || "")) return gameView(arg, false, "pwhl");
