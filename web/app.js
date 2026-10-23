@@ -387,6 +387,24 @@ window.addEventListener("resize", () => movePill());
 // Live pages ask again this often (s). The server answers from memory; the NHL's own scoreboard moves every ~20 s.
 const LIVE_REFRESH = 10;
 
+// idiomorph (web/idiomorph.js) lets a refresh change only what moved. Fetched after startup or by a game page; until it
+// lands, refreshes replace the page as before.
+let morph = null;
+const loadMorph = () => morph || import("./idiomorph.js?v=1").then(m => { morph = m.Idiomorph.morph; }).catch(() => {});
+// An opened or closed <details> stays the way the person left it.
+const MORPH = { morphStyle: "innerHTML",
+  callbacks: { beforeAttributeUpdated: (name, el) => !(name === "open" && el.tagName === "DETAILS") } };
+// Quiet draws (the live refresh, fresher data) change only what moved, so a scroll, an open section or a tap in
+// progress survives; navigations replace the page.
+function paint(html, quiet) {
+  if (quiet && morph) morph(view, html, MORPH);
+  else view.innerHTML = html;
+}
+// Pages that paint() put their listeners on #view, not on controls (a morph keeps controls, so theirs would pile up):
+// each draw takes a fresh set, and every route drops the last page's.
+let viewOff = new AbortController();
+function listen() { viewOff.abort(); viewOff = new AbortController(); return { signal: viewOff.signal }; }
+
 function autoRefresh(fn, seconds) {
   clearTimeout(refreshTimer);
   refreshTimer = setTimeout(() => { if (!document.hidden) fn(true); else autoRefresh(fn, seconds); }, seconds * 1000);
@@ -452,13 +470,6 @@ function newBanner() {
     <a class="btn small" href="#/new">See what's new</a><button class="x" id="newbar-x" aria-label="Dismiss">×</button></div>`;
 }
 
-function bindNewBanner() {
-  document.getElementById("newbar-x")?.addEventListener("click", async e => {
-    e.target.closest(".newbar")?.remove();
-    BANNER = "";
-    await markChangesSeen();
-  });
-}
 
 const KIND_NAME = { new: "New", improved: "Improved", fixed: "Fixed" };
 
@@ -597,12 +608,13 @@ function heroes(data, leagues, slateGames) {
   if (!cards.length) return "";
   const live = c => slateGames.find(x => x.away.abbr === c.abbr || x.home.abbr === c.abbr);
   return `<div class="heroes${cards.length > 1 ? " many" : ""}">${cards.map(c => heroCard(c, live(c))).join("")}</div>`
-    + (cards.length > 1 ? `<div class="hero-dots" aria-hidden="true">${cards.map((_, i) => `<span${i ? "" : ' class="on"'}></span>`).join("")}</div>` : "");
+    + (cards.length > 1 ? `<div class="hero-dots" aria-hidden="true">${cards.map((_, i) => `<span${i === Math.min(heroAt, cards.length - 1) ? ' class="on"' : ""}></span>`).join("")}</div>` : "");
 }
+let heroAt = 0;   // the team card swiped into view, kept across the live refresh
 
 async function tonightView(date, quiet = false) {
   setNav("tonight");
-  if (!quiet) showLoading(`Loading games…`);
+  if (!quiet) { showLoading(`Loading games…`); heroAt = 0; }
   const leagues = LEAGUE === "both" ? ["nhl", "pwhl"] : [LEAGUE];
   let days, mineData = null;
   try {
@@ -635,7 +647,7 @@ async function tonightView(date, quiet = false) {
   const day = { date: days[0].date || dates[0],
     // Arrows step to the nearest day with a game in any shown league.
     prev: days.map(d => d.prev).filter(Boolean).sort().pop(), next: days.map(d => d.next).filter(Boolean).sort()[0] };
-  view.innerHTML = `
+  paint(`
     <div id="getapp">${BANNER}</div>
     ${heroes(mineData, leagues, days.flatMap(d => d.games || []))}
     ${(n => n ? `<div class="spoil-note">🙈 Spoiler-free: ${n} game${n > 1 ? "s" : ""} hidden. Open one to reveal it when you've watched.</div>` : "")(days.flatMap(d => d.games || []).filter(spoilerHidden).length)}
@@ -644,21 +656,22 @@ async function tonightView(date, quiet = false) {
       <h1>${esc(day.date ? dayTitle(day.date) : "Games")}</h1>
       ${day.next ? `<a href="#/day/${day.next}" aria-label="Next day">→</a>` : "<span></span>"}
     </div>
-    ${days.map((d, i) => slate(d, leagues[i])).join("")}`;
-  // The dots under swipeable team cards follow the card in view.
-  const strip = view.querySelector(".heroes.many");
-  if (strip) strip.addEventListener("scroll", () => {
-    const i = Math.round(strip.scrollLeft / (strip.firstElementChild.offsetWidth + 10));
-    view.querySelectorAll(".hero-dots span").forEach((d, j) => d.classList.toggle("on", i === j));
-  }, { passive: true });
+    ${days.map((d, i) => slate(d, leagues[i])).join("")}`, quiet);
+  const on = listen();
+  // The dots under swipeable team cards follow the card in view. scroll doesn't bubble: listen on its way down.
+  view.addEventListener("scroll", e => {
+    const strip = e.target;
+    if (!strip.matches?.(".heroes.many")) return;
+    heroAt = Math.round(strip.scrollLeft / (strip.firstElementChild.offsetWidth + 10));
+    view.querySelectorAll(".hero-dots span").forEach((d, j) => d.classList.toggle("on", heroAt === j));
+  }, { ...on, capture: true, passive: true });
+  bannerClicks(on);
   // One banner at a time: getting the app / alerts first, otherwise what's new.
-  bindBanner();
   getAppBanner().then(html => {
     const next = html || newBanner(), box = document.getElementById("getapp");
     if (!box || next === BANNER) return;
     BANNER = next;
     box.innerHTML = next;
-    bindBanner();
   });
   const all = days.flatMap(d => d.games || []);
   // Warm your team cards' game pages on the server, so tapping one opens straight away.
@@ -763,14 +776,18 @@ async function pickemView(date, quiet = false) {
 // Tonight's one banner slot: getting the app / alerts first, otherwise what's new. BANNER is the last one shown, so a
 // re-render paints it straight away instead of blanking the slot and shifting the page while it's re-checked.
 let BANNER = "";
-function bindBanner() {
-  const box = document.getElementById("getapp");
-  box?.querySelector(".getapp .x")?.addEventListener("click", () => {
-    try { localStorage.setItem("getappHidden", "1"); } catch { /* fine */ }
-    BANNER = "";
-    box.innerHTML = "";
-  });
-  bindNewBanner();
+function bannerClicks(on) {
+  view.addEventListener("click", async e => {
+    if (e.target.closest("#getapp .getapp .x")) {
+      try { localStorage.setItem("getappHidden", "1"); } catch { /* fine */ }
+      BANNER = "";
+      document.getElementById("getapp").innerHTML = "";
+    } else if (e.target.closest("#newbar-x")) {
+      e.target.closest(".newbar")?.remove();
+      BANNER = "";
+      await markChangesSeen();
+    }
+  }, on);
 }
 
 async function getAppBanner() {
@@ -906,8 +923,13 @@ function previewBlock(p, a, h, ac, hc) {
 }
 
 let moreStatsOpen = false;  // stays open across the live refresh
+// What the person picked on this game's page, kept across the live refresh: the shot map period, the open reaction
+// picker. A different game starts fresh.
+let gameUi = { id: null, shots: "all", rx: null };
 async function gameView(id, quiet = false, league = "nhl") {
   setNav("tonight");
+  loadMorph();
+  if (gameUi.id !== id) gameUi = { id, shots: "all", rx: null };
   if (!quiet) showLoading(`Loading game…`);
   let d;
   const path = league === "pwhl" ? `/api/pwhl/game/${encodeURIComponent(id)}` : `/api/game/${encodeURIComponent(id)}`;
@@ -943,9 +965,11 @@ async function gameView(id, quiet = false, league = "nhl") {
     if (!canReact) return "";
     key = key.slice(0, 82);
     const counts = S.reactions[key] || {}, mine = S.mine[key];
+    if (gameUi.rx === key) return `<div class="rxs">${rxPicker(key)}</div>`;
     const chips = Object.entries(counts).map(([e, n]) => `<button class="rxc${mine === e ? " mine" : ""}" data-rx="${e}" data-ev="${esc(key)}">${e} ${n}</button>`).join("");
     return `<div class="rxs">${chips}<button class="rxc add" data-rxopen="${esc(key)}" aria-label="React">${chips ? "＋" : "🙂＋"}</button></div>`;
   };
+  const rxPicker = key => S.emoji.map(e => `<button class="rxc pick${S.mine[key] === e ? " mine" : ""}" data-rx="${e}" data-ev="${esc(key)}">${e}</button>`).join("");
   const side = (t, abbr) => `<a class="side" href="#/team/${abbr}">${mark(abbr, true)}<span class="nm">${esc(t.name || teamName(abbr))}</span></a>`;
 
   // Top card in three groups: the game itself, where to watch it, and you + friends (watching now or later).
@@ -984,7 +1008,7 @@ async function gameView(id, quiet = false, league = "nhl") {
     }).join("")}`).join("")}</div>`;
   }
 
-  if (d.shotmap?.length) html += shotMap(d.shotmap, a, h) + momentumCard(d.shotmap, a, h, ac, hc, league);
+  if (d.shotmap?.length) html += shotMap(d.shotmap, a, h, gameUi.shots) + momentumCard(d.shotmap, a, h, ac, hc, league);
 
   if (d.linescore.length) {
     const shots = Object.fromEntries(d.shots.map(s => [s.period, s]));
@@ -1031,33 +1055,36 @@ async function gameView(id, quiet = false, league = "nhl") {
   if (more) html += `<details class="more-stats" ${moreStatsOpen ? "open" : ""}><summary>More stats: team, penalties, players</summary>${more}</details>`;
 
   if (g.venue) html += `<p class="help" style="text-align:center;margin-top:18px">${esc(g.venue)}</p>`;
-  view.innerHTML = html;
-  view.querySelector(".more-stats")?.addEventListener("toggle", e => { moreStatsOpen = e.target.open; });
-  document.getElementById("report")?.addEventListener("click", async e => {
+  paint(html, quiet);
+  const on = listen();
+  // toggle doesn't bubble: listen while it travels down to the <details>.
+  view.addEventListener("toggle", e => { if (e.target.matches?.(".more-stats")) moreStatsOpen = e.target.open; }, { ...on, capture: true });
+  const sendReport = async e => {
     const note = prompt(`We said: ${g.watch?.app || "no channel"} (${g.watch?.why || ""}).\nWhere is it actually on? (optional)`);
     if (note === null) return;
     e.target.disabled = true;
     try { await api("/api/report", { method: "POST", body: JSON.stringify({ game_id: g.id, note }) }); e.target.textContent = "Thanks, reported."; }
     catch { e.target.textContent = "Couldn't send that. Try again."; e.target.disabled = false; }
-  });
+  };
   const post = async (path, body) => {
     try { await api(path, { method: "POST", body: JSON.stringify({ league: league === "pwhl" ? "pwhl" : "nhl", id: g.id, date: g.date, ...body }) }); }
     catch (e) { toast(e.detail || "Couldn't save that. Try again.", true); }
     gameView(id, true, league);
   };
-  document.getElementById("watching")?.addEventListener("click", () => post("/api/watching", { on: !S.me_watching }));
-  view.querySelectorAll("[data-rxopen]").forEach(b => b.addEventListener("click", () => {
-    const key = b.dataset.rxopen, mine = S.mine[key];
-    b.parentElement.innerHTML = S.emoji.map(e => `<button class="rxc pick${mine === e ? " mine" : ""}" data-rx="${e}" data-ev="${esc(key)}">${e}</button>`).join("");
-    bindRx();
-  }));
-  const bindRx = () => view.querySelectorAll("[data-rx]").forEach(b => b.onclick = () =>
-    post("/api/react", { event: b.dataset.ev, emoji: S.mine[b.dataset.ev] === b.dataset.rx ? null : b.dataset.rx }));
-  bindRx();
-  view.querySelectorAll("[data-shots]").forEach(b => b.addEventListener("click", () => {
-    view.querySelectorAll("[data-shots]").forEach(x => x.classList.toggle("on", x === b));
-    view.querySelectorAll(".rink [data-p]").forEach(dot => { dot.style.display = b.dataset.shots === "all" || dot.dataset.p === b.dataset.shots ? "" : "none"; });
-  }));
+  view.addEventListener("click", e => {
+    const t = e.target, open = t.closest("[data-rxopen]"), react = t.closest("[data-rx]"), shots = t.closest("[data-shots]");
+    if (t.closest("#report")) sendReport(e);
+    else if (t.closest("#watching")) post("/api/watching", { on: !S.me_watching });
+    else if (open) { gameUi.rx = open.dataset.rxopen; open.parentElement.innerHTML = rxPicker(gameUi.rx); }
+    else if (react) {
+      gameUi.rx = null;
+      post("/api/react", { event: react.dataset.ev, emoji: S.mine[react.dataset.ev] === react.dataset.rx ? null : react.dataset.rx });
+    } else if (shots) {
+      gameUi.shots = shots.dataset.shots;
+      view.querySelectorAll("[data-shots]").forEach(x => x.classList.toggle("on", x === shots));
+      view.querySelectorAll(".rink [data-p]").forEach(dot => { dot.style.display = shotShown(dot.dataset.p, gameUi.shots) ? "" : "none"; });
+    }
+  }, on);
   if (g.state === "live" || (g.state === "pre" && Date.parse(g.start) - Date.now() < 30 * 60000)) autoRefresh(q => gameView(id, q, league), LIVE_REFRESH);
 }
 
@@ -1162,16 +1189,18 @@ function momentumCard(shots, a, h, ac, hc, league) {
 
 // ---- shot map -----------------------------------------------------------------------------
 // NHL rink coordinates: x -100..100 (end boards), y -42.5..42.5. Home shoots right, away shoots left.
-function shotMap(shots, a, h) {
+const shotShown = (period, pick) => pick === "all" || period === pick;
+function shotMap(shots, a, h, pick = "all") {
   const color = t => TEAMS[t]?.color || "#888";
   const periods = [...new Set(shots.map(s => s.period))];
   const count = (t, k) => shots.filter(s => s.team === t && (k ? s.kind === k : s.kind !== "miss")).length;
+  if (!periods.includes(pick)) pick = "all";
   const dot = s => {
-    const c = color(s.team), cx = s.x.toFixed(1), cy = (-s.y).toFixed(1);
+    const c = color(s.team), cx = s.x.toFixed(1), cy = (-s.y).toFixed(1), p = `data-p="${esc(s.period)}"${shotShown(s.period, pick) ? "" : ` style="display:none"`}`;
     const title = `<title>${esc(s.shooter)} · ${esc(s.period)} ${esc(s.time)} · ${esc(s.kind === "miss" ? "missed" : s.kind)}${s.shot_type ? ` (${esc(s.shot_type)})` : ""}</title>`;
-    if (s.kind === "goal") return `<g data-p="${esc(s.period)}"><circle cx="${cx}" cy="${cy}" r="3.4" fill="${c}" stroke="var(--text)" stroke-width="1"/>${title}</g>`;
-    if (s.kind === "miss") return `<circle data-p="${esc(s.period)}" cx="${cx}" cy="${cy}" r="1.6" fill="none" stroke="${c}" stroke-width=".7" opacity=".8">${title}</circle>`;
-    return `<circle data-p="${esc(s.period)}" cx="${cx}" cy="${cy}" r="1.8" fill="${c}" opacity=".9">${title}</circle>`;
+    if (s.kind === "goal") return `<g ${p}><circle cx="${cx}" cy="${cy}" r="3.4" fill="${c}" stroke="var(--text)" stroke-width="1"/>${title}</g>`;
+    if (s.kind === "miss") return `<circle ${p} cx="${cx}" cy="${cy}" r="1.6" fill="none" stroke="${c}" stroke-width=".7" opacity=".8">${title}</circle>`;
+    return `<circle ${p} cx="${cx}" cy="${cy}" r="1.8" fill="${c}" opacity=".9">${title}</circle>`;
   };
   const line = "var(--border)";
   return `<h2>Shot map</h2><div class="card pad">
@@ -1192,7 +1221,7 @@ function shotMap(shots, a, h) {
       ${shots.filter(s => s.kind === "goal").map(dot).join("")}
     </svg>
     <div class="shotlegend small"><span>${count(a)} on goal · ${count(a, "miss")} missed</span><span>${count(h)} on goal · ${count(h, "miss")} missed</span></div>
-    ${periods.length > 1 ? `<div class="seg" style="margin:10px 0 0">${["all", ...periods].map(p => `<button data-shots="${esc(p)}" class="${p === "all" ? "on" : ""}">${p === "all" ? "All" : esc(p)}</button>`).join("")}</div>` : ""}
+    ${periods.length > 1 ? `<div class="seg" style="margin:10px 0 0">${["all", ...periods].map(p => `<button data-shots="${esc(p)}" class="${p === pick ? "on" : ""}">${p === "all" ? "All" : esc(p)}</button>`).join("")}</div>` : ""}
   </div>`;
 }
 
@@ -2126,6 +2155,7 @@ new MutationObserver(() => {
 
 function renderRoute() {
   clearTimeout(refreshTimer);
+  viewOff.abort();
   setCompact(false);
   if (ME.status !== "approved") return gateView();
   document.getElementById("tabs").hidden = false;
@@ -2189,7 +2219,7 @@ async function start() {
     if (hiddenAt && Date.now() - hiddenAt > 5 * 60000) { countView(); route(); }   // coming back = a fresh open
   });
   route();
-  setTimeout(prefetch, 2500);  // the other tabs, quietly, once the first page is up
+  setTimeout(() => { prefetch(); loadMorph(); }, 2500);  // the other tabs, quietly, once the first page is up
   setInterval(sendViews, 60000);
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
