@@ -322,10 +322,12 @@ tr.cut td { border-top: 2px dashed var(--accent); }
 .row-field > span { display: flex; flex-direction: column; gap: 2px; flex: 1 1 200px; }
 .row-field select { flex: 0 1 220px; padding: 8px 10px; font-size: 14px; }
 .suggest { border-top: 1px solid var(--border); padding-top: 10px; padding-bottom: 10px; }
-.toast { position: fixed; left: 50%; bottom: calc(72px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px); opacity: 0;
+.toast { position: fixed; left: 50%; bottom: calc(72px + env(safe-area-inset-bottom)); transform: translate(-50%, 12px) scale(.6, .8); opacity: 0;
   pointer-events: none; padding: 9px 16px; border-radius: 999px; background: var(--text); color: var(--bg); font-size: 14px; font-weight: 650;
-  box-shadow: 0 4px 16px rgb(0 0 0 / .25); transition: opacity .2s, transform .2s; z-index: 50; max-width: calc(100% - 32px); }
-.toast.show { opacity: 1; transform: translate(-50%, 0); }
+  box-shadow: 0 4px 16px rgb(0 0 0 / .25); transition: opacity .2s, transform .2s ease-in; z-index: 50; max-width: calc(100% - 32px); }
+/* Springs out from the middle like an island (OpenUI's trip planner demo), shrinks away on the way out. */
+.toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); transition: opacity .15s, transform .45s cubic-bezier(.3, 1.35, .5, 1); }
+@media (prefers-reduced-motion: reduce) { .toast, .toast.show { transition: opacity .2s; } }
 .toast.bad { background: var(--accent); color: #fff; }
 
 /* admin */
@@ -399,17 +401,16 @@ body.league-pwhl { --accent: #163F36; --fav: #163F36; --on-accent: #fff; }
 /* The slapshot (web/app.js) starts a page off to one side: never let that show a sideways scrollbar. */
 html, body { overflow-x: clip; }
 
-/* ---- tab pill (web/app.js movePill): slides to the active tab; page morph is done in JS (islandEnter) ---- */
+/* ---- tab pill (web/app.js movePill): stretches across to the active tab (Web Animations) ---- */
 .tabs { isolation: isolate; }
 .tabs a.active { background: transparent; }
 .tab-pill { position: absolute; left: 0; top: 6px; height: calc(100% - 12px - env(safe-area-inset-bottom)); border-radius: 10px;
-  background: var(--bg); z-index: -1; transition: transform 300ms cubic-bezier(.25, 1.35, .45, 1), width 300ms cubic-bezier(.25, 1.35, .45, 1); }
-.tab-pill.still { transition: none; }
+  background: var(--bg); z-index: -1; }
 
 /* ---- buttons that look like buttons (tab bar icons, Settings button, league switch, Back) ---- */
 .tabs a { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px 5px; font-size: 11.5px;
-  transition: gap 180ms ease, padding 180ms ease; }
-.tab-ico { width: 20px; height: 20px; display: block; transition: height 180ms ease, opacity 140ms ease; }
+  transition: gap 180ms ease, padding 180ms ease, color 160ms ease; }
+.tab-ico { width: 20px; height: 20px; display: block; transition: height 180ms ease, opacity 140ms ease, color 160ms ease; }
 /* Scrolling down folds the icons away (a slim bar of labels); any scroll up brings them back (web/app.js). */
 .tabs.compact a { gap: 0; padding: 5px 4px 4px; }
 .tabs.compact .tab-ico { height: 0; opacity: 0; }
@@ -551,3 +552,12 @@ table.roster .pcell > span { display: flex; flex-direction: column; line-height:
 .board td.upsets, .board td:nth-child(4) { white-space: nowrap; }
 .board td.upsets span[aria-hidden] { color: var(--accent); }
 @media (max-width: 480px) { .board th, .board td { padding-left: 6px; padding-right: 6px; } .board td:nth-child(2) { overflow-wrap: anywhere; } }
+
+/* ---- switch pills (web/app.js placeSwitches): one highlight per .seg / league switch slides to the picked option ---- */
+.seg, .league { position: relative; isolation: isolate; }
+.seg-pill { position: absolute; left: 0; z-index: -1; pointer-events: none; background: var(--bg); }
+.league > .seg-pill { background: var(--text); }
+body.league-pwhl .league > .seg-pill { background: var(--accent); }
+.seg.has-pill > button.on, .seg.has-pill > a.on, .league.has-pill > button.on,
+body.league-pwhl .league.has-pill > button.on { background: transparent; box-shadow: none; }
+.seg button, .seg-top a, .league button { transition: color 160ms ease; }

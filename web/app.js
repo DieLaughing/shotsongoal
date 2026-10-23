@@ -115,7 +115,7 @@ async function fast(path, rerender, quiet = false) {
   if (first) return first.d;
   fresh.then(async d => {
     if (location.hash !== route || JSON.stringify(d) === JSON.stringify(hit.data)) return;
-    await Promise.all(view.getAnimations().map(a => a.finished.catch(() => {})));  // never redraw mid-animation
+    await Promise.all(view.getAnimations({ subtree: true }).map(a => a.finished.catch(() => {})));  // never redraw mid-animation
     if (location.hash === route) rerender();
   }).catch(() => {});
   return hit.data;
@@ -370,19 +370,73 @@ window.addEventListener("scroll", () => {
 }, { passive: true });
 
 // The tab bar's highlight is one pill that slides (with a little spring) to the active tab.
+// Liquid highlight (from OpenUI's trip planner demo): the leading edge gets to the new spot first and the trailing
+// edge follows, so the pill stretches across and snaps to size with a small overshoot. Positions are {x, w} in px.
+function liquid(pill, from, to) {
+  if (from.x === to.x || !motionOn()) return;
+  const lead = to.x > from.x ? [from.x + (to.x - from.x) * .25, to.x + to.w] : [to.x, from.x + from.w - (from.x + from.w - to.x - to.w) * .25];
+  pill.animate([
+    { transform: `translateX(${from.x}px)`, width: `${from.w}px`, easing: "cubic-bezier(.45, 0, .55, 1)" },
+    { transform: `translateX(${lead[0]}px)`, width: `${lead[1] - lead[0]}px`, offset: .45, easing: "cubic-bezier(.3, 1.3, .5, 1)" },
+    { transform: `translateX(${to.x}px)`, width: `${to.w}px` },
+  ], { duration: 380 });
+}
+
+// Puts `pill` under `on` (an option of its parent) and slides it there from `from` (or from where it was).
+function placePill(pill, on, from) {
+  const to = { x: on.offsetLeft, w: on.offsetWidth };
+  from ||= pill.dataset.w ? { x: +pill.dataset.x, w: +pill.dataset.w } : null;
+  Object.assign(pill.style, { width: `${to.w}px`, transform: `translateX(${to.x}px)`, opacity: "1" });
+  Object.assign(pill.dataset, to);
+  if (from) liquid(pill, from, to);
+}
+
 function movePill() {
   const bar = document.getElementById("tabs"), on = bar?.querySelector("a.active");
   let pill = bar?.querySelector(".tab-pill");
   if (!bar) return;
   if (!pill) { pill = document.createElement("span"); pill.className = "tab-pill"; bar.prepend(pill); }
-  pill.classList.toggle("still", !motionOn() || !pill.dataset.placed);
-  if (!on) { pill.style.opacity = "0"; return; }
-  pill.style.opacity = "1";
-  pill.style.width = `${on.offsetWidth}px`;
-  pill.style.transform = `translateX(${on.offsetLeft}px)`;
-  pill.dataset.placed = "1";
+  if (on) placePill(pill, on); else pill.style.opacity = "0";
 }
-window.addEventListener("resize", () => movePill());
+
+// Every switch (.seg: Wire kinds, standings modes, team/player tabs, settings; .league: NHL | PWHL | Both) gets the
+// same pill. Most redraw the page when tapped, so the spot being left is noted on pointerdown under the switch's
+// option labels, and the new switch's pill slides from there. Switches that only move .on slide from their old spot.
+const SWITCHES = ".seg, .league";
+const leaving = new Map();   // option labels -> {x, w, at}
+const switchKey = sw => [...sw.children].filter(c => c.matches("button, a")).map(c => c.textContent.trim()).join("|");
+document.addEventListener("pointerdown", e => {
+  const sw = e.target.closest(SWITCHES), on = sw?.querySelector(":scope > .on");
+  if (on) leaving.set(switchKey(sw), { x: on.offsetLeft, w: on.offsetWidth, at: Date.now() });
+}, true);
+function placeSwitches() {
+  for (const sw of document.querySelectorAll(SWITCHES)) {
+    const on = sw.querySelector(":scope > .on");
+    let pill = sw.querySelector(":scope > .seg-pill");
+    if (!on) {   // nothing picked: only touch the switch if it had a pill (any class write wakes the observer again)
+      if (pill) { pill.remove(); sw.classList.remove("has-pill"); }
+      continue;
+    }
+    if (pill && +pill.dataset.x === on.offsetLeft && +pill.dataset.w === on.offsetWidth) continue;
+    let from = null;
+    if (!pill) {
+      pill = document.createElement("span");
+      pill.className = "seg-pill";
+      Object.assign(pill.style, { top: `${on.offsetTop}px`, height: `${on.offsetHeight}px`, borderRadius: getComputedStyle(on).borderRadius });
+      sw.prepend(pill);
+      sw.classList.add("has-pill");
+      const k = switchKey(sw), left = leaving.get(k);
+      if (left && Date.now() - left.at < 1500) from = left;
+      leaving.delete(k);
+    }
+    placePill(pill, on, from);
+  }
+  switchWatch.takeRecords();   // our own changes aren't news: never wake ourselves up
+}
+// Runs before the browser paints any change (a redraw, a morph, a class flip), so the pill is never a frame late.
+const switchWatch = new MutationObserver(placeSwitches);
+switchWatch.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+window.addEventListener("resize", () => { movePill(); placeSwitches(); });
 
 // Live pages ask again this often (s). The server answers from memory; the NHL's own scoreboard moves every ~20 s.
 const LIVE_REFRESH = 10;
@@ -1591,15 +1645,40 @@ async function leadersView(quiet = false) {
 let searchText = "";
 const fold = s => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
+// What fans call teams beyond city and nickname.
+const TEAM_ALIASES = { MTL: ["habs"], TOR: ["leafs"], BOS: ["bs"], PIT: ["pens"], WSH: ["caps"], TBL: ["bolts", "tampa"], COL: ["avs"],
+  CAR: ["canes"], OTT: ["sens"], NSH: ["preds"], VAN: ["nucks"], NYI: ["isles"], CHI: ["hawks"], CBJ: ["jackets"], VGK: ["knights"],
+  DET: ["wings"], LAK: ["la"], NJD: ["jersey"], PHI: ["philly"] };
+
+// Edit distance, giving up past `max` (typo matching only needs "is it within 1 or 2").
+function near(a, b, max) {
+  if (Math.abs(a.length - b.length) > max) return false;
+  let prev = [...Array(b.length + 1).keys()];
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    if (Math.min(...row) > max) return false;
+    prev = row;
+  }
+  return prev[b.length] <= max;
+}
+
 function searchResults(q, players) {
-  const f = fold(q.trim());
+  const plain = s => fold(s).replace(/['’.]/g, "");   // "B's", "St. Louis", "O'Reilly" typed either way
+  const f = plain(q.trim());
   if (f.length < 2) return { teams: [], players: [] };
-  const score = s => { const t = fold(s); return t.startsWith(f) ? 0 : t.split(/[\s-]/).some(w => w.startsWith(f)) ? 1 : t.includes(f) ? 2 : -1; };
-  const teams = Object.entries(TEAMS).map(([abbr, t]) => [abbr, Math.min(...[t.name, t.place, `${t.place} ${t.name}`, t.code || abbr].map(score).map(x => x < 0 ? 9 : x))])
+  const score = s => { const t = plain(s); return t.startsWith(f) ? 0 : t.split(/[\s-]/).some(w => w.startsWith(f)) ? 1 : t.includes(f) ? 2 : -1; };
+  const teams = Object.entries(TEAMS).map(([abbr, t]) => [abbr, Math.min(...[t.name, t.place, `${t.place} ${t.name}`, t.code || abbr, ...(TEAM_ALIASES[abbr] || [])]
+    .map(score).map(x => x < 0 ? 9 : x))])
     .filter(([, s]) => s < 9).sort((x, y) => x[1] - y[1] || teamName(x[0]).localeCompare(teamName(y[0]))).map(([a]) => a);
   const fav = favs();
-  const found = players.map(p => [p, score(p[1])]).filter(([, s]) => s >= 0)
-    .sort((x, y) => x[1] - y[1] || (fav.has(y[0][2]) - fav.has(x[0][2])) || x[0][1].localeCompare(y[0][1])).slice(0, 30).map(([p]) => p);
+  let found = players.map(p => [p, score(p[1])]).filter(([, s]) => s >= 0);
+  // A misspelling ("pastranak", "mcdavis"): names with a word within 1 letter (2 for long words) of what was typed.
+  if (found.length < 3 && f.length >= 4 && !f.includes(" ")) {
+    const max = f.length >= 7 ? 2 : 1, have = new Set(found.map(([p]) => p));
+    found = found.concat(players.filter(p => !have.has(p) && plain(p[1]).split(/[\s-]/).some(w => near(f, w, max))).map(p => [p, 3]));
+  }
+  found = found.sort((x, y) => x[1] - y[1] || (fav.has(y[0][2]) - fav.has(x[0][2])) || x[0][1].localeCompare(y[0][1])).slice(0, 30).map(([p]) => p);
   return { teams: teams.slice(0, 6), players: found };
 }
 
@@ -1740,7 +1819,9 @@ function settingsView() {
     <div class="group-title">More</div>
     <h2>Display</h2>
     <div class="card checks"><label><input type="checkbox" id="animations" ${s.animations !== false ? "checked" : ""}>Animations between pages</label></div>
-    <p class="help">Quick slides between tabs and pages. Turn them off for instant switching. They're also off whenever your phone's Reduce Motion setting is on.</p>
+    <div class="seg" role="group" aria-label="Page motion">${[["rise", "Rise"], ["slapshot", "Slapshot"]].map(([k, l]) =>
+      `<button data-motion="${k}" class="${motionStyle() === k ? "on" : ""}">${l}</button>`).join("")}</div>
+    <p class="help">Rise: each page builds in from the top. Slapshot: the page flies in from the side. Turn animations off for instant switching. They're also off whenever your phone's Reduce Motion setting is on.</p>
     <div class="seg" role="group" aria-label="Team marks">${[["badges", "Team badges"], ["logos", "Team logos"]].map(([k, l]) =>
       `<button data-marks="${k}" class="${(s.marks || "logos") === k ? "on" : ""}">${l}</button>`).join("")}</div>
     <p class="help">How teams show up everywhere: the teams' own logos, or coloured badges with their letters (the leanest).</p>
@@ -1784,6 +1865,11 @@ function settingsView() {
   document.getElementById("useguess")?.addEventListener("click", () => { saveSettings({ local: [guess] }); settingsView(); });
   view.querySelectorAll("input[name=services]").forEach(i => i.addEventListener("change", () => saveSettings({ services: picked("services") })));
   document.getElementById("animations").addEventListener("change", e => saveSettings({ animations: e.target.checked }));
+  document.querySelectorAll("[data-motion]").forEach(b => b.addEventListener("click", () => {
+    try { localStorage.setItem("motion", b.dataset.motion); } catch { /* fine */ }
+    document.querySelectorAll("[data-motion]").forEach(x => x.classList.toggle("on", x === b));
+    if (motionOn()) b.dataset.motion === "rise" ? rise() : slapshot(1);   // a taste of it
+  }));
   document.getElementById("odds").addEventListener("change", e => saveSettings({ odds: e.target.checked }));
   document.getElementById("photos").addEventListener("change", e => saveSettings({ photos: e.target.checked }));
   view.querySelectorAll("button[data-marks]").forEach(b => b.addEventListener("click", () => {
@@ -2132,6 +2218,19 @@ function route() {
   return renderRoute();
 }
 
+// Page motion: "rise" (default) or "slapshot", per device (Settings > Display).
+const motionStyle = () => { try { return localStorage.getItem("motion") || "rise"; } catch { return "rise"; } };
+
+// "Rise" (from OpenUI's trip planner demo): the new page's blocks fade up into place one after another, 35 ms apart,
+// so it assembles top-down; the heading comes into focus. Only the first 8 stagger (the rest arrive with the 8th), so
+// the whole page is in place within ~0.6 s and the top of it at once.
+function rise() {
+  [...view.children].slice(0, 16).forEach((el, i) => el.animate([
+    { transform: "translate3d(0, 14px, 0)", opacity: 0, filter: el.tagName === "H1" ? "blur(4px)" : "none" },
+    { transform: "translate3d(0, 0, 0)", opacity: 1, filter: "none" },
+  ], { duration: 340, delay: Math.min(i, 7) * 35, easing: "cubic-bezier(.2, .9, .3, 1)", fill: "backwards" }));
+}
+
 function slapshot(d) {
   view.animate([
     // Whole-pixel sideways moves only: no scaling or skew, so the text drawn while moving is the same as the text at
@@ -2150,7 +2249,7 @@ new MutationObserver(() => {
   if (!first || (first.classList.contains("empty") && /^Loading/.test(first.textContent))) return;
   const d = pendingShot;
   pendingShot = 0;
-  slapshot(d);
+  if (motionStyle() === "rise") rise(); else slapshot(d);
 }).observe(view, { childList: true });
 
 function renderRoute() {
