@@ -212,6 +212,7 @@ HTML/CSS/JS in `web/`.
 | `sog/alerts.py` | Push alerts |
 | `sog/access.py` | Cloudflare sign-in check, signed links, ntfy pushes |
 | `web/` | The installable web app |
+| `docs/how-it-works.md` | How every part works, where data comes from and each source's quirks |
 
 ## Contributing
 
