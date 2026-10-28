@@ -12,7 +12,7 @@ const LEAGUE_TITLE = { ...LEAGUE_NAME, ncaam: "NCAA Men's Hockey", ncaaw: "NCAA 
 const COLLEGE = ["ncaam", "ncaaw"];
 const isCollege = lg => COLLEGE.includes(lg);
 const shownLeagues = () => ({ nhl: ["nhl"], pwhl: ["pwhl"], ncaa: COLLEGE, both: ["nhl", "pwhl", ...COLLEGE] }[LEAGUE] || ["nhl"]);
-// Pick'em and the Wire are NHL and PWHL only (no college odds or news feeds): in college mode they show both.
+// The Wire is NHL and PWHL only (no college news feed to tag): in college mode it shows both.
 const proLeagues = () => { const l = shownLeagues().filter(x => !isCollege(x)); return l.length ? l : ["nhl", "pwhl"]; };
 // Standings and Leaders show one league at a time; with several shown they remember their own pick.
 function pageLeague() {
@@ -142,7 +142,7 @@ async function prefetch() {
   const leagues = proLeagues();
   let wire = { kind: "", mine: false };
   try { wire = { ...wire, ...JSON.parse(localStorage.getItem("wire") || "{}") }; } catch { /* defaults */ }
-  const paths = [`/api/pickem?leagues=${leagues.join(",")}`,
+  const paths = [`/api/pickem?leagues=${shownLeagues().join(",")}`,
     ...leagues.map(l => `/api/wire?league=${l}&kind=${wire.kind}&mine=${wire.mine ? 1 : 0}`),
     ...(ME.settings.favorites || []).map(a => `/api/team/${encodeURIComponent(a)}`), "/api/search"];
   standings(pageLeague()).catch(() => {});
@@ -699,9 +699,10 @@ function heroes(data, leagues, slateGames) {
 let heroAt = 0;   // the team card swiped into view, kept across the live refresh
 // College slates on Tonight fold under their heading: open by default under NCAA, shut under All. What you
 // pick is kept per league and pill on this device, so a busy Saturday stays folded the next time.
-const foldKey = league => `fold:${LEAGUE}:${league}`;
-function foldIsOpen(league) {
-  try { const v = localStorage.getItem(foldKey(league)); if (v) return v === "1"; } catch { /* default */ }
+// Pick'em keeps its own ("picks:").
+const foldKey = (league, page = "") => `fold:${page}${LEAGUE}:${league}`;
+function foldIsOpen(league, page = "") {
+  try { const v = localStorage.getItem(foldKey(league, page)); if (v) return v === "1"; } catch { /* default */ }
   return LEAGUE !== "both";
 }
 
@@ -792,7 +793,7 @@ async function tonightView(date, quiet = false) {
 async function pickemView(date, quiet = false) {
   setNav("picks");
   if (!quiet) showLoading(`Loading Pick'em…`);
-  const leagues = proLeagues();
+  const leagues = shownLeagues();
   let d, hidden;
   try {
     [d, hidden] = await Promise.all([
@@ -802,7 +803,11 @@ async function pickemView(date, quiet = false) {
   const code = abbr => TEAMS[abbr]?.code || abbr;
   const now = new Date().toISOString();
   const begun = g => g.state !== "pre" || (g.start && g.start <= now);
-  const rows = d.games.map(g => {
+  const poolOf = lg => isCollege(lg) ? "college" : "pro";
+  // A pick button fits ~6 letters on a phone: a longer school goes by its short code ("Northeastern" -> "NE"), not "North…".
+  const pickName = abbr => { const n = teamName(abbr), c = TEAMS[abbr]?.code || "";
+    return isCollege(leagueOf(abbr)) && n.length > 6 && c && c.length <= 5 ? c : n; };
+  const rowOf = g => {
     const hide = spoilerHidden(g), k = spKey(g), started = begun(g);
     SPOIL_GAMES.set(k, g);
     const done = g.state === "final" && !hide;
@@ -810,7 +815,7 @@ async function pickemView(date, quiet = false) {
     const side = t => {
       const on = g.mine === t.abbr;
       const res = on && done && g.won != null ? (g.won ? " won" : " lost") : "";
-      return `<button class="pk${on ? " on" : ""}${res}" data-pick="${t.abbr}" data-k="${esc(k)}" ${started ? "disabled" : ""}>${mark(t.abbr)}${!hide && g.state !== "pre" && t.score != null ? `<b class="pk-sc">${t.score}</b>` : `<span class="pk-nm">${esc(teamName(t.abbr))}</span>`}</button>`;
+      return `<button class="pk${on ? " on" : ""}${res}" data-pick="${t.abbr}" data-k="${esc(k)}" ${started ? "disabled" : ""}>${mark(t.abbr)}${!hide && g.state !== "pre" && t.score != null ? `<b class="pk-sc">${t.score}</b>` : `<span class="pk-nm">${esc(pickName(t.abbr))}</span>`}</button>`;
     };
     // Before puck drop: each team's win chance under its button, "2×" on the underdog while the upset bonus is on.
     const pct = t => {
@@ -824,36 +829,58 @@ async function pickemView(date, quiet = false) {
     const upset = o?.upset && done ? `<div class="pick-friends"><span class="upset">⚡ Upset!</span>${g.won && g.pts > 1 ? ` You got <b>${g.pts} points</b>.` : ""}</div>` : "";
     return `<div class="pick-row">
       <div class="pick-line">${side(g.away)}<div class="pick-mid">${mid}</div>${side(g.home)}
-        <button class="lockbtn${g.lock ? " on" : ""}" data-lockk="${esc(k)}" ${started ? "disabled" : ""} aria-pressed="${g.lock}" title="Lock of the night">★</button></div>
+        <button class="lockbtn${g.lock ? " on" : ""}" data-lockk="${esc(k)}" data-pool="${poolOf(g.league)}" ${started ? "disabled" : ""} aria-pressed="${g.lock}" title="Lock of the night">★</button></div>
       ${chances}
       ${started && friends.length ? `<div class="pick-friends">${friends.map(p => `${esc(p.name)} ${esc(code(p.team))}${p.lock ? " ★" : ""}`).join(" · ")}</div>`
         : !started && g.count > (g.mine ? 1 : 0) ? `<div class="pick-friends">${g.count - (g.mine ? 1 : 0)} friend${g.count - (g.mine ? 1 : 0) > 1 ? "s have" : " has"} picked</div>` : ""}
       ${upset}
     </div>`;
-  }).join("");
-  const table = list => list.length ? `<div class="card"><table class="board"><tr><th></th><th>Name</th><th>Pts</th><th>Right–<wbr>wrong</th><th title="Right picks on an underdog that won">Upsets</th></tr>
-    ${list.map((r, i) => `<tr class="${r.me ? "me" : ""}"><td class="muted">${i + 1}</td><td>${esc(r.name)}${r.me ? " (you)" : ""}</td><td><b>${r.pts}</b></td><td>${r.w}–${r.l}</td><td class="upsets">${r.upsets ? `<span aria-hidden="true">⚡</span> ${r.upsets}` : `<span class="muted">–</span>`}</td></tr>`).join("")}</table></div>`
+  };
+  // The games: the pros together, then each college league folded under its heading like Tonight (your teams first).
+  // With only one kind showing, no headings at all.
+  const fav = favs();
+  const pro = d.games.filter(g => !isCollege(g.league)), college = COLLEGE.filter(lg => d.games.some(g => g.league === lg));
+  const proName = leagues.filter(l => !isCollege(l)).map(l => LEAGUE_NAME[l]).join(" & ");
+  let rows = pro.length ? `${college.length ? `<div class="league-head nhl">${esc(proName)}</div>` : ""}<div class="card picks">${pro.map(rowOf).join("")}</div>` : "";
+  for (const lg of college) {
+    const games = d.games.filter(g => g.league === lg).sort((x, y) => (fav.has(y.away.abbr) || fav.has(y.home.abbr)) - (fav.has(x.away.abbr) || fav.has(x.home.abbr)));
+    const picked = games.filter(g => g.mine).length;
+    rows += `<details class="league-fold" data-fold="${lg}"${foldIsOpen(lg, "picks:") ? " open" : ""}>
+      <summary class="league-head ${lg}">${esc(LEAGUE_TITLE[lg])}<span class="lf-count">${games.length} game${games.length > 1 ? "s" : ""}${picked ? ` · ${picked} picked` : ""}</span></summary>
+      <div class="card picks">${games.map(rowOf).join("")}</div></details>`;
+  }
+  // One table per pool (the pros, college): they score differently, so they never mix. Both showing = a switch.
+  const POOL_NAME = { pro: proName || "NHL & PWHL", college: "College" };
+  const table = (list, upsets) => list.length ? `<div class="card"><table class="board"><tr><th></th><th>Name</th><th>Pts</th><th>Right–<wbr>wrong</th>${upsets ? `<th title="Right picks on an underdog that won">Upsets</th>` : ""}</tr>
+    ${list.map((r, i) => `<tr class="${r.me ? "me" : ""}"><td class="muted">${i + 1}</td><td>${esc(r.name)}${r.me ? " (you)" : ""}</td><td><b>${r.pts}</b></td><td>${r.w}–${r.l}</td>${upsets ? `<td class="upsets">${r.upsets ? `<span aria-hidden="true">⚡</span> ${r.upsets}` : `<span class="muted">–</span>`}</td>` : ""}</tr>`).join("")}</table></div>`
     : `<div class="card"><div class="empty">No results yet. Make some picks!</div></div>`;
-  const b = d.board, last = b.last?.table || [];
-  const best = last[0], meLast = last.find(r => r.me);
-  const lastLine = best ? `<div class="card pad small"><b>${esc(shortDate(b.last.date))}</b>: ${esc(best.name)} went ${best.w} for ${best.w + best.l}${meLast && meLast !== best ? `, you went ${meLast.w} for ${meLast.w + meLast.l}` : ""}.</div>` : "";
-  const hid = hidden.filter(g => g.state === "final" && leagues.includes(g.league === "pwhl" ? "pwhl" : leagueOf(g.home.abbr)));
+  const pools = Object.keys(d.boards);
+  let boardPick = pools[0];
+  try { const p = localStorage.getItem("pickBoard"); if (pools.includes(p)) boardPick = p; } catch { /* fine */ }
+  const tables = p => {
+    const b = d.boards[p], last = b.last?.table || [], best = last[0], meLast = last.find(r => r.me);
+    const lastLine = best ? `<div class="card pad small"><b>${esc(shortDate(b.last.date))}</b>: ${esc(best.name)} went ${best.w} for ${best.w + best.l}${meLast && meLast !== best ? `, you went ${meLast.w} for ${meLast.w + meLast.l}` : ""}.</div>` : "";
+    return `${lastLine ? `<h2>Last results</h2>${lastLine}` : ""}
+      <h2>This week</h2>${table(b.week, p === "pro")}
+      <h2>Season ${esc(b.season)}${pools.length > 1 || leagues.length > 1 ? "" : ` · ${LEAGUE_NAME[leagues[0]]}`}</h2>${table(b.table, p === "pro")}`;
+  };
+  const hid = hidden.filter(g => g.state === "final" && leagues.includes(g.league || "nhl"));
   view.innerHTML = `
     <div class="daybar">
       ${d.prev ? `<a href="#/picks/${d.prev}" aria-label="Previous day">←</a>` : "<span></span>"}
       <h1>${esc(dayTitle(d.date))}</h1>
       ${d.next ? `<a href="#/picks/${d.next}" aria-label="Next day">→</a>` : "<span></span>"}
     </div>
-    <p class="help">Tap who wins: <b>1 point</b> for every one you get right${d.games.some(g => g.bonus) ? `, or <b>2 points</b> if they win as the underdog (marked <b>2×</b>)` : ""}. Tap ★ on one game a night to make it your lock: it <b>doubles</b> that game's points (nothing if it's wrong). Picks lock at puck drop.</p>
-    ${rows ? `<div class="card picks">${rows}</div>` : `<div class="empty">No games this day.</div>`}
+    <p class="help">Tap who wins: <b>1 point</b> for every one you get right${pro.some(g => g.bonus) ? `, or <b>2 points</b> if they win as the underdog (marked <b>2×</b>)` : ""}. Tap ★ on one game a night to make it your lock: it <b>doubles</b> that game's points (nothing if it's wrong). Picks lock at puck drop.${college.length ? ` College gets its own ★ and table; no underdog bonus there, and a tie counts as wrong.` : ""}</p>
+    <div class="pick-dice"><button class="btn small" id="dice" hidden></button><span class="muted small">Only games you haven't picked</span></div>
+    ${rows || `<div class="empty">No games this day.</div>`}
     ${hid.length ? `<h2>The table</h2>${spoilCover(hid, "The Pick'em table")}` : `
-      ${lastLine ? `<h2>Last results</h2>${lastLine}` : ""}
-      <h2>This week</h2>${table(b.week)}
-      <h2>Season ${esc(b.season)}${leagues.length > 1 ? "" : ` · ${LEAGUE_NAME[leagues[0]]}`}</h2>${table(b.table)}`}
+      ${pools.length > 1 ? `<div class="seg seg-top" role="tablist" style="margin-top:22px">${pools.map(p => `<button data-board="${p}" class="${p === boardPick ? "on" : ""}">${esc(POOL_NAME[p])}</button>`).join("")}</div>` : ""}
+      <div id="boards">${tables(boardPick)}</div>`}
     <p class="help">You show up as <b>${esc(d.name)}</b>. <a href="#/settings">Change your name in Settings</a>.</p>`;
   const send = async (g, team, lock) => {
     try {
-      await api("/api/pickem", { method: "POST", body: JSON.stringify({ league: g.league === "pwhl" ? "pwhl" : "nhl", id: g.id, date: g.date, team, lock }) });
+      await api("/api/pickem", { method: "POST", body: JSON.stringify({ league: g.league || "nhl", id: g.id, date: g.date, team, lock }) });
     } catch (e) { toast(e.detail || "Couldn't save that pick. Try again.", true); }
     pickemView(date, true);
   };
@@ -866,8 +893,36 @@ async function pickemView(date, quiet = false) {
   view.querySelectorAll("[data-lockk]").forEach(btn => btn.addEventListener("click", () => {
     const g = SPOIL_GAMES.get(btn.dataset.lockk);
     if (!g.mine) { toast("Pick a team for this game first", true); return; }
-    view.querySelectorAll(".lockbtn").forEach(x => x.classList.toggle("on", x === btn && !g.lock));
+    view.querySelectorAll(`.lockbtn[data-pool="${btn.dataset.pool}"]`).forEach(x => x.classList.toggle("on", x === btn && !g.lock));
     send(g, g.mine, !g.lock);
+  }));
+  // 🎲 Pick for me: every game you haven't picked that hasn't started, in the sections that are open (fold a college
+  // league away to leave it out). The server leans on the odds where there are any, else flips a coin.
+  const dice = document.getElementById("dice");
+  const open = lg => !isCollege(lg) || view.querySelector(`details[data-fold="${lg}"]`)?.open;
+  const unpicked = () => d.games.filter(g => !g.mine && g.state === "pre" && !begun(g) && open(g.league || "nhl"));
+  const diceLabel = () => { const n = unpicked().length; dice.hidden = !n; dice.parentElement.hidden = !n;
+    dice.textContent = `🎲 Pick ${n === 1 ? "this one" : n} for me`; };
+  diceLabel();
+  dice.addEventListener("click", async () => {
+    const list = unpicked();
+    dice.disabled = true;
+    try {
+      const r = await api("/api/pickem/random", { method: "POST", body: JSON.stringify({ date: d.date,
+        games: list.map(g => ({ league: g.league || "nhl", id: g.id })) }) });
+      toast(r.picked ? `Picked ${r.picked} game${r.picked > 1 ? "s" : ""} for you. Tap any to change it.` : "Nothing left to pick");
+    } catch (e) { toast(e.detail || "Couldn't pick those. Try again.", true); }
+    pickemView(date, true);
+  });
+  // Switching tables swaps them in place: the page doesn't move (see docs/motion.md).
+  view.querySelectorAll("[data-board]").forEach(btn => btn.addEventListener("click", () => {
+    try { localStorage.setItem("pickBoard", btn.dataset.board); } catch { /* fine */ }
+    view.querySelectorAll("[data-board]").forEach(x => x.classList.toggle("on", x === btn));
+    document.getElementById("boards").innerHTML = tables(btn.dataset.board);
+  }));
+  view.querySelectorAll("details[data-fold]").forEach(el => el.addEventListener("toggle", () => {
+    try { localStorage.setItem(foldKey(el.dataset.fold, "picks:"), el.open ? "1" : "0"); } catch { /* fine */ }
+    diceLabel();
   }));
   if (d.games.some(g => g.state === "live" || (g.state === "pre" && Date.parse(g.start) - Date.now() < 30 * 60000))) {
     autoRefresh(q => pickemView(date, q), 30);

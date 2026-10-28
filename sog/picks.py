@@ -1,10 +1,13 @@
-"""Pick'em: everyone picks a winner for each game (NHL and PWHL) before puck drop. A right pick is 1 point, or 2 when
-the team won as the underdog (the last DraftKings line before puck drop, see odds.py; games from UPSET_FROM on).
-One "lock of the night" per date doubles that if right (0 if wrong). Results are filled in from the day slates the
-app already loads, so this never asks the leagues for anything extra. Friends' picks show once a game has started."""
+"""Pick'em: everyone picks a winner for each game before puck drop. A right pick is 1 point, or 2 when the team won as
+the underdog (the last DraftKings line before puck drop, see odds.py; games from UPSET_FROM on; college has no odds, so
+no bonus). One "lock of the night" per date and pool doubles that if right (0 if wrong): the pros (NHL + PWHL) and
+college are separate pools, each with its own lock and its own table. A college tie is a wrong pick for everyone.
+Results are filled in from the day slates the app already loads, so this never asks the leagues for anything extra.
+Friends' picks show once a game has started."""
 from __future__ import annotations
 
 import os
+import random
 import sqlite3
 import threading
 from datetime import date as Date, datetime, timedelta, timezone
@@ -52,8 +55,15 @@ def _iso(t: datetime) -> str:
     return t.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+POOLS = {"pro": ("nhl", "pwhl"), "college": ("ncaam", "ncaaw")}
+
+
 def league(g: dict) -> str:
-    return "pwhl" if g.get("league") == "pwhl" else "nhl"
+    return g.get("league") if g.get("league") in ("pwhl", "ncaam", "ncaaw") else "nhl"
+
+
+def pool(lg: str) -> str:
+    return "college" if lg in POOLS["college"] else "pro"
 
 
 def started(g: dict, now: datetime | None = None) -> bool:
@@ -92,16 +102,37 @@ def set_pick(email: str, g: dict, team: str | None, lock: bool = False, now: dat
             return
         if team not in (g["away"]["abbr"], g["home"]["abbr"]):
             raise ValueError("Pick one of the two teams.")
-        if lock:
+        if lock:  # one lock per night in each pool: moving it only moves it within the pros or within college
+            same = POOLS[pool(lg)]
             other = _conn.execute("SELECT league, game_id, start FROM pick WHERE email=? AND date=? AND lock=1 "
-                                  "AND NOT (league=? AND game_id=?)", (email, g["date"], lg, gid)).fetchone()
+                                  "AND league IN (?, ?) AND NOT (league=? AND game_id=?)", (email, g["date"], *same, lg, gid)).fetchone()
             if other and other[2] and other[2] <= _iso(now or _now()):
                 raise ValueError("Your lock of the night is already on a game that has started.")
-            _conn.execute("UPDATE pick SET lock=0 WHERE email=? AND date=?", (email, g["date"]))
+            _conn.execute("UPDATE pick SET lock=0 WHERE email=? AND date=? AND league IN (?, ?)", (email, g["date"], *same))
         _conn.execute("""INSERT INTO pick (email, league, game_id, date, start, team, lock, created) VALUES (?,?,?,?,?,?,?,?)
                          ON CONFLICT (email, league, game_id) DO UPDATE SET team=excluded.team, lock=excluded.lock,
                          start=excluded.start""",
                       (email, lg, gid, g["date"], g.get("start"), team, int(bool(lock)), _iso(now or _now())))
+
+
+def fill_random(email: str, games: list[dict], now: datetime | None = None, rng: random.Random | None = None) -> int:
+    """"Pick for me": a pick on every game in the list this person hasn't picked and that hasn't started. Leans on the
+    odds where there are any (a 65% favourite gets the pick 65% of the time), else a coin flip. Never changes a pick
+    or a lock. Returns how many it picked."""
+    rng = rng or random.Random()
+    if not games:
+        return 0
+    marks = ",".join("?" * len(games))
+    have = {(r["league"], r["game_id"]) for r in _rows(f"SELECT league, game_id FROM pick WHERE email=? AND game_id IN ({marks})",
+                                                      (email, *(g["id"] for g in games)))}
+    n = 0
+    for g in games:
+        if (league(g), g["id"]) in have or g.get("state") != "pre" or started(g, now):
+            continue
+        away = ((g.get("odds") or {}).get("away_pct") or 50) / 100
+        set_pick(email, g, g["away"]["abbr"] if rng.random() < away else g["home"]["abbr"], now=now)
+        n += 1
+    return n
 
 
 def record_results(games: list[dict]) -> int:
@@ -110,7 +141,11 @@ def record_results(games: list[dict]) -> int:
     with _lock, _conn:
         for g in games:
             a, h = g["away"].get("score"), g["home"].get("score")
-            if g.get("state") != "final" or a is None or h is None or a == h:
+            if g.get("state") != "final" or a is None or h is None:
+                continue
+            if a == h:  # only college games can end tied: nobody picked a winner
+                n += _conn.execute("UPDATE pick SET won = 0, dog = 0 WHERE league=? AND game_id=? AND won IS NULL",
+                                   (league(g), g["id"])).rowcount
                 continue
             winner = g["away"]["abbr"] if a > h else g["home"]["abbr"]
             dog = odds.underdog(league(g), g["id"]) if (g.get("date") or "") >= UPSET_FROM else None

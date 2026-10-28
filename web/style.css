@@ -189,6 +189,11 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .league-fold > summary::after { content: ""; width: 7px; height: 7px; margin: 0 4px 0 auto; border-right: 2px solid var(--muted);
   border-bottom: 2px solid var(--muted); transform: translateY(-2px) rotate(45deg); transition: transform 160ms ease; }
 .league-fold[open] > summary::after { transform: translateY(2px) rotate(-135deg); }
+.league-head + .card, .league-fold > summary + .card { margin-top: 12px; }
+/* 🎲 Pick for me: thumb side on touch screens, like the game page's buttons. */
+.pick-dice { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 14px; }
+@media (pointer: coarse) { :root[data-hand="right"] .pick-dice { flex-direction: row-reverse; justify-content: flex-start; } }
+.pick-dice[hidden] { display: none; }
 .lf-count { font-weight: 600; letter-spacing: 0; color: var(--muted); font-size: 12.5px; }
 .rk { font-size: 11px; font-weight: 700; color: var(--muted); margin-right: 4px; font-variant-numeric: tabular-nums; }
 

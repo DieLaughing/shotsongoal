@@ -829,7 +829,7 @@ def _day_before(day: str) -> str:
 async def pickem(request: Request, date: str | None = None, leagues: str = "nhl"):
     if date and not DATE.match(date):
         raise HTTPException(400)
-    lgs = [lg for lg in ("nhl", "pwhl") if lg in leagues.split(",")] or ["nhl"]
+    lgs = [lg for lg in LEAGUES if lg in leagues.split(",")] or ["nhl"]
     today = feed.opening_day()
     date = date or today
     days = await asyncio.gather(*[_upstream(_slate(lg, date)) for lg in lgs])
@@ -847,14 +847,32 @@ async def pickem(request: Request, date: str | None = None, leagues: str = "nhl"
     return {"date": date, "today": today,
             "prev": max((d["prev"] for d in days if d.get("prev")), default=None),
             "next": min((d["next"] for d in days if d.get("next")), default=None),
-            "games": picks.for_games(me, games, names), "board": picks.board(me, names, lgs, today),
+            "games": picks.for_games(me, games, names),
+            # One table per pool shown (the pros, college): they score differently, so they never mix.
+            "boards": {p: picks.board(me, names, [lg for lg in lgs if lg in pl], today)
+                       for p, pl in picks.POOLS.items() if any(lg in pl for lg in lgs)},
             "name": names.get(me, me.split("@")[0])}
+
+
+@app.post("/api/pickem/random")
+async def pickem_random(request: Request):
+    """"🎲 Pick for me": the page sends the games it shows (folded sections left out); the server checks each one is on
+    that date's slate, then picks the ones this person hasn't."""
+    body = await request.json()
+    date = str(body.get("date") or "")
+    wanted = {(str(x.get("league")), x.get("id")) for x in body.get("games") or [] if isinstance(x, dict)}
+    lgs = [lg for lg in LEAGUES if any(w[0] == lg for w in wanted)]
+    if not DATE.match(date) or not lgs:
+        raise HTTPException(400)
+    days = await asyncio.gather(*[_upstream(_slate(lg, date)) for lg in lgs])
+    games = odds.attach([dict(g, league=lg) for lg, d in zip(lgs, days) for g in d["games"] if (lg, g["id"]) in wanted])
+    return {"picked": picks.fill_random(request.state.email, games)}
 
 
 @app.post("/api/pickem")
 async def pickem_save(request: Request):
     body = await request.json()
-    g = await _game_from(body, ("nhl", "pwhl"))  # no college in Pick'em
+    g = await _game_from(body)
     try:
         picks.set_pick(request.state.email, g, body.get("team") or None, bool(body.get("lock")))
     except ValueError as exc:

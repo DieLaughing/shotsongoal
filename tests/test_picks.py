@@ -62,3 +62,51 @@ def test_lock_cant_move_off_a_started_game():
 def test_seasons_and_weeks():
     assert picks.season_of("2027-03-01") == "2026-27" and picks.season_of("2026-10-13") == "2026-27"
     assert picks.week_start("2026-10-15") == "2026-10-12"
+
+
+def test_college_is_its_own_pool_with_its_own_lock_and_table():
+    picks.set_pick("a@x", g(1, "TOR", "BOS"), "BOS", lock=True, now=NOW)
+    picks.set_pick("a@x", g(401, "CM-103", "CM-2172", league="ncaam"), "CM-103", lock=True, now=NOW)  # college lock
+    picks.set_pick("a@x", g(402, "CW-104", "CW-111", league="ncaaw"), "CW-104", lock=True, now=NOW)  # moves it in college
+    mine = picks.for_games("a@x", [g(1, "TOR", "BOS"), g(401, "CM-103", "CM-2172", league="ncaam"),
+                                   g(402, "CW-104", "CW-111", league="ncaaw")], {"a@x": "Al"}, now=NOW)
+    assert [m["lock"] for m in mine] == [True, False, True]   # the NHL lock stays put
+    picks.set_pick("b@x", g(1, "TOR", "BOS"), "BOS", now=NOW)
+    picks.record_results([g(1, "TOR", "BOS", state="final", a=1, h=3),
+                          g(402, "CW-104", "CW-111", state="final", a=2, h=0, league="ncaaw")])
+    names = {"a@x": "Al", "b@x": "Bo"}
+    pro = picks.board("a@x", names, ["nhl", "pwhl"], "2026-10-14")["table"]
+    college = picks.board("a@x", names, ["ncaam", "ncaaw"], "2026-10-14")["table"]
+    assert [p["name"] for p in pro] == ["Al", "Bo"] and pro[0]["pts"] == 2
+    assert [(p["name"], p["pts"]) for p in college] == [("Al", 2)]   # only people with college picks; the lock doubled
+
+
+def test_a_tie_is_a_wrong_pick():
+    picks.set_pick("a@x", g(401, "CM-103", "CM-2172", league="ncaam"), "CM-103", lock=True, now=NOW)
+    assert picks.record_results([g(401, "CM-103", "CM-2172", state="final", a=2, h=2, league="ncaam")]) == 1
+    assert picks.pending("2026-10-14") == []   # settled, not waiting forever
+    assert picks.board("a@x", {"a@x": "Al"}, ["ncaam"], "2026-10-14")["table"][0] == {
+        "name": "Al", "me": True, "pts": 0, "w": 0, "l": 1, "upsets": 0}
+
+
+def test_pick_for_me_fills_only_open_unpicked_games():
+    import random
+    picks.set_pick("a@x", g(1, "TOR", "BOS"), "TOR", lock=True, now=NOW)
+    games = [g(1, "TOR", "BOS"), g(2, "DET", "OTT"), g(3, "MTL", "FLA", state="live"),
+             g(4, "CM-103", "CM-2172", league="ncaam"), g(5, "NYR", "NJD", start="2026-10-13T19:00:00Z")]
+    assert picks.fill_random("a@x", games, now=NOW, rng=random.Random(1)) == 2   # 2 and 4: 1 is picked, 3 and 5 started
+    mine = {m["id"]: m for m in picks.for_games("a@x", games, {"a@x": "Al"}, now=NOW)}
+    assert mine[1]["mine"] == "TOR" and mine[1]["lock"] is True   # untouched
+    assert mine[2]["mine"] in ("DET", "OTT") and mine[4]["mine"] in ("CM-103", "CM-2172")
+    assert not mine[2]["lock"] and not mine[4]["lock"] and mine[3]["mine"] is None
+    assert picks.fill_random("a@x", games, now=NOW) == 0   # nothing left to pick
+
+
+def test_pick_for_me_leans_on_the_odds():
+    import random
+    rng, heavy = random.Random(7), []
+    for i in range(200):
+        game = {**g(100 + i, "TOR", "BOS"), "odds": {"away_pct": 80, "home_pct": 20}}
+        picks.fill_random("a@x", [game], now=NOW, rng=rng)
+    heavy = [m["mine"] for m in picks.for_games("a@x", [g(100 + i, "TOR", "BOS") for i in range(200)], {}, now=NOW)]
+    assert 140 < heavy.count("TOR") < 180   # about 80%

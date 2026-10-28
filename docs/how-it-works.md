@@ -80,6 +80,14 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   slates GET /api/pickem loads (+ up to 10 older pending dates); underdog bonus: see Odds. Friends' picks only after puck drop; names =
   settings.nickname or the email's local part (friend_names(); emails never sent). Season = Jul-Jun, week = Mon-Sun.
   The table is covered while a spoiler-free game is hidden.
+  Pools (picks.POOLS): the pros (NHL + PWHL) and college (ncaam + ncaaw) each have their own lock per date and their
+  own table (/api/pickem returns `boards` {pro, college} for the pools shown; with both, a NHL & PWHL | College switch
+  swaps the tables in place). Pick'em follows the league pill like Tonight: college games fold under their league
+  heading (fold:picks:<pill>:<lg>), your teams first. No underdog bonus for college (no odds); a college tie settles
+  every pick on it as wrong. Long school names on pick buttons show the ESPN code (pickName).
+  "🎲 Pick N for me" (POST /api/pickem/random, picks.fill_random): the page sends the unpicked, unstarted games in its
+  open sections (a folded college league is left out); the server keeps those on that date's slate and picks each one
+  this person hasn't, weighted by odds.attach's win % (coin flip without odds). Never touches a pick or a lock.
 - Odds, for fun (sog/odds.py; Settings > Display > Show odds, on by default): the DraftKings moneyline comes free in the
   NHL score feed (oddsPartners, matched by name; nhl.parse_score -> g.odds) but vanishes at puck drop, so the
   scoreboard loop saves each pre-game line to game_odds (write on change; all rows kept in memory, pages never
@@ -181,8 +189,8 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   loss is an L). The scoreboard loop polls each college league every COLLEGE_LIVE 15 s while busy, else COLLEGE_IDLE
   10 min; goal alerts come from the score (ncaa.goals: one key per team per goal, no scorer). Where to watch =
   watch.college + networks.yaml `college:` (no blackouts; the listed stream you have leads; B1G+/FloHockey/NCHC.tv are
-  services with `college: true`, shown in Settings only to people who follow or show college). No Pick'em, odds,
-  Wire, leaders or players for college. UI: NCAA = both college leagues; All = every league. Each college league
+  services with `college: true`, shown in Settings only to people who follow or show college). No odds, Wire,
+  leaders or players for college (Pick'em: see Pick'em, its own pool). UI: NCAA = both college leagues; All = every league. Each college league
   on Tonight is a <details> whose summary IS the league heading ("NCAA Men's Hockey · 20 games · 1 of yours", chevron at
   the end): open by default under NCAA, shut under All (so the NHL isn't buried), and what you pick is kept per pill + league (localStorage fold:<pill>:<lg>);
   game pages' "last games" skip anything 60+ days old (ESPN fills in last season) and read team-first (ncaa.our_score); Standings and
