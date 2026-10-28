@@ -178,6 +178,15 @@ def parse_standings(data: dict, league: str, ranks: dict[str, int] | None = None
     return out
 
 
+def our_score(score: str | None, result: str | None) -> str | None:
+    """ESPN writes "4-1" winner first; the app writes the team's own score first ("1-4" for a loss), "OT" kept."""
+    parts = (score or "").split(" ", 1)
+    nums = parts[0].split("-")
+    if result != "L" or len(nums) != 2:
+        return score
+    return " ".join([f"{nums[1]}-{nums[0]}", *parts[1:]])
+
+
 def goals(g: dict) -> list[dict]:
     """ESPN names no college scorers, so a goal alert is "the away team's 2nd goal": one key per team per goal, the
     score being what it is when it's seen. A goal taken back never repeats, a re-scored one never doubles."""

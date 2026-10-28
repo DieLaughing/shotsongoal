@@ -76,3 +76,8 @@ def test_keys_carry_the_league():
     g = {"league": "ncaaw", "id": 401905141}
     assert spoilers.key(g) == "ncaaw:401905141" and social.league(g) == "ncaaw"
     assert spoilers.clean({"games": ["ncaaw:401905141", "bad:1"]}, teams.ALL)["games"] == ["ncaaw:401905141"]
+
+
+def test_scores_read_from_the_teams_side():
+    assert ncaa.our_score("4-1", "L") == "1-4" and ncaa.our_score("4-3 OT", "L") == "3-4 OT"
+    assert ncaa.our_score("5-1", "W") == "5-1" and ncaa.our_score("2-2 OT", "T") == "2-2 OT"

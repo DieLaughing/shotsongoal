@@ -176,8 +176,10 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   10 min; goal alerts come from the score (ncaa.goals: one key per team per goal, no scorer). Where to watch =
   watch.college + networks.yaml `college:` (no blackouts; the listed stream you have leads; B1G+/FloHockey/NCHC.tv are
   services with `college: true`, shown in Settings only to people who follow or show college). No Pick'em, odds,
-  Wire, leaders or players for college. UI: NCAA = both college leagues; All = every league, where each college
-  slate's non-favourite games fold into a "Other NCAA men games (n)" <details> so the NHL isn't buried; Standings and
+  Wire, leaders or players for college. UI: NCAA = both college leagues; All = every league. Each college slate
+  on Tonight shows your teams, then the rest in a "Other NCAA men games (n)" <details>: open by default under NCAA,
+  shut under All (so the NHL isn't buried), and what you pick is kept per pill + league (localStorage fold:<pill>:<lg>);
+  game pages' "last games" skip anything 60+ days old (ESPN fills in last season) and read team-first (ncaa.our_score); Standings and
   Leaders pick one league from those shown (pageLeague). College logos are their own sheet, /img/college-logos.css
   (Division I only, ~120 KB gz), loaded only by people who show or follow college; the team picker folds each
   college league by conference.

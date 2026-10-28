@@ -507,11 +507,14 @@ class Feed:
                 t = names.get(g[side]["abbr"][3:]) or {}
                 g[side]["name"] = g[side]["name"] or t.get("shortDisplayName") or t.get("location") or ""
             recent = {}
+            cutoff = ((datetime.fromisoformat(g["date"]) if g.get("date") else datetime.now()) - timedelta(days=60)).date().isoformat()
             for t in d.get("lastFiveGames") or []:
                 k = ncaa.key(league, (t.get("team") or {}).get("id"))
-                recent[k] = [{"date": ncaa.eastern_date(e.get("gameDate")), "opp": ncaa.key(league, (e.get("opponent") or {}).get("id")),
+                # ESPN fills in last season for a team that hasn't played yet: only this season's games.
+                recent[k] = [{"date": day, "opp": ncaa.key(league, (e.get("opponent") or {}).get("id")),
                               "opp_name": (e.get("opponent") or {}).get("displayName") or "", "home": e.get("atVs") == "vs",
-                              "result": e.get("gameResult"), "score": e.get("score")} for e in t.get("events") or []]
+                              "result": e.get("gameResult"), "score": ncaa.our_score(e.get("score"), e.get("gameResult"))}
+                             for e in t.get("events") or [] if (day := ncaa.eastern_date(e.get("gameDate"))) and day >= cutoff]
             # (The summary's "news" is the sport's latest stories, not this game's: left out.)
             return {"game": g, "recent": recent, "attendance": info.get("attendance") or None}
         detail = await self.cached(f"{league}:game:{game_id}", league, fetch, _game_ttl, stale_ok=_game_stale_ok)

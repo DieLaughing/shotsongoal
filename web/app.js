@@ -695,7 +695,13 @@ function heroes(data, leagues, slateGames) {
     + (cards.length > 1 ? `<div class="hero-dots" aria-hidden="true">${cards.map((_, i) => `<span${i === Math.min(heroAt, cards.length - 1) ? ' class="on"' : ""}></span>`).join("")}</div>` : "");
 }
 let heroAt = 0;   // the team card swiped into view, kept across the live refresh
-const foldOpen = new Set();   // college slates opened on Tonight in All mode, kept across the live refresh
+// College slates on Tonight are drop-downs (your teams stay out): open by default under NCAA, shut under All. What you
+// pick is kept per league and pill on this device, so a busy Saturday stays folded the next time.
+const foldKey = league => `fold:${LEAGUE}:${league}`;
+function foldIsOpen(league) {
+  try { const v = localStorage.getItem(foldKey(league)); if (v) return v === "1"; } catch { /* default */ }
+  return LEAGUE !== "both";
+}
 
 async function tonightView(date, quiet = false) {
   setNav("tonight");
@@ -725,9 +731,8 @@ async function tonightView(date, quiet = false) {
     rest.sort((x, y) => order(x) - order(y) || (x.start || "").localeCompare(y.start || ""));
     const head = leagues.length > 1 ? `<div class="league-head ${league}">${LEAGUE_NAME[league]}</div>` : "";
     if (!(day.games || []).length) return LEAGUE === "both" && isCollege(league) ? "" : head + `<div class="empty">No ${LEAGUE_NAME[league]} games this day.</div>`;
-    // With every league showing, a college night (20+ games) folds away behind its count; your teams stay out.
-    if (LEAGUE === "both" && isCollege(league) && rest.length) {
-      const open = foldOpen.has(league) ? " open" : "";
+    if (isCollege(league) && rest.length) {
+      const open = foldIsOpen(league) ? " open" : "";
       return head + section("Your teams", mine) + `<details class="more-games" data-fold="${league}"${open}><summary>${mine.length ? "Other" : "All"} ${esc(LEAGUE_NAME[league])} games (${rest.length})</summary>
         <div class="card">${rest.map(g => gameCard(g, fav)).join("")}</div></details>`;
     }
@@ -748,7 +753,10 @@ async function tonightView(date, quiet = false) {
     </div>
     ${days.map((d, i) => slate(d, leagues[i])).join("")}`, quiet);
   const on = listen();
-  view.addEventListener("toggle", e => { const f = e.target.dataset?.fold; if (f) e.target.open ? foldOpen.add(f) : foldOpen.delete(f); }, { ...on, capture: true });
+  view.addEventListener("toggle", e => {
+    const f = e.target.dataset?.fold;
+    if (f) try { localStorage.setItem(foldKey(f), e.target.open ? "1" : "0"); } catch { /* fine */ }
+  }, { ...on, capture: true });
   // The dots under swipeable team cards follow the card in view. scroll doesn't bubble: listen on its way down.
   view.addEventListener("scroll", e => {
     const strip = e.target;
@@ -1184,9 +1192,10 @@ async function gameView(id, quiet = false, league = "nhl") {
 function collegeExtras(d, g) {
   let html = "";
   const form = ["away", "home"].map(s => [g[s].abbr, d.recent?.[g[s].abbr] || []]).filter(([, l]) => l.length);
-  if (form.length) html += `<h2>Last games</h2><div class="card">${form.map(([abbr, list]) => `<div class="event"><span class="when">${mark(abbr)}</span>
-    <div><div class="who">${esc(teamName(abbr))}</div><div class="detail">${list.map(x =>
-      `${esc(x.result || "")} ${esc(x.score || "")} ${x.home ? "vs" : "at"} ${esc(TEAMS[x.opp]?.name || x.opp_name)}`).join(" · ")}</div></div></div>`).join("")}</div>`;
+  const row = x => `<div class="grow"><span class="grow-date">${x.date ? esc(shortDate(x.date)) : ""}</span>
+    <span class="tm grow-opp">${x.home ? "vs" : "@"} ${TEAMS[x.opp] ? mark(x.opp) : ""} <span>${esc(TEAMS[x.opp]?.name || x.opp_name)}</span></span>
+    <span class="grow-r"><b class="${x.result === "W" ? "res-w" : x.result === "L" ? "res-l" : ""}">${esc(x.result || "")}</b> ${esc(x.score || "")}</span></div>`;
+  if (form.length) html += form.map(([abbr, list]) => `<h2>${esc(teamName(abbr))}: last games</h2><div class="card">${list.map(row).join("")}</div>`).join("");
   const where = [g.note, g.neutral ? "Neutral site" : "", d.attendance ? `${Number(d.attendance).toLocaleString()} fans` : ""].filter(Boolean);
   return html + `<p class="help">${where.length ? `${esc(where.join(" · "))}. ` : ""}ESPN doesn't publish scorers, shots or players for college games: tap "Box score on ESPN" for the rest.</p>`;
 }

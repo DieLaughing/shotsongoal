@@ -5,7 +5,7 @@ This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit th
 
 ## October 28, 2026
 
-- **New: College hockey.** Men's and women's college hockey is here. Tap NCAA at the top for every college game, or All for everything at once (there, college games you don't follow fold away under a count so the NHL isn't buried). Pick your schools in Settings › Your teams, grouped by conference, and they get the same cards on Tonight, alerts for puck drop, goals and finals, calendar feeds and spoiler-free. Games show poll ranks, goals by period and where each one streams (ESPN+, B1G+, FloHockey, NCHC.tv…; tick the ones you have in Settings). The League tab has each conference's records. ESPN doesn't publish scorers or shots for college games, so game pages link to ESPN's box score for those.
+- **New: College hockey.** Men's and women's college hockey is here. Tap NCAA at the top for every college game, or All for everything at once. Each college league's games are a drop-down under your own teams. Open it, or fold it away on a busy night, and it stays the way you left it (under All it starts folded, so the NHL isn't buried). Pick your schools in Settings › Your teams, grouped by conference, and they get the same cards on Tonight, alerts for puck drop, goals and finals, calendar feeds and spoiler-free. Games show poll ranks, goals by period and where each one streams (ESPN+, B1G+, FloHockey, NCHC.tv…; tick the ones you have in Settings). The League tab has each conference's records. ESPN doesn't publish scorers or shots for college games, so game pages link to ESPN's box score for those.
 
 ## October 23, 2026
 
