@@ -38,7 +38,7 @@ const gameApi = (league, id) => league === "pwhl" ? `/api/pwhl/game/${encodeURIC
   : isCollege(league) ? `/api/college/${league}/game/${encodeURIComponent(id)}` : `/api/game/${encodeURIComponent(id)}`;
 // "Hockey East · NCAA men", "PWHL", "Atlantic"
 const leagueLabel = a => { const lg = leagueOf(a), div = TEAMS[a]?.div;
-  return lg === "pwhl" ? "PWHL" : isCollege(lg) ? [div, LEAGUE_NAME[lg]].filter(Boolean).join(" · ") : div || "NHL"; };
+  return lg === "pwhl" ? "PWHL" : isCollege(lg) ? [CONF_NAME[div] || div, LEAGUE_NAME[lg]].filter(Boolean).join(" · ") : div || "NHL"; };
 let refreshTimer = null;
 let INSTALL_PROMPT = null;  // Android/desktop Chrome hand us this so we can show a real Install button
 
@@ -237,6 +237,7 @@ function watchBlock(g, report) {
   const btns = [
     ...links.map((l, i) => `<a class="btn${i ? "" : " primary"}" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`),
     g.recap ? `<a class="btn" href="${esc(g.recap)}" target="_blank" rel="noopener">Recap on NHL.com ↗</a>` : "",
+    g.highlights ? `<a class="btn" href="${esc(g.highlights)}" target="_blank" rel="noopener">▶ Highlights ↗</a>` : "",
     g.espn && g.state !== "pre" ? `<a class="btn" href="${esc(g.espn)}" target="_blank" rel="noopener">Box score on ESPN ↗</a>` : "",
     g.state === "pre" && g.tickets ? `<a class="btn" href="${esc(g.tickets)}" target="_blank" rel="noopener">Tickets ↗</a>` : ""].join("");
   if (!ctx && !btns && !report) return "";
@@ -1482,6 +1483,40 @@ function rosterTables(d, abbr, lg) {
 
 const TEAM_TABS = [["games", "Games"], ["players", "Players"], ["news", "News"]];
 
+// College team pages: the season worked out from the schedule (sog/ncaa.py season_summary), the roster ESPN has (no
+// player stats exist for college) and the game videos, each final matched to its game.
+function collegeSeason(s) {
+  if (!s) return "";
+  const word = { W: "Won", L: "Lost", T: "Tied" };
+  const cell = (label, value) => value ? `<div class="sstat"><span class="muted small">${esc(label)}</span><b>${esc(value)}</b></div>` : "";
+  return `<h2>This season</h2><div class="card pad"><div class="sgrid">
+      ${cell("Home", s.home)}${cell("Away", s.away)}${cell(CONF_NAME[s.conf_name] || s.conf_name ? `${CONF_NAME[s.conf_name] || s.conf_name} games` : "", s.conf)}
+      ${cell("Goals a game", `${s.gf} for · ${s.ga} against`)}</div>
+    ${s.last?.length ? `<div class="form5"><span class="muted small">Last ${s.last.length}</span>${s.last.map(c =>
+      `<span class="f5 f5-${c.toLowerCase()}" title="${word[c]}">${c}</span>`).join("")}</div>` : ""}</div>`;
+}
+function collegeRoster(list) {
+  let html = "";
+  for (const [k, label] of [["F", "Forwards"], ["D", "Defense"], ["G", "Goalies"]]) {
+    const rows = list.filter(p => p.group === k);
+    if (!rows.length) continue;
+    html += `<h2>${label}</h2><div class="card scroll"><table class="croster"><tr><th>#</th><th>Player</th><th>Year</th><th>Hometown</th><th class="wide">Ht</th></tr>
+      ${rows.map(p => `<tr><td class="muted">${p.number ?? ""}</td><td><b>${esc(p.name)}</b></td><td>${esc(p.year || "")}</td>
+        <td>${esc(p.home || "")}</td><td class="wide">${esc(p.height || "")}</td></tr>`).join("")}</table></div>`;
+  }
+  return html + `<p class="help">From ESPN. College player stats aren't published there.</p>`;
+}
+function collegeVideos(list, schedule, abbr) {
+  const games = new Map(schedule.map(g => [g.id, g]));
+  return `<div class="card" style="margin-top:12px">${list.slice(0, 15).map(v => {
+    const g = games.get(v.game), hide = g && spoilerHidden(g);
+    const when = g ? shortDate(g.date) : v.time ? shortDate(new Date(v.time).toLocaleDateString("en-CA")) : "";
+    const opp = g && (g.home.abbr === abbr ? `vs ${g.away.name || teamName(g.away.abbr)}` : `at ${g.home.name || teamName(g.home.abbr)}`);
+    return `<a class="prow" href="${esc(v.url)}" target="_blank" rel="noopener"><span class="prow-main"><b>▶ ${esc(opp || v.title)}</b>
+      <span class="muted small">${esc(when)}${hide ? " · 🙈 hidden game" : ""} · ESPN ↗</span></span></a>`;
+  }).join("")}</div>`;
+}
+
 async function teamView(abbr) {
   setNav("league");
   showLoading(`Loading ${esc(fullName(abbr))}…`);
@@ -1499,7 +1534,10 @@ async function teamView(abbr) {
   const isFav = fav.has(abbr);
   let tab = "games";
   try { tab = localStorage.getItem("teamTab") || tab; } catch { /* fine */ }
-  const tabs = isCollege(lg) ? [] : TEAM_TABS;   // college: no rosters or news from ESPN, so just the games
+  // College: ESPN has rosters for about half the men's teams (none of the women's) and game videos for about half.
+  const C = d.college || {};
+  const tabs = isCollege(lg) ? [["games", "Games"], ...(C.roster?.length ? [["roster", "Roster"]] : []), ...(C.highlights?.length ? [["videos", "Highlights"]] : [])]
+    : TEAM_TABS;
   if (!tabs.some(([k]) => k === tab)) tab = "games";
   const body = {
     games: () => `${later.length ? `<h2>Coming up</h2><div class="card">${later.slice(0, 8).map(g => teamGameRow(g, abbr)).join("")}</div>` : ""}
@@ -1510,18 +1548,23 @@ async function teamView(abbr) {
         <span class="pill info">${m.left} to go</span></div>`).join("")}</div>` : ""}${rosterTables(d, abbr, lg)}`,
     news: () => d.wire?.length ? `<div class="card" style="margin-top:12px">${d.wire.slice(0, 12).map(i => wireItem(i, new Set(), hidden)).join("")}</div>`
       : `<div class="card pad muted small">No news or moves lately.</div>`,
+    roster: () => collegeRoster(C.roster),
+    videos: () => collegeVideos(C.highlights, d.schedule, abbr),
   };
+  const pollMove = p => !p ? "" : !p.previous ? " (new)" : p.previous > p.rank ? ` (▲${p.previous - p.rank})` : p.previous < p.rank ? ` (▼${p.rank - p.previous})` : "";
   view.innerHTML = `${backLink("#/league", "League")}<div class="card pad team-head">
       ${mark(abbr, true)}
       <div style="flex:1;min-width:0"><h1 style="margin:0">${esc(fullName(abbr))}</h1>
-      ${st && isCollege(lg) ? `<div class="muted small">${[`${st.w}-${st.l}-${st.t}`, st.rank ? `No. ${st.rank} in the poll` : "", leagueLabel(abbr)].filter(Boolean).map(esc).join(" · ")}</div>`
-        : isCollege(lg) ? `<div class="muted small">${esc(leagueLabel(abbr))}</div>`
+      ${isCollege(lg) ? `<div class="muted small">${[C.season?.record || (st ? `${st.w}-${st.l}-${st.t}` : ""),
+          C.poll ? `No. ${C.poll.rank} in the poll${pollMove(C.poll)}` : "", leagueLabel(abbr)].filter(Boolean).map(esc).join(" · ")}</div>
+        ${C.venue ? `<div class="muted small">${esc([C.venue.name, C.venue.town].filter(Boolean).join(" · "))}</div>` : ""}`
         : st && lg === "pwhl" ? `<div class="muted small">${st.w}-${st.otw}-${st.otl}-${st.l} · ${st.pts} pts · ${esc(ordinal(st.league_rank))} in the PWHL${st.season ? ` (${esc(st.season)})` : ""}</div>`
         : st ? `<div class="muted small">${st.w}-${st.l}-${st.otl} · ${st.pts} pts · ${esc(ordinal(st.div_rank))} in the ${esc(st.div)}${st.streak ? ` · ${esc(st.streak)}` : ""}</div>` : ""}</div>
       <button class="btn small" id="fav">${isFav ? "★ Favorite" : "☆ Favorite"}</button>
     </div>
+    ${isCollege(lg) ? collegeSeason(C.season) : ""}
     ${next ? `<h2>${next.state === "live" ? "On now" : "Next game"}</h2><div class="card">${gameCard(next, fav)}</div>` : ""}
-    ${tabs.length ? `<div class="seg" role="tablist">${tabs.map(([k, l]) => `<button data-ttab="${k}" class="${k === tab ? "on" : ""}">${l}</button>`).join("")}</div>` : ""}
+    ${tabs.length > 1 ? `<div class="seg" role="tablist">${tabs.map(([k, l]) => `<button data-ttab="${k}" class="${k === tab ? "on" : ""}">${l}</button>`).join("")}</div>` : ""}
     <div id="ttab">${body[tab]()}</div>`;
   view.querySelectorAll("[data-ttab]").forEach(b => b.addEventListener("click", () => {
     tab = b.dataset.ttab;

@@ -16,6 +16,7 @@ from .nhl import ORDINAL
 
 SITE = "https://site.api.espn.com/apis/site/v2/sports/hockey"
 STANDINGS = "https://site.api.espn.com/apis/v2/sports/hockey"
+CORE = "https://sports.core.api.espn.com/v2/sports/hockey/leagues"   # the team's arena
 LEAGUES = ("ncaam", "ncaaw")
 PATH = {"ncaam": "mens-college-hockey", "ncaaw": "womens-college-hockey"}
 PREFIX = {"ncaam": "CM-", "ncaaw": "CW-"}
@@ -135,11 +136,72 @@ def parse_schedule(data: dict, league: str, ranks: dict[str, int] | None = None)
     return [parse_event(e, league, ranks) for e in data.get("events") or []]
 
 
-def parse_rankings(data: dict) -> dict[str, int]:
-    """The first poll ESPN lists (USCHO for the men, USCHO / USA Hockey for the women): school id -> rank."""
+def parse_poll(data: dict) -> dict[str, dict]:
+    """The first poll ESPN lists (USCHO's): school id -> {rank, previous} (previous 0 = wasn't ranked last week)."""
     for poll in data.get("rankings") or []:
-        return {str((r.get("team") or {}).get("id")): r.get("current") for r in poll.get("ranks") or [] if r.get("current")}
+        return {str((r.get("team") or {}).get("id")): {"rank": r["current"], "previous": r.get("previous") or 0}
+                for r in poll.get("ranks") or [] if r.get("current")}
     return {}
+
+
+CLASS = {1: "Fr", 2: "So", 3: "Jr", 4: "Sr"}
+GROUP = {"F": "F", "C": "F", "LW": "F", "RW": "F", "W": "F", "D": "D", "G": "G"}
+
+
+def parse_roster(data: dict) -> list[dict]:
+    """ESPN's college roster (about half the men's Division I teams have one; no women's): who, not how they're doing,
+    since ESPN has no college player stats. Class from years of experience: 1 = Fr ... 5+ = Gr."""
+    rows = data.get("athletes") or []
+    flat = [x for r in rows for x in (r.get("items") or [r])]   # some rosters come grouped by position
+    out = []
+    for p in flat:
+        pos = ((p.get("position") or {}).get("abbreviation") or "").upper()
+        years = (p.get("experience") or {}).get("years")
+        bp = p.get("birthPlace") or {}
+        out.append({"id": _int(p.get("id")), "name": p.get("fullName") or p.get("displayName") or "",
+                    "number": _int(p.get("jersey")), "pos": pos, "group": GROUP.get(pos, "F"),
+                    "year": CLASS.get(years) or ("Gr" if (years or 0) > 4 else None),
+                    "home": ", ".join(x for x in (bp.get("city"), bp.get("state") or bp.get("country")) if x) or None,
+                    "height": p.get("displayHeight") or None})
+    out.sort(key=lambda p: (p["number"] is None, p["number"] or 0))
+    return out
+
+
+def parse_highlights(data: dict) -> list[dict]:
+    """A team's ESPN videos: game highlights, each tagged with its game (ESPN event id)."""
+    out = []
+    for a in data.get("articles") or []:
+        url = ((a.get("links") or {}).get("web") or {}).get("href")
+        if a.get("type") != "Media" or not url:
+            continue
+        game = next((_int(c.get("eventId")) for c in a.get("categories") or [] if c.get("type") == "event"), None)
+        out.append({"title": a.get("headline") or "", "url": url, "game": game, "time": a.get("published")})
+    return out
+
+
+def season_summary(schedule: list[dict], abbr: str, conf_of: dict[str, str | None]) -> dict | None:
+    """What a college team page leads with, worked out from its schedule: home, away and conference records, goals
+    per game and the last five. Conference games = both teams in the same conference (ESPN's flag is often empty)."""
+    games = [g for g in schedule if g.get("state") == "final" and g.get("type") in (2, 3)
+             and g["away"].get("score") is not None and g["home"].get("score") is not None]
+    if not games:
+        return None
+    mine = conf_of.get(abbr)
+
+    def side(g):
+        home = g["home"]["abbr"] == abbr
+        us, them = (g["home"], g["away"]) if home else (g["away"], g["home"])
+        code = "T" if us["score"] == them["score"] else "W" if us["score"] > them["score"] else "L"
+        return home, us["score"], them["score"], code, them["abbr"]
+    rows = [side(g) for g in sorted(games, key=lambda g: g.get("start") or "")]
+
+    def rec(rs):
+        return f"{sum(r[3] == 'W' for r in rs)}-{sum(r[3] == 'L' for r in rs)}-{sum(r[3] == 'T' for r in rs)}" if rs else None
+    n = len(rows)
+    return {"record": rec(rows), "home": rec([r for r in rows if r[0]]), "away": rec([r for r in rows if not r[0]]),
+            "conf": rec([r for r in rows if mine and conf_of.get(r[4]) == mine]), "conf_name": mine,
+            "gf": round(sum(r[1] for r in rows) / n, 1), "ga": round(sum(r[2] for r in rows) / n, 1),
+            "last": [r[3] for r in rows[-5:]]}
 
 
 def parse_standings(data: dict, league: str, ranks: dict[str, int] | None = None,

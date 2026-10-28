@@ -81,3 +81,35 @@ def test_keys_carry_the_league():
 def test_scores_read_from_the_teams_side():
     assert ncaa.our_score("4-1", "L") == "1-4" and ncaa.our_score("4-3 OT", "L") == "3-4 OT"
     assert ncaa.our_score("5-1", "W") == "5-1" and ncaa.our_score("2-2 OT", "T") == "2-2 OT"
+
+
+def test_season_summary_from_the_schedule():
+    g = lambda gid, away, home, a, h: {"id": gid, "state": "final", "type": 2, "start": f"2026-10-{gid:02d}T23:00:00Z",
+                                       "away": {"abbr": away, "score": a}, "home": {"abbr": home, "score": h}}
+    sched = [g(3, "CM-113", "CM-2172", 1, 6), g(9, "CM-2511", "CM-113", 2, 2), g(10, "CM-2511", "CM-113", 1, 5),
+             g(17, "CM-111", "CM-113", 4, 1), {"id": 30, "state": "pre", "type": 2, "away": {"abbr": "CM-108"}, "home": {"abbr": "CM-113"}}]
+    s = ncaa.season_summary(sched, "CM-113", {"CM-113": "HE", "CM-111": "HE", "CM-2172": "NCHC", "CM-2511": "AHA"})
+    assert s["record"] == "1-2-1" and s["home"] == "1-1-1" and s["away"] == "0-1-0"
+    assert s["conf"] == "0-1-0" and s["conf_name"] == "HE"   # only Northeastern is in Hockey East
+    assert s["last"] == ["L", "T", "W", "L"] and s["gf"] == 2.2 and s["ga"] == 3.2
+    assert ncaa.season_summary([], "CM-113", {}) is None
+
+
+def test_roster_and_highlights():
+    roster = ncaa.parse_roster({"athletes": [
+        {"id": "5", "fullName": "Bo Cosman", "jersey": "28", "position": {"abbreviation": "F"}, "experience": {"years": 3},
+         "birthPlace": {"city": "Milton", "state": "GA"}, "displayHeight": "6' 3\""},
+        {"id": "6", "fullName": "Jackson Irving", "jersey": "1", "position": {"abbreviation": "G"}, "experience": {"years": 5}}]})
+    assert [p["name"] for p in roster] == ["Jackson Irving", "Bo Cosman"]   # by number
+    assert roster[1]["year"] == "Jr" and roster[1]["home"] == "Milton, GA" and roster[0]["year"] == "Gr" and roster[0]["group"] == "G"
+    vids = ncaa.parse_highlights({"articles": [
+        {"type": "Media", "headline": "A vs B Game Highlights", "links": {"web": {"href": "https://espn/x"}},
+         "categories": [{"type": "team", "teamId": 113}, {"type": "event", "eventId": 401904769}]},
+        {"type": "Story", "headline": "not a video", "links": {"web": {"href": "https://espn/y"}}}]})
+    assert vids == [{"title": "A vs B Game Highlights", "url": "https://espn/x", "game": 401904769, "time": None}]
+
+
+def test_poll_keeps_last_week():
+    poll = ncaa.parse_poll({"rankings": [{"ranks": [{"current": 3, "previous": 5, "team": {"id": "2172"}},
+                                                   {"current": 20, "previous": 0, "team": {"id": "113"}}]}]})
+    assert poll == {"2172": {"rank": 3, "previous": 5}, "113": {"rank": 20, "previous": 0}}

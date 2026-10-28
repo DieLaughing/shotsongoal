@@ -547,6 +547,8 @@ async def college_game(league: str, game_id: int, request: Request):
     n = max(len(g["away"].get("periods") or []), len(g["home"].get("periods") or []))
     per = lambda side, i: (g[side].get("periods") or [])[i] if i < len(g[side].get("periods") or []) else None
     linescore = [{"period": ncaa.period_label(i + 1), "away": per("away", i), "home": per("home", i)} for i in range(n)]
+    if g["state"] == "final":
+        g["highlights"] = feed.ncaa_highlight(league, g)
     detail = {**detail, "game": g, "linescore": linescore if g["state"] in ("live", "final") else [], "shots": [],
               "scoring": [], "penalties": [], "stars": [], "team_stats": [], "players": {}, "shotmap": [],
               "situation": None, "recap": None}

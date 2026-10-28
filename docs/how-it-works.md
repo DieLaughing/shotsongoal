@@ -170,7 +170,13 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   the scoreboard + by period + each team's last five, with a "Box score on ESPN" button (g.espn). The summary's
   `news` is the sport's latest stories, not the game's: not used. Days = scoreboard?dates=YYYYMMDD (`<lg>:day:<date>`,
   prev/next from the league calendar); game page = summary (`<lg>:game:<id>`) with state/score from the saved day;
-  team page = teams/<id>/schedule (no roster/news tabs); standings = overall records per conference sorted by
+  team page (Feed.ncaa_team) = teams/<id>/schedule + "This season" worked out from it (ncaa.season_summary: home,
+  away, conference = both teams in the same conference since ESPN's conferenceCompetition flag is often empty, goals a
+  game, last five) + arena (core API teams/<id> venue, 30 days) + poll move (`<lg>:poll` {rank, previous}) + a Roster
+  tab (teams/<id>/roster: ~half the men's D-I teams, no women's; name/number/class from years/hometown/height, no
+  stats exist) + a Highlights tab (news?team=<id>: Media items tagged with their event id, this season's games only).
+  Tabs only show when ESPN has something. A final's game page gets "▶ Highlights" from either team's saved list
+  (Feed.ncaa_highlight peeks and refreshes in the background, never waits); standings = overall records per conference sorted by
   win % (ESPN's college points are always 0; no conference standings). Ties stand (outcome "T"; records W-L-T, an OT
   loss is an L). The scoreboard loop polls each college league every COLLEGE_LIVE 15 s while busy, else COLLEGE_IDLE
   10 min; goal alerts come from the score (ncaa.goals: one key per team per goal, no scorer). Where to watch =

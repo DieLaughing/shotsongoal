@@ -49,6 +49,7 @@ PWHL_TEAM_IDS = {"BOS": 1, "MIN": 2, "MTL": 3, "NY": 4, "OTT": 5, "TOR": 6, "SEA
 COLLEGE_LIVE = timedelta(seconds=15)  # college scoreboards while a game is on or about to start
 COLLEGE_IDLE = timedelta(minutes=10)  # ... and otherwise
 RANKS_TTL = timedelta(hours=6)        # the polls come out on Mondays
+HIGHLIGHTS_TTL = timedelta(minutes=30)  # a college team's ESPN game videos
 EASTERN = ZoneInfo("America/New_York")
 INSIDER_DEFAULTS = {"nhl": wire.DEFAULT_INSIDERS, "pwhl": wire.PWHL_INSIDERS}
 
@@ -211,7 +212,7 @@ class Feed:
     async def any_team(self, abbr: str) -> dict:
         """A team page's data in any league: schedule, roster and stats (college: schedule only)."""
         if ncaa.league_of(abbr):
-            return {"schedule": await self.ncaa_schedule(abbr), "roster": [], "stats": {"skaters": [], "goalies": []}}
+            return await self.ncaa_team(abbr)
         return await (self.pwhl_team(abbr) if abbr.startswith(pwhl.PREFIX) else self.team(abbr))
 
     async def team(self, abbr: str) -> dict:
@@ -466,20 +467,63 @@ class Feed:
         return day
 
     # ---- college (ESPN) ---------------------------------------------------------------------
-    async def ncaa_ranks(self, league: str) -> dict[str, int]:
-        """This week's poll, school id -> rank. Missing is fine: games just show without ranks."""
+    async def ncaa_poll(self, league: str) -> dict[str, dict]:
+        """This week's poll, school id -> {rank, previous}. Missing is fine: games just show without ranks."""
         async def fetch():
-            return ncaa.parse_rankings(await ncaa.get(league, "rankings"))
+            return ncaa.parse_poll(await ncaa.get(league, "rankings"))
         try:
-            return await self.cached(f"{league}:ranks", league, fetch, RANKS_TTL)
+            return await self.cached(f"{league}:poll", league, fetch, RANKS_TTL)
         except Exception:
             return {}
 
+    async def ncaa_ranks(self, league: str) -> dict[str, int]:
+        return {k: v["rank"] for k, v in (await self.ncaa_poll(league)).items()}
+
     def _ranks_peek(self, league: str) -> dict[str, int]:
-        hit = self.store.get(f"{league}:ranks")
+        hit = self.store.get(f"{league}:poll")
         if not hit or not hit["fresh"]:
-            self.refresh_later(f"{league}:ranks", lambda: self.ncaa_ranks(league))
-        return hit["data"] if hit else {}
+            self.refresh_later(f"{league}:poll", lambda: self.ncaa_poll(league))
+        return {k: v["rank"] for k, v in hit["data"].items()} if hit else {}
+
+    async def ncaa_team(self, abbr: str) -> dict:
+        """A college team page: schedule, plus what ESPN has beyond it (roster for some, game highlights, arena, poll
+        move) and the season worked out from the schedule. Every extra is optional: a missing one just isn't shown."""
+        from .teams import COLLEGE_INFO
+        league, sid = ncaa.league_of(abbr), abbr[3:]
+
+        async def roster():
+            return ncaa.parse_roster(await ncaa.get(league, f"teams/{sid}/roster"))
+
+        async def venue():
+            v = (await ncaa.get(league, f"teams/{sid}", base=ncaa.CORE)).get("venue") or {}
+            a = v.get("address") or {}
+            return {"name": v.get("fullName"), "town": ", ".join(x for x in (a.get("city"), a.get("state")) if x) or None}
+        sched, rost, vids, arena, poll = await asyncio.gather(
+            self.ncaa_schedule(abbr),
+            self.cached(f"{league}:team:{sid}:roster", league, roster, timedelta(hours=12)),
+            self.cached(f"{league}:team:{sid}:highlights", league, lambda: _college_highlights(league, sid), HIGHLIGHTS_TTL),
+            self.cached(f"{league}:team:{sid}:venue", league, venue, timedelta(days=30)),
+            self.ncaa_poll(league), return_exceptions=True)
+        sched = [] if isinstance(sched, Exception) else sched
+        return {"schedule": sched, "roster": [], "stats": {"skaters": [], "goalies": []},
+                "college": {"roster": [] if isinstance(rost, Exception) else rost,
+                            # ESPN's list runs back into last season: only this season's games
+                            "highlights": [] if isinstance(vids, Exception) else [v for v in vids if v["game"] in {g["id"] for g in sched}],
+                            "venue": None if isinstance(arena, Exception) or not arena.get("name") else arena,
+                            "poll": None if isinstance(poll, Exception) else poll.get(sid),
+                            "season": ncaa.season_summary(sched, abbr, {k: t["conf"] for k, t in COLLEGE_INFO.items()})}}
+
+    def ncaa_highlight(self, league: str, game: dict) -> str | None:
+        """A final's highlight video from either team's saved highlights. Never waits: a missing or old list is
+        fetched in the background, so the link turns up on the next visit (ESPN posts them an hour or so after)."""
+        found = None
+        for side in ("home", "away"):
+            sid, key = game[side]["abbr"][3:], f"{league}:team:{game[side]['abbr'][3:]}:highlights"
+            hit = self.store.get(key)
+            if not hit or not hit["fresh"]:
+                self.refresh_later(key, lambda sid=sid, key=key: self._fetch(key, league, lambda: _college_highlights(league, sid), HIGHLIGHTS_TTL))
+            found = found or next((v["url"] for v in (hit["data"] if hit else []) if v["game"] == game["id"]), None)
+        return found
 
     async def _ncaa_day_fetch(self, league: str, date: str) -> dict:
         data = await ncaa.get(league, "scoreboard", dates=date.replace("-", ""), limit=300)
@@ -803,6 +847,10 @@ def _day_ttl(day: dict, date: str) -> timedelta | None:
     if any(g["state"] == "live" for g in games):
         return timedelta(seconds=LIVE_POLL * 3)
     return timedelta(minutes=10 if date <= today else 60)
+
+
+async def _college_highlights(league: str, sid: str) -> list[dict]:
+    return ncaa.parse_highlights(await ncaa.get(league, "news", team=sid, limit=30))
 
 
 def _college_day_ttl(day: dict, date: str) -> timedelta | None:
