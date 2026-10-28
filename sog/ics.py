@@ -54,7 +54,8 @@ def build(games: list[dict], base_url: str, title: str) -> str:
             desc.append(f"Watch: {w['app']} ({w['why']})")
         elif g["state"] != "final":
             desc.append(w.get("why") or "")
-        desc.append(f"{base_url}/#/{'pgame' if g.get('league') == 'pwhl' else 'game'}/{g['id']}")
+        lg = g.get("league") or "nhl"
+        desc.append(f"{base_url}/#/{ {'nhl': 'game', 'pwhl': 'pgame'}.get(lg, f'cgame/{lg}') }/{g['id']}")
         lines += ["BEGIN:VEVENT", f"UID:{g.get('league', 'nhl')}-{g['id']}@shotsongoal", f"DTSTAMP:{stamp}",
                   f"DTSTART:{start:%Y%m%dT%H%M%SZ}", f"DTEND:{start + GAME_LENGTH:%Y%m%dT%H%M%SZ}",
                   f"SUMMARY:{_esc(summary)}", f"DESCRIPTION:{_esc(chr(10).join(x for x in desc if x))}",

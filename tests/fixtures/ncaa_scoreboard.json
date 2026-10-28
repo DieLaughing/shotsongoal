@@ -1,0 +1,457 @@
+{
+"events": [
+{
+"id": "401904410",
+"date": "2026-10-24T21:00Z",
+"season": {
+"year": 2027,
+"type": 2,
+"slug": "regular-season"
+},
+"links": [],
+"status": {
+"clock": 0.0,
+"displayClock": "0:00",
+"period": 4,
+"type": {
+"id": "3",
+"name": "STATUS_FINAL",
+"state": "post",
+"completed": true,
+"description": "Final",
+"detail": "Final/OT",
+"shortDetail": "Final/OT",
+"altDetail": "OT"
+}
+},
+"competitions": [
+{
+"date": "2026-10-24T21:00Z",
+"neutralSite": false,
+"conferenceCompetition": null,
+"venue": {
+"fullName": "Pegula Ice Arena"
+},
+"status": {
+"clock": 0.0,
+"displayClock": "0:00",
+"period": 4,
+"type": {
+"id": "3",
+"name": "STATUS_FINAL",
+"state": "post",
+"completed": true,
+"description": "Final",
+"detail": "Final/OT",
+"shortDetail": "Final/OT",
+"altDetail": "OT"
+}
+},
+"broadcasts": [
+{
+"market": "national",
+"names": [
+"B1G+"
+]
+}
+],
+"notes": [],
+"competitors": [
+{
+"homeAway": "home",
+"score": "3",
+"winner": true,
+"curatedRank": {
+"current": 99
+},
+"records": [
+{
+"name": "overall",
+"abbreviation": "Season",
+"type": "total",
+"summary": "2-4-0"
+}
+],
+"linescores": [
+{
+"value": 1.0,
+"displayValue": "1",
+"period": 1
+},
+{
+"value": 0.0,
+"displayValue": "0",
+"period": 2
+},
+{
+"value": 1.0,
+"displayValue": "1",
+"period": 3
+},
+{
+"value": 1.0,
+"displayValue": "1",
+"period": 4
+}
+],
+"team": {
+"id": "213",
+"abbreviation": "PSU",
+"shortDisplayName": "Penn State",
+"location": "Penn State"
+}
+},
+{
+"homeAway": "away",
+"score": "2",
+"winner": false,
+"curatedRank": {
+"current": 99
+},
+"records": [
+{
+"name": "overall",
+"abbreviation": "Season",
+"type": "total",
+"summary": "3-4-1"
+}
+],
+"linescores": [
+{
+"value": 0.0,
+"displayValue": "0",
+"period": 1
+},
+{
+"value": 2.0,
+"displayValue": "2",
+"period": 2
+},
+{
+"value": 0.0,
+"displayValue": "0",
+"period": 3
+},
+{
+"value": 0.0,
+"displayValue": "0",
+"period": 4
+}
+],
+"team": {
+"id": "2099",
+"abbreviation": "CAN",
+"shortDisplayName": "Canisius",
+"location": "Canisius"
+}
+}
+]
+}
+]
+},
+{
+"id": "401904822",
+"date": "2026-10-24T22:00Z",
+"season": {
+"year": 2027,
+"type": 2,
+"slug": "regular-season"
+},
+"links": [],
+"status": {
+"clock": 0.0,
+"displayClock": "0:00",
+"period": 3,
+"type": {
+"id": "3",
+"name": "STATUS_FINAL",
+"state": "post",
+"completed": true,
+"description": "Final",
+"detail": "Final",
+"shortDetail": "Final"
+}
+},
+"competitions": [
+{
+"date": "2026-10-24T22:00Z",
+"neutralSite": false,
+"conferenceCompetition": null,
+"venue": {
+"fullName": "Schneider Arena"
+},
+"status": {
+"clock": 0.0,
+"displayClock": "0:00",
+"period": 3,
+"type": {
+"id": "3",
+"name": "STATUS_FINAL",
+"state": "post",
+"completed": true,
+"description": "Final",
+"detail": "Final",
+"shortDetail": "Final"
+}
+},
+"broadcasts": [
+{
+"market": "national",
+"names": [
+"ESPN+"
+]
+}
+],
+"notes": [],
+"competitors": [
+{
+"homeAway": "home",
+"score": "5",
+"winner": true,
+"curatedRank": {
+"current": 7
+},
+"records": [
+{
+"name": "overall",
+"abbreviation": "Season",
+"type": "total",
+"summary": "5-0-0"
+}
+],
+"linescores": [
+{
+"value": 5.0,
+"displayValue": "5",
+"period": 1
+},
+{
+"value": 0.0,
+"displayValue": "0",
+"period": 2
+},
+{
+"value": 0.0,
+"displayValue": "0",
+"period": 3
+}
+],
+"team": {
+"id": "2507",
+"abbreviation": "PROV",
+"shortDisplayName": "Providence",
+"location": "Providence"
+}
+},
+{
+"homeAway": "away",
+"score": "2",
+"winner": false,
+"curatedRank": {
+"current": 99
+},
+"records": [
+{
+"name": "overall",
+"abbreviation": "Season",
+"type": "total",
+"summary": "1-5-0"
+}
+],
+"linescores": [
+{
+"value": 1.0,
+"displayValue": "1",
+"period": 1
+},
+{
+"value": 1.0,
+"displayValue": "1",
+"period": 2
+},
+{
+"value": 0.0,
+"displayValue": "0",
+"period": 3
+}
+],
+"team": {
+"id": "2349",
+"abbreviation": "UML",
+"shortDisplayName": "UMass Lowell",
+"location": "UMass Lowell "
+}
+}
+]
+}
+]
+},
+{
+"id": "401904865",
+"date": "2026-10-25T00:00Z",
+"season": {
+"year": 2027,
+"type": 2,
+"slug": "regular-season"
+},
+"links": [],
+"status": {
+"clock": 0.0,
+"displayClock": "0:00",
+"period": 4,
+"type": {
+"id": "3",
+"name": "STATUS_FINAL",
+"state": "post",
+"completed": true,
+"description": "Final",
+"detail": "Final/OT",
+"shortDetail": "Final/OT",
+"altDetail": "OT"
+}
+},
+"competitions": [
+{
+"date": "2026-10-25T00:00Z",
+"neutralSite": false,
+"conferenceCompetition": null,
+"venue": {
+"fullName": "Magness Arena"
+},
+"status": {
+"clock": 0.0,
+"displayClock": "0:00",
+"period": 4,
+"type": {
+"id": "3",
+"name": "STATUS_FINAL",
+"state": "post",
+"completed": true,
+"description": "Final",
+"detail": "Final/OT",
+"shortDetail": "Final/OT",
+"altDetail": "OT"
+}
+},
+"broadcasts": [
+{
+"market": "home",
+"names": [
+"NCHCHockey.com"
+]
+}
+],
+"notes": [],
+"competitors": [
+{
+"homeAway": "home",
+"score": "2",
+"winner": false,
+"curatedRank": {
+"current": 4
+},
+"records": [
+{
+"name": "overall",
+"abbreviation": "Season",
+"type": "total",
+"summary": "3-2-1"
+}
+],
+"linescores": [
+{
+"value": 0.0,
+"displayValue": "0",
+"period": 1
+},
+{
+"value": 2.0,
+"displayValue": "2",
+"period": 2
+},
+{
+"value": 0.0,
+"displayValue": "0",
+"period": 3
+},
+{
+"value": 0.0,
+"displayValue": "0",
+"period": 4
+}
+],
+"team": {
+"id": "2172",
+"abbreviation": "DEN",
+"shortDisplayName": "Denver",
+"location": "Denver"
+}
+},
+{
+"homeAway": "away",
+"score": "2",
+"winner": false,
+"curatedRank": {
+"current": 18
+},
+"records": [
+{
+"name": "overall",
+"abbreviation": "Season",
+"type": "total",
+"summary": "1-3-1"
+}
+],
+"linescores": [
+{
+"value": 0.0,
+"displayValue": "0",
+"period": 1
+},
+{
+"value": 1.0,
+"displayValue": "1",
+"period": 2
+},
+{
+"value": 1.0,
+"displayValue": "1",
+"period": 3
+},
+{
+"value": 0.0,
+"displayValue": "0",
+"period": 4
+}
+],
+"team": {
+"id": "103",
+"abbreviation": "BC",
+"shortDisplayName": "Boston College",
+"location": "Boston College"
+}
+}
+]
+}
+]
+}
+],
+"leagues": [
+{
+"calendar": [
+"2026-10-02T07:00Z",
+"2026-10-03T07:00Z",
+"2026-10-04T07:00Z",
+"2026-10-08T07:00Z",
+"2026-10-09T07:00Z",
+"2026-10-10T07:00Z",
+"2026-10-11T07:00Z",
+"2026-10-15T07:00Z",
+"2026-10-16T07:00Z",
+"2026-10-17T07:00Z",
+"2026-10-18T07:00Z",
+"2026-10-20T07:00Z"
+]
+}
+]
+}

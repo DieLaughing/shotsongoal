@@ -11,7 +11,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from . import moneypuck, nhl, odds, pwhl, wire
+from . import moneypuck, ncaa, nhl, odds, pwhl, wire
 from .teams import TEAMS as NHL_TEAMS
 from .db import Store, parse_iso
 
@@ -46,6 +46,9 @@ PWHL_LIVE = timedelta(seconds=15)     # PWHL scoreboard while a game is on or ab
 PWHL_IDLE = timedelta(minutes=30)     # ... and otherwise
 PWHL_TEAM_IDS = {"BOS": 1, "MIN": 2, "MTL": 3, "NY": 4, "OTT": 5, "TOR": 6, "SEA": 8, "VAN": 9,
                  "DET": 10, "HAM": 11, "VGS": 12, "SJ": 13}
+COLLEGE_LIVE = timedelta(seconds=15)  # college scoreboards while a game is on or about to start
+COLLEGE_IDLE = timedelta(minutes=10)  # ... and otherwise
+RANKS_TTL = timedelta(hours=6)        # the polls come out on Mondays
 EASTERN = ZoneInfo("America/New_York")
 INSIDER_DEFAULTS = {"nhl": wire.DEFAULT_INSIDERS, "pwhl": wire.PWHL_INSIDERS}
 
@@ -161,6 +164,8 @@ class Feed:
         return await self.cached("standings", "standings", fetch, STANDINGS_TTL)
 
     async def team_schedule(self, abbr: str) -> list[dict]:
+        if ncaa.league_of(abbr):
+            return await self.ncaa_schedule(abbr)
         if abbr.startswith(pwhl.PREFIX):
             return [g for g in await self.pwhl_games() if abbr in (g["away"]["abbr"], g["home"]["abbr"])]
 
@@ -202,6 +207,12 @@ class Feed:
                 await self._fetch(f"career:{abbr}", "career", fetch, CAREER_TTL)
             except Exception:
                 pass
+
+    async def any_team(self, abbr: str) -> dict:
+        """A team page's data in any league: schedule, roster and stats (college: schedule only)."""
+        if ncaa.league_of(abbr):
+            return {"schedule": await self.ncaa_schedule(abbr), "roster": [], "stats": {"skaters": [], "goalies": []}}
+        return await (self.pwhl_team(abbr) if abbr.startswith(pwhl.PREFIX) else self.team(abbr))
 
     async def team(self, abbr: str) -> dict:
 
@@ -454,6 +465,87 @@ class Feed:
                     pass
         return day
 
+    # ---- college (ESPN) ---------------------------------------------------------------------
+    async def ncaa_ranks(self, league: str) -> dict[str, int]:
+        """This week's poll, school id -> rank. Missing is fine: games just show without ranks."""
+        async def fetch():
+            return ncaa.parse_rankings(await ncaa.get(league, "rankings"))
+        try:
+            return await self.cached(f"{league}:ranks", league, fetch, RANKS_TTL)
+        except Exception:
+            return {}
+
+    def _ranks_peek(self, league: str) -> dict[str, int]:
+        hit = self.store.get(f"{league}:ranks")
+        if not hit or not hit["fresh"]:
+            self.refresh_later(f"{league}:ranks", lambda: self.ncaa_ranks(league))
+        return hit["data"] if hit else {}
+
+    async def _ncaa_day_fetch(self, league: str, date: str) -> dict:
+        data = await ncaa.get(league, "scoreboard", dates=date.replace("-", ""), limit=300)
+        return ncaa.parse_scoreboard(data, league, date, self._ranks_peek(league))
+
+    async def ncaa_day(self, league: str, date: str | None) -> dict:
+        date = date or self.opening_day()
+        return await self.cached(f"{league}:day:{date}", league, lambda: self._ncaa_day_fetch(league, date),
+                                 lambda d: _college_day_ttl(d, date))
+
+    async def ncaa_game(self, league: str, game_id: int) -> dict:
+        """ESPN's game summary: the game (from its header) and each team's last five. The score
+        and clock come from the saved scoreboard when it's newer (the poller keeps it within seconds)."""
+        async def fetch():
+            d = await ncaa.get(league, "summary", event=game_id)
+            h = d.get("header") or {}
+            comp = (h.get("competitions") or [{}])[0]
+            ranks = self._ranks_peek(league)
+            g = ncaa.parse_event({"id": h.get("id"), "date": comp.get("date"), "competitions": [comp],
+                                  "season": h.get("season"), "links": h.get("links")}, league, ranks)
+            info = d.get("gameInfo") or {}
+            g["venue"] = g["venue"] or (info.get("venue") or {}).get("fullName") or ""
+            names = {str(c.get("id")): (c.get("team") or {}) for c in comp.get("competitors") or []}
+            for side in ("away", "home"):
+                t = names.get(g[side]["abbr"][3:]) or {}
+                g[side]["name"] = g[side]["name"] or t.get("shortDisplayName") or t.get("location") or ""
+            recent = {}
+            for t in d.get("lastFiveGames") or []:
+                k = ncaa.key(league, (t.get("team") or {}).get("id"))
+                recent[k] = [{"date": ncaa.eastern_date(e.get("gameDate")), "opp": ncaa.key(league, (e.get("opponent") or {}).get("id")),
+                              "opp_name": (e.get("opponent") or {}).get("displayName") or "", "home": e.get("atVs") == "vs",
+                              "result": e.get("gameResult"), "score": e.get("score")} for e in t.get("events") or []]
+            # (The summary's "news" is the sport's latest stories, not this game's: left out.)
+            return {"game": g, "recent": recent, "attendance": info.get("attendance") or None}
+        detail = await self.cached(f"{league}:game:{game_id}", league, fetch, _game_ttl, stale_ok=_game_stale_ok)
+        g = dict(detail["game"])
+        hit = self.store.get(f"{league}:day:{g.get('date')}")
+        live = next((x for x in (hit["data"]["games"] if hit else []) if x["id"] == g["id"]), None)
+        if live and (live["state"] != g["state"] or live["state"] == "live"):
+            g = {**live, "venue": g["venue"] or live.get("venue")}
+        return {**detail, "game": g}
+
+    async def ncaa_standings(self, league: str) -> list[dict]:
+        async def fetch():
+            ranks = await self.ncaa_ranks(league)
+            from .teams import COLLEGE_INFO
+            return ncaa.parse_standings(await ncaa.get(league, "standings", base=ncaa.STANDINGS), league, ranks,
+                                        {k: t["conf"] for k, t in COLLEGE_INFO.items()})
+        return await self.cached(f"{league}:standings", league, fetch, STANDINGS_TTL * 2)
+
+    async def ncaa_schedule(self, abbr: str) -> list[dict]:
+        league = ncaa.league_of(abbr)
+
+        async def fetch():
+            return ncaa.parse_schedule(await ncaa.get(league, f"teams/{abbr[3:]}/schedule"), league, self._ranks_peek(league))
+        return await self.cached(f"{league}:team:{abbr[3:]}:schedule", league, fetch, timedelta(minutes=30))
+
+    async def poll_ncaa(self, league: str) -> dict:
+        """Today's college games for the alerts, straight from ESPN. ESPN names no scorers: goal alerts are made from
+        the score (ncaa.goals)."""
+        date = slate_date()
+        day = await self._fetch(f"{league}:day:{date}", league, lambda: self._ncaa_day_fetch(league, date),
+                                lambda d: _college_day_ttl(d, date))
+        day = {**day, "games": [dict(g, goals=ncaa.goals(g)) if g["state"] in ("live", "final") else g for g in day["games"]]}
+        return day
+
     # ---- pollers --------------------------------------------------------------------
     async def today_page(self) -> dict:
         """Today's scoreboard for a page: the saved copy (the poller keeps it within seconds while games are on),
@@ -484,6 +576,7 @@ class Feed:
 
     async def _scoreboard_loop(self) -> None:
         last_idle = last_pwhl = 0.0
+        last_college = {lg: 0.0 for lg in ncaa.LEAGUES}
         while True:
             started = time.time()
             busy = self.busy
@@ -521,6 +614,19 @@ class Feed:
                     busy = busy or _busy(pday)
                     if self.alerts:
                         await self.alerts.on_day(pday)
+                for lg in ncaa.LEAGUES:
+                    saved = self.store.get(f"{lg}:day:{slate_date()}")
+                    hot = bool(saved) and _busy(saved["data"])
+                    if now - last_college[lg] >= (COLLEGE_LIVE if hot else COLLEGE_IDLE).total_seconds():
+                        last_college[lg] = now
+                        try:
+                            cday = await self.poll_ncaa(lg)
+                        except Exception as exc:
+                            log.warning("%s scoreboard failed: %r", lg, exc)
+                            continue
+                        busy = busy or _busy(cday)
+                        if self.alerts:
+                            await self.alerts.on_day(cday)
                 self.busy = busy
             except Exception:
                 log.exception("scoreboard loop error")
@@ -694,6 +800,12 @@ def _day_ttl(day: dict, date: str) -> timedelta | None:
     if any(g["state"] == "live" for g in games):
         return timedelta(seconds=LIVE_POLL * 3)
     return timedelta(minutes=10 if date <= today else 60)
+
+
+def _college_day_ttl(day: dict, date: str) -> timedelta | None:
+    if any(g["state"] == "live" for g in day.get("games") or []):
+        return COLLEGE_LIVE
+    return _day_ttl(day, date)
 
 
 def _age(fetched: str | None) -> timedelta:

@@ -7,6 +7,8 @@ from __future__ import annotations
 import re
 import sqlite3
 import threading
+
+from . import teams
 from datetime import date as Date, datetime, timedelta, timezone
 
 SCHEMA = """
@@ -47,7 +49,7 @@ def _now() -> str:
 
 
 def league(g: dict) -> str:
-    return "pwhl" if g.get("league") == "pwhl" else "nhl"
+    return g.get("league") if g.get("league") in ("pwhl", "ncaam", "ncaaw") else "nhl"
 
 
 # ---- people --------------------------------------------------------------------------------
@@ -73,7 +75,7 @@ def rivals(email: str, g: dict, people: dict[str, dict]) -> list[dict]:
     for e, p in people.items():
         if e == email:
             continue
-        main = next((t for t in p["favorites"] if t.startswith("PW-") == (league(g) == "pwhl")), None)
+        main = next((t for t in p["favorites"] if teams.league_of(t) == league(g)), None)
         if main in other:
             out.append({"name": p["name"], "team": main})
     return out

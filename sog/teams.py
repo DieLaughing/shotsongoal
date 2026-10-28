@@ -1,6 +1,9 @@
 """The 32 clubs. Colours stand in for logos (no official NHL marks on the site); approximate is fine."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 TEAMS = {
     "ANA": ("Anaheim", "Ducks", "#F47A38"),
     "BOS": ("Boston", "Bruins", "#FFB81C"),
@@ -65,13 +68,22 @@ DIVISION_OF = {a: d for d, teams in DIVISIONS.items() for a in teams}
 
 # Light colours need dark text on top of them.
 LIGHT = {"BOS", "NSH", "PIT", "SEA", "UTA", "LAK", "VGK", "PW-TOR", "PW-SJ"}
-ALL = {**TEAMS, **PWHL}
+
+# College teams, keyed "CM-<ESPN id>" (men) / "CW-<ESPN id>" (women): sog/data/college.json, from
+# tools/college_teams.py. (place, name, colour) like the others, with the school as the name: mascots repeat.
+COLLEGE_INFO = {f"{prefix}{t['id']}": {**t, "league": lg}
+                for lg, prefix in (("ncaam", "CM-"), ("ncaaw", "CW-"))
+                for t in json.loads((Path(__file__).resolve().parent / "data" / "college.json").read_text())[lg]}
+COLLEGE = {k: ("", t["school"], t["color"]) for k, t in COLLEGE_INFO.items()}
+ALL = {**TEAMS, **PWHL, **COLLEGE}
 
 
 def league_of(key: str) -> str:
-    return "pwhl" if key.startswith("PW-") else "nhl"
+    return "pwhl" if key.startswith("PW-") else "ncaam" if key.startswith("CM-") else "ncaaw" if key.startswith("CW-") else "nhl"
 
 
 def as_list() -> list[dict]:
-    return [{"abbr": a, "code": a.removeprefix("PW-"), "league": league_of(a), "place": p, "name": n, "color": c,
-             "light": a in LIGHT, "div": DIVISION_OF.get(a)} for a, (p, n, c) in ALL.items()]
+    out = [{"abbr": a, "code": a.removeprefix("PW-"), "league": league_of(a), "place": p, "name": n, "color": c,
+            "light": a in LIGHT, "div": DIVISION_OF.get(a)} for a, (p, n, c) in {**TEAMS, **PWHL}.items()]
+    return out + [{"abbr": k, "code": t["code"], "league": t["league"], "place": "", "name": t["school"], "full": t["full"],
+                   "color": t["color"], "light": t["light"], "div": t["conf"]} for k, t in COLLEGE_INFO.items()]

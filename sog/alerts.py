@@ -17,6 +17,7 @@ log = logging.getLogger("sog.alerts")
 KINDS = ("start", "goals", "final", "trades", "fights")
 OFF_BY_DEFAULT = {"fights"}  # opt-in
 TRADE_MAX_AGE = timedelta(days=2)
+GAME_PATH = {"nhl": "#/game/{gid}", "pwhl": "#/pgame/{gid}", "ncaam": "#/cgame/ncaam/{gid}", "ncaaw": "#/cgame/ncaaw/{gid}"}
 
 
 def prefs(settings: dict) -> dict:
@@ -45,29 +46,29 @@ class Alerts:
     # ---- what happened -------------------------------------------------------------------
     def game_events(self, day: dict) -> list[dict]:
         out = []
-        pw = day.get("league") == "pwhl"
+        league = day.get("league") or "nhl"
         for g in day.get("games") or []:
             a, h, gid = g["away"], g["home"], g["id"]
             teams = [a["abbr"], h["abbr"]]
             code = lambda t: t.get("code") or t["abbr"]  # "BOS", not "PW-BOS"
-            # PWHL and NHL ids can collide, so PWHL keys and links carry the league.
-            gkey = f"pwhl:{gid}" if pw else gid
-            url = f"{self.base}/#/pgame/{gid}" if pw else f"{self.base}/#/game/{gid}"
+            # League ids can collide, so other leagues' keys and links carry the league.
+            gkey = gid if league == "nhl" else f"{league}:{gid}"
+            url = f"{self.base}/{GAME_PATH.get(league, '#/game/').format(gid=gid)}"
             matchup = f"{a['name'] or code(a)} at {h['name'] or code(h)}"
             if g["state"] in ("live", "final"):
                 out.append({"key": f"start:{gkey}", "kind": "start", "teams": teams, "game": g, "url": url,
                             "title": f"Puck drop: {matchup}", "body": None})
             for x in g.get("goals") or []:
                 tags = [t for t in (x["strength"] if x["strength"] != "EV" else "", "EN" if x["empty_net"] else "") if t]
-                if not pw:
+                if league == "nhl":
                     tags += [m for m in [self._milestone(g, x)] if m]
                 out.append({"key": f"goal:{gkey}:{x['key']}", "kind": "goals", "teams": teams, "game": g, "url": url,
                             "scorer_team": x["team"],
-                            "title": f"{x['team'].removeprefix('PW-')} goal · {code(a)} {x['away']}-{x['home']} {code(h)}",
-                            "body": f"{x['scorer']}" + (f" ({x['total']})" if x.get("total") else "")
-                                    + f" · {x['period']} {x['time']}" + (f" · {'/'.join(tags)}" if tags else "")})
+                            "title": f"{code(a if x['team'] == a['abbr'] else h)} goal · {code(a)} {x['away']}-{x['home']} {code(h)}",
+                            "body": " · ".join(p for p in (f"{x['scorer']}" + (f" ({x['total']})" if x.get("total") else ""),
+                                                           f"{x['period']} {x['time']}".strip(), "/".join(tags)) if p)})
             if g["state"] == "final" and a.get("score") is not None:
-                extra = f" ({g['outcome']})" if g.get("outcome") not in (None, "REG") else ""
+                extra = f" ({g['outcome']})" if g.get("outcome") not in (None, "REG", "T") else ""
                 out.append({"key": f"final:{gkey}", "kind": "final", "teams": teams, "game": g, "url": url,
                             "title": f"Final{extra}: {code(a)} {a['score']}, {code(h)} {h['score']}",
                             "body": f"{matchup}"})
@@ -169,6 +170,8 @@ class Alerts:
                 body = e["body"]
                 if e["kind"] == "start" and e["game"].get("league") == "pwhl":
                     body = "Where to watch: thepwhl.com"
+                elif e["kind"] == "start" and e["game"].get("networks"):
+                    body = f"Watch: {' or '.join(e['game']['networks'][:2])}"
                 elif e["kind"] == "start":
                     w = watch.watch_for(e["game"], settings.get("local"), settings.get("services"), settings.get("country"))
                     body = f"Watch: {w['app']}" if w.get("app") else w.get("why")

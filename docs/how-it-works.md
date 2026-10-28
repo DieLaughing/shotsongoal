@@ -1,6 +1,6 @@
 # Shots on Goal: how it works
 
-Self-hosted NHL + PWHL hub for a person and their friends: scores, game pages with shot maps, standings, the Wire
+Self-hosted NHL + PWHL + college hockey hub for a person and their friends: scores, game pages with shot maps, standings, the Wire
 (trades and news), alerts, calendar feeds, ticket links and US/Canada where-to-watch. Sibling app of Lights Out (racing).
 These notes explain how every part works, where data comes from and the quirks of each source.
 
@@ -71,7 +71,7 @@ How the app moves (what animates, what must hold still, timings, rules for new U
 - "Your team" cards (top of Tonight, default slate only): /api/myteams -> sog/home.py team_summary per favourite from
   the cached team schedule + standings (latest season only: a 60-day gap splits seasons; off-season = last season's
   place, no streak/week). Cards tinted with the team colour; live/final state comes from the slate. Kept 5 min client-side.
-- Spoiler-free: settings.spoilers {teams, games, seen} (game keys nhl:<id> / pwhl:<id>), rules in sog/spoilers.py,
+- Spoiler-free: settings.spoilers {teams, games, seen} (game keys <league>:<id>: nhl, pwhl, ncaam, ncaaw), rules in sog/spoilers.py,
   mirrored by spoilerHidden() in web/app.js; /api/hidden lists them for pages. Started games from today/yesterday
   only. Hidden = no score on cards/hero, game page cover, Standings/team page covered when a hidden game is final, Wire items about it after puck drop
   blurred; alerts.py skips goal/final pushes (puck drop still sent).
@@ -155,10 +155,32 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   Standings: W = regulation_wins, OTW = non_reg_wins, OTL = non_reg_losses, L = losses (reg_losses/ot_losses don't add
   up). Before a season starts, standings, roster and stats use last season. Where to watch = the league's page only.
   Wire: THN women's RSS, The Ice Garden (only stories naming a PWHL nickname or "PWHL"), PWHL Bluesky list
-  (insider.league column). UI: NHL | PWHL | Both pill in the header (per device, `?league=` in a URL sets it); Both =
+  (insider.league column). UI: NHL | PWHL | NCAA | All ("both") pill in the header (per device, `?league=` in a URL sets it); Both =
   Tonight and Wire in separate sections, Standings/Teams get a one-league picker; PWHL mode uses Boston Fleet colours
   (#163F36 / #B3DFD7 dark). Every 6 h the app compares the league's team list (teamsbyseason) with teams.PWHL and
   pushes the admin via ntfy once per change (new nickname, rename, unknown team).
+- College (NCAA men's + women's): sog/ncaa.py = ESPN site API (site.api.espn.com .../hockey/mens-college-hockey and
+  womens-college-hockey) into the NHL shapes. Team keys "CM-<ESPN id>" / "CW-<ESPN id>" (ESPN ids are per school, so a
+  school's two teams share an id and a logo). sog/data/college.json (teams.COLLEGE_INFO: code, school, full name,
+  conference, colour) is built by tools/college_teams.py: ESPN has no college colours (each is the logo's main colour)
+  and no women's conferences (WOMENS_CONF, recheck each season); a team the standings list under a different id than
+  the team list (Minnesota State women) takes the standings id, which is the one games use. Rerun it each season.
+  ESPN gives scores, clock, goals per period (`periods`), records, poll ranks (curatedRank, 99 = unranked; else the
+  saved `<lg>:ranks` poll) and streams (`networks`), but NO scorers, shots, players or play-by-play: the game page is
+  the scoreboard + by period + each team's last five, with a "Box score on ESPN" button (g.espn). The summary's
+  `news` is the sport's latest stories, not the game's: not used. Days = scoreboard?dates=YYYYMMDD (`<lg>:day:<date>`,
+  prev/next from the league calendar); game page = summary (`<lg>:game:<id>`) with state/score from the saved day;
+  team page = teams/<id>/schedule (no roster/news tabs); standings = overall records per conference sorted by
+  win % (ESPN's college points are always 0; no conference standings). Ties stand (outcome "T"; records W-L-T, an OT
+  loss is an L). The scoreboard loop polls each college league every COLLEGE_LIVE 15 s while busy, else COLLEGE_IDLE
+  10 min; goal alerts come from the score (ncaa.goals: one key per team per goal, no scorer). Where to watch =
+  watch.college + networks.yaml `college:` (no blackouts; the listed stream you have leads; B1G+/FloHockey/NCHC.tv are
+  services with `college: true`, shown in Settings only to people who follow or show college). No Pick'em, odds,
+  Wire, leaders or players for college. UI: NCAA = both college leagues; All = every league, where each college
+  slate's non-favourite games fold into a "Other NCAA men games (n)" <details> so the NHL isn't buried; Standings and
+  Leaders pick one league from those shown (pageLeague). College logos are their own sheet, /img/college-logos.css
+  (Division I only, ~120 KB gz), loaded only by people who show or follow college; the team picker folds each
+  college league by conference.
 - Tickets: NHL games carry `tickets` = the feed's ticketsLink (Ticketmaster event); PWHL = the scorebar's TicketUrl,
   else the league's tickets page for upcoming games. Shown only before puck drop.
 

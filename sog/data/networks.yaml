@@ -14,6 +14,9 @@ services:
   abc:        { label: "ABC (antenna or TV login)",        url: "https://abc.com/watch-live" }
   tnt:        { label: "TNT / truTV via TV login, or HBO Max", url: "https://www.hbomax.com/sports" }
   nhln:       { label: "NHL Network via a TV login" }
+  b1g_plus:   { label: "B1G+ (Big Ten college games)", url: "https://www.bigtenplus.com/", college: true }
+  flo:        { label: "FloHockey / FloSports (college games)", url: "https://www.flohockey.tv/", college: true }
+  nchc_tv:    { label: "NCHC.tv (NCHC college games)", url: "https://nchc.tv/", college: true }
   regional:   { label: "My local team's channel (TV login or team app)" }
 
 # National US networks. "exclusive" = when listed with no home/away channels, every US viewer must use it.
@@ -35,6 +38,21 @@ regional:
   NESN:        { app: "NESN 360", url: "https://watch.nesn.com/" }
   Prime Video: { app: "Prime Video", url: "https://www.primevideo.com/" }
   SCRIPPS:     { app: "Scripps (free, over the air)" }
+
+# ---- College (NCAA men's and women's) ------------------------------------------------------------------------------
+# ESPN lists one or two streams per college game, by these names (surveyed Oct 2026: ESPN+ 88, B1G+ 24, FloSports 19,
+# NCHCHockey.com 19, Midco 24 of ~200 games). No blackouts: whatever's listed is where it is. Unlisted names show as-is.
+college:
+  ESPN+:             { service: espn_plus, app: "ESPN+" }
+  ESPN:              { service: espn, app: "ESPN app" }
+  ESPN2:             { service: espn, app: "ESPN app" }
+  ESPNU:             { service: espn, app: "ESPN app" }
+  B1G+:              { service: b1g_plus, app: "B1G+" }
+  FloSports:         { service: flo, app: "FloHockey" }
+  FloHockey:         { service: flo, app: "FloHockey" }
+  NCHCHockey.com:    { service: nchc_tv, app: "NCHC.tv" }
+  Midco Sports Net:  { app: "Midco Sports", url: "https://www.midcosportsplus.com/" }
+  Midco Sports Plus: { app: "Midco Sports+", url: "https://www.midcosportsplus.com/" }
 
 # ---- Canada (settings.country = CA) ------------------------------------------------------------------------------
 # Built from every 2026-27 regular-season game's Canadian tvBroadcasts (surveyed 2026-10-18) and the 2026-27 deals:

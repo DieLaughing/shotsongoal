@@ -5,13 +5,20 @@ let ME = null;          // /api/me
 let TEAMS = {};         // abbr -> {place, name, color, light}
 let CHANGES = [];       // What's new entries, newest first (/api/changes)
 let STANDINGS = {};     // per league: team names, records and divisions
-// Which league the app shows: nhl | pwhl | both (Tonight and the Wire only; other pages pick one). Per device.
+// Which leagues the app shows: nhl | pwhl | ncaa (college, men's and women's) | both (the "All" pill). Per device.
 let LEAGUE = (() => { try { return localStorage.getItem("league") || "nhl"; } catch { return "nhl"; } })();
-const LEAGUE_NAME = { nhl: "NHL", pwhl: "PWHL" };
-// Standings and Teams always show one league; in Both mode they remember their own pick.
+const LEAGUE_NAME = { nhl: "NHL", pwhl: "PWHL", ncaam: "NCAA men", ncaaw: "NCAA women" };
+const COLLEGE = ["ncaam", "ncaaw"];
+const isCollege = lg => COLLEGE.includes(lg);
+const shownLeagues = () => ({ nhl: ["nhl"], pwhl: ["pwhl"], ncaa: COLLEGE, both: ["nhl", "pwhl", ...COLLEGE] }[LEAGUE] || ["nhl"]);
+// Pick'em and the Wire are NHL and PWHL only (no college odds or news feeds): in college mode they show both.
+const proLeagues = () => { const l = shownLeagues().filter(x => !isCollege(x)); return l.length ? l : ["nhl", "pwhl"]; };
+// Standings and Leaders show one league at a time; with several shown they remember their own pick.
 function pageLeague() {
-  if (LEAGUE !== "both") return LEAGUE;
-  try { return localStorage.getItem("pageLeague") || "nhl"; } catch { return "nhl"; }
+  const opts = shownLeagues();
+  let l = null;
+  try { l = localStorage.getItem("pageLeague"); } catch { /* fine */ }
+  return opts.includes(l) ? l : opts[0];
 }
 function setLeague(l) {
   LEAGUE = l;
@@ -22,9 +29,15 @@ function setLeague(l) {
 function applyLeague() {
   document.body.classList.toggle("league-pwhl", LEAGUE === "pwhl");
   document.querySelectorAll("[data-league]").forEach(b => b.classList.toggle("on", b.dataset.league === LEAGUE));
+  applyLogos();
 }
-const leagueOf = abbr => (abbr || "").startsWith("PW-") ? "pwhl" : "nhl";
-const gameHref = g => g.league === "pwhl" ? `#/pgame/${g.id}` : `#/game/${g.id}`;
+const leagueOf = abbr => { const a = abbr || ""; return a.startsWith("PW-") ? "pwhl" : a.startsWith("CM-") ? "ncaam" : a.startsWith("CW-") ? "ncaaw" : "nhl"; };
+const gameHref = g => g.league === "pwhl" ? `#/pgame/${g.id}` : isCollege(g.league) ? `#/cgame/${g.league}/${g.id}` : `#/game/${g.id}`;
+const gameApi = (league, id) => league === "pwhl" ? `/api/pwhl/game/${encodeURIComponent(id)}`
+  : isCollege(league) ? `/api/college/${league}/game/${encodeURIComponent(id)}` : `/api/game/${encodeURIComponent(id)}`;
+// "Hockey East · NCAA men", "PWHL", "Atlantic"
+const leagueLabel = a => { const lg = leagueOf(a), div = TEAMS[a]?.div;
+  return lg === "pwhl" ? "PWHL" : isCollege(lg) ? [div, LEAGUE_NAME[lg]].filter(Boolean).join(" · ") : div || "NHL"; };
 let refreshTimer = null;
 let INSTALL_PROMPT = null;  // Android/desktop Chrome hand us this so we can show a real Install button
 
@@ -73,7 +86,7 @@ async function api(path, opts = {}) {
 
 // What each write can change, as GET_CACHE key prefixes: those copies go, every other page keeps its copy. A write
 // that isn't listed (tests/test_cache_drops.py checks they all are) drops every copy: never stale, only slower.
-const GAME_KEYS = ["/api/game", "/api/pwhl/game"];   // the day lists (/api/games) and game pages
+const GAME_KEYS = ["/api/game", "/api/pwhl/game", "/api/college"];   // the day lists (/api/games) and game pages
 const WRITE_DROPS = {
   "/api/pickem": ["/api/pickem"], "/api/watching": GAME_KEYS, "/api/react": GAME_KEYS, "/api/report": [],
   "/api/request": ["/api/me"], "/api/bug": ["/api/bugs"], "/api/push": ["/api/push"], "/api/admin": ["/api/admin"],
@@ -125,7 +138,7 @@ async function fast(path, rerender, quiet = false) {
 // tab after the first opens from the phone's copy.
 async function prefetch() {
   if (ME?.status !== "approved") return;
-  const leagues = LEAGUE === "both" ? ["nhl", "pwhl"] : [LEAGUE];
+  const leagues = proLeagues();
   let wire = { kind: "", mine: false };
   try { wire = { ...wire, ...JSON.parse(localStorage.getItem("wire") || "{}") }; } catch { /* defaults */ }
   const paths = [`/api/pickem?leagues=${leagues.join(",")}`,
@@ -149,18 +162,26 @@ const favs = () => new Set(ME?.settings?.favorites || []);
 function mark(abbr, big = false) {
   const t = TEAMS[abbr] || {};
   const logo = ME?.settings?.marks === "logos" && TEAMS[abbr] ? ` lg-${abbr}` : "";
-  return `<span class="mark${t.light ? " light" : ""}${big ? " big" : ""}${logo}" style="--c:${esc(t.color || "#666")}"${logo ? ` title="${esc(fullName(abbr))}"` : ""}>${esc(t.code || abbr)}</span>`;
+  return `<span class="mark${t.light ? " light" : ""}${big ? " big" : ""}${logo}" style="--c:${esc(t.color || "#666")}"${logo ? ` title="${esc(fullName(abbr))}"` : ""}>${esc((t.code || abbr).slice(0, 4))}</span>`;
 }
 function applyLogos() {
-  let link = document.getElementById("logos-css");
-  if (ME?.settings?.marks !== "logos") { link?.remove(); return; }
-  const href = ME.logos || "/img/logos.css?v=new";   // not built yet: this one waits for the build
-  if (!link) { link = Object.assign(document.createElement("link"), { id: "logos-css", rel: "stylesheet" }); document.head.append(link); }
-  if (link.getAttribute("href") !== href) link.href = href;
+  if (!ME) return;
+  const on = ME.settings?.marks === "logos";
+  // College logos (~110 schools) are their own sheet, loaded only by people who show or follow college hockey.
+  const college = on && (shownLeagues().some(isCollege) || (ME.settings.favorites || []).some(a => isCollege(leagueOf(a))));
+  for (const [id, want, href] of [["logos-css", on, ME.logos || "/img/logos.css?v=new"],   // not built yet: this one waits for the build
+    ["college-logos-css", college, ME.college_logos || "/img/college-logos.css?v=new"]]) {
+    let link = document.getElementById(id);
+    if (!want) { link?.remove(); continue; }
+    if (!link) { link = Object.assign(document.createElement("link"), { id, rel: "stylesheet" }); document.head.append(link); }
+    if (link.getAttribute("href") !== href) link.href = href;
+  }
 }
 
 const teamName = abbr => TEAMS[abbr]?.name || abbr;
-const fullName = abbr => TEAMS[abbr] ? `${TEAMS[abbr].place} ${TEAMS[abbr].name}` : abbr;
+const fullName = abbr => TEAMS[abbr] ? TEAMS[abbr].full || `${TEAMS[abbr].place} ${TEAMS[abbr].name}` : abbr;
+// A college team's poll rank, before its name.
+const rankTag = side => side?.rank ? `<span class="rk">${side.rank}</span>` : "";
 
 const time = iso => new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
@@ -185,7 +206,7 @@ function statusCell(g) {
     return `<div class="status"><div class="live">LIVE</div><div class="t">${esc(where)}</div>${sit}</div>`;
   }
   if (g.state === "final") {
-    const extra = g.outcome && g.outcome !== "REG" ? `/${g.outcome}` : "";
+    const extra = g.outcome === "T" ? " · Tie" : g.outcome && g.outcome !== "REG" ? `/${g.outcome}` : "";
     return `<div class="status"><div class="t">Final${esc(extra)}</div></div>`;
   }
   if (g.state === "postponed") return `<div class="status"><div class="t">Postponed</div></div>`;
@@ -215,6 +236,7 @@ function watchBlock(g, report) {
   const btns = [
     ...links.map((l, i) => `<a class="btn${i ? "" : " primary"}" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`),
     g.recap ? `<a class="btn" href="${esc(g.recap)}" target="_blank" rel="noopener">Recap on NHL.com ↗</a>` : "",
+    g.espn && g.state !== "pre" ? `<a class="btn" href="${esc(g.espn)}" target="_blank" rel="noopener">Box score on ESPN ↗</a>` : "",
     g.state === "pre" && g.tickets ? `<a class="btn" href="${esc(g.tickets)}" target="_blank" rel="noopener">Tickets ↗</a>` : ""].join("");
   if (!ctx && !btns && !report) return "";
   return `<div class="gsec">
@@ -224,7 +246,7 @@ function watchBlock(g, report) {
 // ---- spoiler-free ------------------------------------------------------------------------------
 // settings.spoilers = {teams: always hidden, games: "watching later", seen: watched since}. Mirrors sog/spoilers.py.
 // Only started games from today or yesterday are hidden, so it switches itself off the day after.
-const spKey = g => `${g.league === "pwhl" ? "pwhl" : "nhl"}:${g.id}`;
+const spKey = g => `${g.league || "nhl"}:${g.id}`;
 const peeked = new Set();         // "Show it now": for this visit only
 const SPOIL_GAMES = new Map();    // key -> game, for the buttons
 const isoDay = (offset = 0) => { const d = new Date(); d.setDate(d.getDate() + offset); return d.toLocaleDateString("en-CA"); };
@@ -275,9 +297,9 @@ function gameCard(g, fav) {
   // The watch line sits outside the game link so its own link (ESPN+, NESN 360...) can be tapped.
   return `<div class="game${isFav ? " fav" : ""}">
     <a class="body" href="${gameHref(g)}">
-      <div class="team-line${lost(a)}">${mark(a.abbr)}<span class="nm">${esc(a.name || teamName(a.abbr))}</span>${sc(a)}</div>
+      <div class="team-line${lost(a)}">${mark(a.abbr)}<span class="nm">${rankTag(a)}${esc(a.name || teamName(a.abbr))}</span>${sc(a)}</div>
       ${hide ? `<div class="status"><div class="t">🙈 Hidden</div></div>` : statusCell(g)}
-      <div class="team-line${lost(h)}">${mark(h.abbr)}<span class="nm">${esc(h.name || teamName(h.abbr))}</span>${sc(h)}</div>
+      <div class="team-line${lost(h)}">${mark(h.abbr)}<span class="nm">${rankTag(h)}${esc(h.name || teamName(h.abbr))}</span>${sc(h)}</div>
     </a>
     ${cardWatch(g.watch, g)}${oddsLine(g)}${watchersLine(g)}
   </div>`;
@@ -490,9 +512,10 @@ async function standings(league = "nhl") {
 }
 
 function leaguePicker(current) {
-  // Only shown in Both mode, on pages that always show one league.
-  if (LEAGUE !== "both") return "";
-  return `<div class="seg">${["nhl", "pwhl"].map(l => `<button data-page-league="${l}" class="${l === current ? "on" : ""}">${LEAGUE_NAME[l]}</button>`).join("")}</div>`;
+  // Only when the pill shows more than one league, on pages that always show one.
+  const opts = shownLeagues();
+  if (opts.length < 2) return "";
+  return `<div class="seg">${opts.map(l => `<button data-page-league="${l}" class="${l === current ? "on" : ""}">${LEAGUE_NAME[l]}</button>`).join("")}</div>`;
 }
 function bindLeaguePicker(again) {
   view.querySelectorAll("[data-page-league]").forEach(b => b.addEventListener("click", () => {
@@ -596,7 +619,7 @@ async function loadMyTeams() {
 const RESULT_WORD = { W: "W", L: "L", OT: "OTL" };
 const STREAK_WORD = { W: "won", L: "lost", OT: "lost in OT" };
 function streakText(code) {
-  const m = /^(W|L|OT)(\d+)$/.exec(code || "");
+  const m = /^(W|L|OT)(\d+)$/.exec(code || "");   // a run of ties ("T2") isn't worth a chip
   if (!m || m[2] === "1") return "";
   return m[1] === "OT" ? `${m[2]} OT losses in a row` : `${STREAK_WORD[m[1]][0].toUpperCase()}${STREAK_WORD[m[1]].slice(1)} ${m[2]} straight`;
 }
@@ -617,9 +640,9 @@ function heroCard(c, live) {
       kicker = "Live now";
       right = `<b class="hero-sc">${side.us.score ?? 0}–${side.them.score ?? 0}</b><span>${esc(g.intermission ? `${g.period} INT` : `${g.period} ${g.clock || ""}`)}</span>`;
     } else if (g.state === "final") {
-      const won = side.us.score > side.them.score;
+      const won = side.us.score > side.them.score, extra = g.outcome && !["REG", "T"].includes(g.outcome);
       kicker = "Final tonight";
-      right = `<b class="hero-sc">${won ? "W" : g.outcome && g.outcome !== "REG" ? "OTL" : "L"} ${side.us.score}–${side.them.score}</b>${g.outcome && g.outcome !== "REG" ? `<span>${esc(g.outcome)}</span>` : ""}`;
+      right = `<b class="hero-sc">${side.us.score === side.them.score ? "T" : won ? "W" : extra && !isCollege(g.league) ? "OTL" : "L"} ${side.us.score}–${side.them.score}</b>${extra ? `<span>${esc(g.outcome)}</span>` : ""}`;
     } else {
       kicker = today ? "Tonight" : `Next game · ${shortDate(g.date)}`;
       right = `<b class="hero-sc">${g.start ? esc(time(g.start)) : "TBD"}</b>`;
@@ -672,19 +695,19 @@ function heroes(data, leagues, slateGames) {
     + (cards.length > 1 ? `<div class="hero-dots" aria-hidden="true">${cards.map((_, i) => `<span${i === Math.min(heroAt, cards.length - 1) ? ' class="on"' : ""}></span>`).join("")}</div>` : "");
 }
 let heroAt = 0;   // the team card swiped into view, kept across the live refresh
+const foldOpen = new Set();   // college slates opened on Tonight in All mode, kept across the live refresh
 
 async function tonightView(date, quiet = false) {
   setNav("tonight");
   if (!quiet) { showLoading(`Loading games…`); heroAt = 0; }
-  const leagues = LEAGUE === "both" ? ["nhl", "pwhl"] : [LEAGUE];
+  const leagues = shownLeagues();
   let days, mineData = null;
   try {
-    // Both leagues: the NHL's date leads, so the PWHL slate is for the same day.
+    // Several leagues: the first one's date leads, so the others' slates are for the same day.
     const mine = date ? null : loadMyTeams();
     const again = () => tonightView(date, true);
     const first = await fast(`/api/games?league=${leagues[0]}${date ? `&date=${encodeURIComponent(date)}` : ""}`, again, quiet);
-    days = [first];
-    if (leagues[1]) days.push(await fast(`/api/games?league=${leagues[1]}&date=${encodeURIComponent(date || first.date)}`, again, quiet));
+    days = [first, ...await Promise.all(leagues.slice(1).map(l => fast(`/api/games?league=${l}&date=${encodeURIComponent(date || first.date)}`, again, quiet)))];
     mineData = await mine;
   } catch (e) {
     view.innerHTML = failed(e);
@@ -701,8 +724,14 @@ async function tonightView(date, quiet = false) {
     const rest = games.filter(g => !mine.includes(g));
     rest.sort((x, y) => order(x) - order(y) || (x.start || "").localeCompare(y.start || ""));
     const head = leagues.length > 1 ? `<div class="league-head ${league}">${LEAGUE_NAME[league]}</div>` : "";
-    if (!(day.games || []).length) return head + `<div class="empty">No ${LEAGUE_NAME[league]} games this day.</div>`;
-    return head + section("Your teams", mine) + section(mine.length ? "Around the league" : "All games", rest);
+    if (!(day.games || []).length) return LEAGUE === "both" && isCollege(league) ? "" : head + `<div class="empty">No ${LEAGUE_NAME[league]} games this day.</div>`;
+    // With every league showing, a college night (20+ games) folds away behind its count; your teams stay out.
+    if (LEAGUE === "both" && isCollege(league) && rest.length) {
+      const open = foldOpen.has(league) ? " open" : "";
+      return head + section("Your teams", mine) + `<details class="more-games" data-fold="${league}"${open}><summary>${mine.length ? "Other" : "All"} ${esc(LEAGUE_NAME[league])} games (${rest.length})</summary>
+        <div class="card">${rest.map(g => gameCard(g, fav)).join("")}</div></details>`;
+    }
+    return head + section("Your teams", mine) + section(mine.length ? (isCollege(league) ? "Around college hockey" : "Around the league") : "All games", rest);
   };
   const dates = days.map(d => d.date).filter(Boolean);
   const day = { date: days[0].date || dates[0],
@@ -719,6 +748,7 @@ async function tonightView(date, quiet = false) {
     </div>
     ${days.map((d, i) => slate(d, leagues[i])).join("")}`, quiet);
   const on = listen();
+  view.addEventListener("toggle", e => { const f = e.target.dataset?.fold; if (f) e.target.open ? foldOpen.add(f) : foldOpen.delete(f); }, { ...on, capture: true });
   // The dots under swipeable team cards follow the card in view. scroll doesn't bubble: listen on its way down.
   view.addEventListener("scroll", e => {
     const strip = e.target;
@@ -738,7 +768,7 @@ async function tonightView(date, quiet = false) {
   // Warm your team cards' game pages on the server, so tapping one opens straight away.
   if (!quiet) setTimeout(() => (mineData?.teams || []).forEach(c => {
     const g = all.find(x => x.away.abbr === c.abbr || x.home.abbr === c.abbr);
-    if (g && g.state !== "postponed") fetch(g.league === "pwhl" ? `/api/pwhl/game/${g.id}` : `/api/game/${g.id}`).catch(() => {});
+    if (g && g.state !== "postponed") fetch(gameApi(g.league || "nhl", g.id)).catch(() => {});
   }), 1500);
   if (all.some(g => g.state === "live" || (g.state === "pre" && Date.parse(g.start) - Date.now() < 30 * 60000))) {
     autoRefresh(q => tonightView(date, q), LIVE_REFRESH);
@@ -751,7 +781,7 @@ async function tonightView(date, quiet = false) {
 async function pickemView(date, quiet = false) {
   setNav("picks");
   if (!quiet) showLoading(`Loading Pick'em…`);
-  const leagues = LEAGUE === "both" ? ["nhl", "pwhl"] : [LEAGUE];
+  const leagues = proLeagues();
   let d, hidden;
   try {
     [d, hidden] = await Promise.all([
@@ -993,10 +1023,9 @@ async function gameView(id, quiet = false, league = "nhl") {
   if (gameUi.id !== id) gameUi = { id, shots: "all", rx: null };
   if (!quiet) showLoading(`Loading game…`);
   let d;
-  const path = league === "pwhl" ? `/api/pwhl/game/${encodeURIComponent(id)}` : `/api/game/${encodeURIComponent(id)}`;
-  try { d = await fast(path, () => gameView(id, true, league), quiet); } catch (e) { view.innerHTML = failed(e); return; }
+  try { d = await fast(gameApi(league, id), () => gameView(id, true, league), quiet); } catch (e) { view.innerHTML = failed(e); return; }
   const g = d.game, a = g.away.abbr, h = g.home.abbr;
-  if (league === "pwhl") g.league = "pwhl";
+  if (league !== "nhl") g.league = league;
   if (spoilerHidden(g)) {
     view.innerHTML = `${backLink("#/")}<div class="card pad spoil-cover">
       <div class="spoil-teams">${mark(a, true)}<span>vs</span>${mark(h, true)}</div>
@@ -1011,7 +1040,7 @@ async function gameView(id, quiet = false, league = "nhl") {
   const ac = TEAMS[a]?.color || "#888", hc = TEAMS[h]?.color || "#888";
   let state = "";
   if (g.state === "live") state = `<span class="live">LIVE</span> ${esc(g.intermission ? `${g.period} intermission` : `${g.period} · ${g.clock || ""}`)}`;
-  else if (g.state === "final") state = `Final${g.outcome && g.outcome !== "REG" ? ` (${esc(g.outcome)})` : ""}`;
+  else if (g.state === "final") state = g.outcome === "T" ? `Final · Tie` : `Final${g.outcome && g.outcome !== "REG" ? ` (${esc(g.outcome)})` : ""}`;
   else if (g.state === "postponed") state = "Postponed";
   else state = g.start ? `${esc(shortDate(g.date))} · ${esc(time(g.start))}` : "Time TBD";
   const showScore = g.state === "live" || g.state === "final";
@@ -1031,13 +1060,13 @@ async function gameView(id, quiet = false, league = "nhl") {
     return `<div class="rxs">${chips}<button class="rxc add" data-rxopen="${esc(key)}" aria-label="React">${chips ? "＋" : "🙂＋"}</button></div>`;
   };
   const rxPicker = key => S.emoji.map(e => `<button class="rxc pick${S.mine[key] === e ? " mine" : ""}" data-rx="${e}" data-ev="${esc(key)}">${e}</button>`).join("");
-  const side = (t, abbr) => `<a class="side" href="#/team/${abbr}">${mark(abbr, true)}<span class="nm">${esc(t.name || teamName(abbr))}</span></a>`;
+  const side = (t, abbr) => `<a class="side" href="#/team/${abbr}">${mark(abbr, true)}<span class="nm">${rankTag(t)}${esc(t.name || teamName(abbr))}</span>${t.record ? `<span class="muted small">${esc(t.record)}</span>` : ""}</a>`;
 
   // Top card in three groups: the game itself, where to watch it, and you + friends (watching now or later).
   // On touch screens the buttons sit on the side of the hand picked in Settings > Display; elsewhere they're centred.
   const upcoming = g.state !== "final" && g.state !== "postponed";
   const sit = d.situation && g.state === "live" && !g.intermission ? `<div class="sitpill">${esc(d.situation.text)}</div>` : "";
-  const report = g.state !== "final" && league !== "pwhl" ? `<button class="linkish" id="report">Wrong channel?</button>` : "";
+  const report = g.state !== "final" && league === "nhl" ? `<button class="linkish" id="report">Wrong channel?</button>` : "";
   const social = upcoming || friendsLine ? `<div class="gsec gsec-row">
       ${upcoming ? `<button class="btn small${S.me_watching ? " primary" : ""}" id="watching">${S.me_watching ? "👀 You're watching" : "👀 I'm watching"}</button>
         ${spoilerMarked(g) ? spoilButton("seen", g, "🙈 Spoiler-free on · turn off") : spoilButton("later", g, "🙈 Watching later")}` : ""}
@@ -1050,7 +1079,7 @@ async function gameView(id, quiet = false, league = "nhl") {
       ${side(g.home, h)}
     </div>
     ${watchBlock(g, report)}
-    ${league === "pwhl" ? "" : oddsBlock(g, ac, hc)}
+    ${league === "nhl" ? oddsBlock(g, ac, hc) : ""}
     ${social}
   </div>
   ${d.recap ? `<p class="recap">${esc(d.recap)}</p>` : ""}`;
@@ -1072,14 +1101,15 @@ async function gameView(id, quiet = false, league = "nhl") {
   if (d.shotmap?.length) html += shotMap(d.shotmap, a, h, gameUi.shots) + momentumCard(d.shotmap, a, h, ac, hc, league);
 
   if (d.linescore.length) {
-    const shots = Object.fromEntries(d.shots.map(s => [s.period, s]));
+    const shots = Object.fromEntries(d.shots.map(s => [s.period, s])), sog = d.shots.length > 0;
     html += `<h2>By period</h2><div class="card scroll"><table>
-      <tr><th></th>${d.linescore.map(p => `<th>${esc(p.period)}</th>`).join("")}<th>T</th><th>SOG</th></tr>
+      <tr><th></th>${d.linescore.map(p => `<th>${esc(p.period)}</th>`).join("")}<th>T</th>${sog ? "<th>SOG</th>" : ""}</tr>
       ${["away", "home"].map(s => `<tr><td class="team"><span class="tm">${mark(s === "away" ? a : h)}</span></td>
         ${d.linescore.map(p => `<td>${p[s] ?? ""}<span class="muted small">${shots[p.period] ? ` · ${shots[p.period][s]}` : ""}</span></td>`).join("")}
-        <td><b>${g[s].score ?? 0}</b></td><td>${g[s].sog ?? ""}</td></tr>`).join("")}
-    </table></div><p class="help">Goals · shots in each period.</p>`;
+        <td><b>${g[s].score ?? 0}</b></td>${sog ? `<td>${g[s].sog ?? ""}</td>` : ""}</tr>`).join("")}
+    </table></div><p class="help">${sog ? "Goals · shots in each period." : "Goals in each period."}</p>`;
   }
+  if (isCollege(league)) html += collegeExtras(d, g);
 
 
   if (d.stars.length) {
@@ -1128,7 +1158,7 @@ async function gameView(id, quiet = false, league = "nhl") {
     catch { e.target.textContent = "Couldn't send that. Try again."; e.target.disabled = false; }
   };
   const post = async (path, body) => {
-    try { await api(path, { method: "POST", body: JSON.stringify({ league: league === "pwhl" ? "pwhl" : "nhl", id: g.id, date: g.date, ...body }) }); }
+    try { await api(path, { method: "POST", body: JSON.stringify({ league, id: g.id, date: g.date, ...body }) }); }
     catch (e) { toast(e.detail || "Couldn't save that. Try again.", true); }
     gameView(id, true, league);
   };
@@ -1147,6 +1177,18 @@ async function gameView(id, quiet = false, league = "nhl") {
     }
   }, on);
   if (g.state === "live" || (g.state === "pre" && Date.parse(g.start) - Date.now() < 30 * 60000)) autoRefresh(q => gameView(id, q, league), LIVE_REFRESH);
+}
+
+// College game pages: ESPN has no scorers, shots or players for college games, so after the score by period come
+// each team's last games and a pointer to ESPN's own page.
+function collegeExtras(d, g) {
+  let html = "";
+  const form = ["away", "home"].map(s => [g[s].abbr, d.recent?.[g[s].abbr] || []]).filter(([, l]) => l.length);
+  if (form.length) html += `<h2>Last games</h2><div class="card">${form.map(([abbr, list]) => `<div class="event"><span class="when">${mark(abbr)}</span>
+    <div><div class="who">${esc(teamName(abbr))}</div><div class="detail">${list.map(x =>
+      `${esc(x.result || "")} ${esc(x.score || "")} ${x.home ? "vs" : "at"} ${esc(TEAMS[x.opp]?.name || x.opp_name)}`).join(" · ")}</div></div></div>`).join("")}</div>`;
+  const where = [g.note, g.neutral ? "Neutral site" : "", d.attendance ? `${Number(d.attendance).toLocaleString()} fans` : ""].filter(Boolean);
+  return html + `<p class="help">${where.length ? `${esc(where.join(" · "))}. ` : ""}ESPN doesn't publish scorers, shots or players for college games: tap "Box score on ESPN" for the rest.</p>`;
 }
 
 // ---- Wire ----------------------------------------------------------------------------
@@ -1183,7 +1225,7 @@ async function wireView(quiet = false) {
   let state = { kind: "", mine: false };
   try { state = { ...state, ...JSON.parse(localStorage.getItem("wire") || "{}") }; } catch { /* defaults */ }
   if (!quiet) showLoading(`Loading the Wire…`);
-  const leagues = LEAGUE === "both" ? ["nhl", "pwhl"] : [LEAGUE];
+  const leagues = proLeagues();
   let lists, hidden;
   try {
     [hidden, ...lists] = await Promise.all([hiddenToday().catch(() => []),
@@ -1314,6 +1356,20 @@ function pwhlStandings(rows) {
   </table></div>${season}`;
 }
 
+// College: overall records (ESPN's college points are always 0), one table per conference, by win percentage.
+function collegeStandings(rows, lg) {
+  const fav = favs(), confs = [...new Set(rows.map(r => r.conf || "Other"))].sort((x, y) => (x === "Other") - (y === "Other") || x.localeCompare(y));
+  const pct = v => v.toFixed(3).replace(/^0/, "");
+  const table = list => `<div class="card scroll"><table>
+    <tr><th colspan="2">Team</th><th>GP</th><th>W</th><th>L</th><th>T</th><th>PCT</th><th>Poll</th></tr>
+    ${list.map((r, i) => `<tr class="${fav.has(r.abbr) ? "fav" : ""}"><td class="rank">${i + 1}</td>
+      <td class="team"><span class="tm">${mark(r.abbr)}<a href="#/team/${r.abbr}">${esc(r.short || r.code)}</a></span></td>
+      <td>${r.gp}</td><td>${r.w}</td><td>${r.l}</td><td>${r.t}</td><td><b>${pct(r.pct)}</b></td><td>${r.rank || ""}</td></tr>`).join("")}
+  </table></div>`;
+  const body = confs.map(c => `<h2>${esc(c === "Other" ? "Other teams" : rows.find(r => (r.conf || "Other") === c)?.conf_name || c)}</h2>${table(rows.filter(r => (r.conf || "Other") === c))}`).join("");
+  return body + `<p class="help">${esc(LEAGUE_NAME[lg])}${rows[0]?.season ? `, ${esc(rows[0].season)}` : ""}: every game's record, not conference standings (ESPN doesn't publish those). Poll: this week's USCHO ranking.</p>`;
+}
+
 // Your teams as shortcuts above the standings; every team name in the tables opens its page too.
 function yourTeamTiles(lg) {
   const mine = [...favs()].filter(a => leagueOf(a) === lg);
@@ -1331,10 +1387,10 @@ async function standingsView(mode = "division") {
     bindLeaguePicker(() => standingsView(mode));
     return;
   }
-  if (lg === "pwhl") {
+  if (lg === "pwhl" || isCollege(lg)) {
     let rows;
-    try { rows = await standings("pwhl"); } catch (e) { view.innerHTML = failed(e); return; }
-    view.innerHTML = leagueTabs("standings") + leaguePicker("pwhl") + yourTeamTiles("pwhl") + pwhlStandings(rows);
+    try { rows = await standings(lg); } catch (e) { view.innerHTML = failed(e); return; }
+    view.innerHTML = leagueTabs("standings") + leaguePicker(lg) + yourTeamTiles(lg) + (lg === "pwhl" ? pwhlStandings(rows) : collegeStandings(rows, lg));
     bindLeaguePicker(() => standingsView(mode));
     return;
   }
@@ -1381,13 +1437,13 @@ function teamGameRow(g, abbr) {
   let right;
   if (spoilerHidden(g)) right = `<span class="muted small">🙈 Hidden</span>`;
   else if (g.state === "final") {
-    const won = us.score > them.score;
-    right = `<b class="${won ? "res-w" : "res-l"}">${won ? "W" : extra ? "OTL" : "L"}</b> ${us.score}–${them.score}${extra ? ` <span class="muted small">${esc(g.outcome)}</span>` : ""}`;
+    const won = us.score > them.score, tie = us.score === them.score, ot = extra && g.outcome !== "T";
+    right = `<b class="${won ? "res-w" : tie ? "" : "res-l"}">${tie ? "T" : won ? "W" : ot && !isCollege(g.league) ? "OTL" : "L"}</b> ${us.score}–${them.score}${ot ? ` <span class="muted small">${esc(g.outcome)}</span>` : ""}`;
   } else if (g.state === "live") right = `<span class="live">LIVE</span> ${us.score ?? 0}–${them.score ?? 0}`;
   else if (g.state === "postponed") right = `<span class="muted small">Postponed</span>`;
   else right = g.start ? esc(time(g.start)) : `<span class="muted small">TBD</span>`;
   return `<a class="grow" href="${gameHref(g)}"><span class="grow-date">${esc(shortDate(g.date))}</span>
-    <span class="tm grow-opp">${home ? "vs" : "@"} ${mark(opp)} <span>${esc(teamName(opp))}</span></span><span class="grow-r">${right}</span></a>`;
+    <span class="tm grow-opp">${home ? "vs" : "@"} ${mark(opp)} <span>${rankTag(them)}${esc(TEAMS[opp] ? teamName(opp) : them.name || opp)}</span></span><span class="grow-r">${right}</span></a>`;
 }
 
 // The roster and this season's numbers in one table per group, best first: who's who and how they're doing, together.
@@ -1432,7 +1488,8 @@ async function teamView(abbr) {
   const isFav = fav.has(abbr);
   let tab = "games";
   try { tab = localStorage.getItem("teamTab") || tab; } catch { /* fine */ }
-  if (!TEAM_TABS.some(([k]) => k === tab)) tab = "games";
+  const tabs = isCollege(lg) ? [] : TEAM_TABS;   // college: no rosters or news from ESPN, so just the games
+  if (!tabs.some(([k]) => k === tab)) tab = "games";
   const body = {
     games: () => `${later.length ? `<h2>Coming up</h2><div class="card">${later.slice(0, 8).map(g => teamGameRow(g, abbr)).join("")}</div>` : ""}
       ${done.length ? `<h2>Recent results</h2><div class="card">${done.slice(0, 10).map(g => teamGameRow(g, abbr)).join("")}</div>` : ""}
@@ -1446,12 +1503,14 @@ async function teamView(abbr) {
   view.innerHTML = `${backLink("#/league", "League")}<div class="card pad team-head">
       ${mark(abbr, true)}
       <div style="flex:1;min-width:0"><h1 style="margin:0">${esc(fullName(abbr))}</h1>
-      ${st && lg === "pwhl" ? `<div class="muted small">${st.w}-${st.otw}-${st.otl}-${st.l} · ${st.pts} pts · ${esc(ordinal(st.league_rank))} in the PWHL${st.season ? ` (${esc(st.season)})` : ""}</div>`
+      ${st && isCollege(lg) ? `<div class="muted small">${[`${st.w}-${st.l}-${st.t}`, st.rank ? `No. ${st.rank} in the poll` : "", leagueLabel(abbr)].filter(Boolean).map(esc).join(" · ")}</div>`
+        : isCollege(lg) ? `<div class="muted small">${esc(leagueLabel(abbr))}</div>`
+        : st && lg === "pwhl" ? `<div class="muted small">${st.w}-${st.otw}-${st.otl}-${st.l} · ${st.pts} pts · ${esc(ordinal(st.league_rank))} in the PWHL${st.season ? ` (${esc(st.season)})` : ""}</div>`
         : st ? `<div class="muted small">${st.w}-${st.l}-${st.otl} · ${st.pts} pts · ${esc(ordinal(st.div_rank))} in the ${esc(st.div)}${st.streak ? ` · ${esc(st.streak)}` : ""}</div>` : ""}</div>
       <button class="btn small" id="fav">${isFav ? "★ Favorite" : "☆ Favorite"}</button>
     </div>
     ${next ? `<h2>${next.state === "live" ? "On now" : "Next game"}</h2><div class="card">${gameCard(next, fav)}</div>` : ""}
-    <div class="seg" role="tablist">${TEAM_TABS.map(([k, l]) => `<button data-ttab="${k}" class="${k === tab ? "on" : ""}">${l}</button>`).join("")}</div>
+    ${tabs.length ? `<div class="seg" role="tablist">${tabs.map(([k, l]) => `<button data-ttab="${k}" class="${k === tab ? "on" : ""}">${l}</button>`).join("")}</div>` : ""}
     <div id="ttab">${body[tab]()}</div>`;
   view.querySelectorAll("[data-ttab]").forEach(b => b.addEventListener("click", () => {
     tab = b.dataset.ttab;
@@ -1619,6 +1678,11 @@ async function leadersView(quiet = false) {
   setNav("league");
   if (!quiet) showLoading("Loading leaders…");
   const lg = pageLeague();
+  if (isCollege(lg)) {
+    view.innerHTML = `${leagueTabs("leaders")}${leaguePicker(lg)}<div class="card pad muted small">No leaders for college hockey: ESPN doesn't publish college player stats.</div>`;
+    bindLeaguePicker(() => leadersView());
+    return;
+  }
   let cat = "points";
   try { cat = localStorage.getItem("leadersCat") || cat; } catch { /* fine */ }
   let d, hid = [];
@@ -1703,7 +1767,7 @@ async function searchView() {
     const r = searchResults(searchText, players);
     if (searchText.trim().length < 2) { out.innerHTML = `<p class="help">Type a name: Pastrnak, Keller, Bruins, Fleet…</p>`; return; }
     if (!r.teams.length && !r.players.length) { out.innerHTML = `<div class="card pad muted small">Nothing matches “${esc(searchText.trim())}”.</div>`; return; }
-    out.innerHTML = `${r.teams.length ? `<h2>Teams</h2><div class="card">${r.teams.map(a => `<a class="prow" href="#/team/${a}">${mark(a, true)}<span class="prow-main"><b>${esc(fullName(a))}</b><span class="muted small">${leagueOf(a) === "pwhl" ? "PWHL" : esc(TEAMS[a]?.div || "NHL")}</span></span></a>`).join("")}</div>
+    out.innerHTML = `${r.teams.length ? `<h2>Teams</h2><div class="card">${r.teams.map(a => `<a class="prow" href="#/team/${a}">${mark(a, true)}<span class="prow-main"><b>${esc(fullName(a))}</b><span class="muted small">${esc(leagueLabel(a))}</span></span></a>`).join("")}</div>
       <div id="teamgames"></div>` : ""}
       ${r.players.length ? `<h2>Players</h2><div class="card">${r.players.map(([pid, name, team, pos]) => `<a class="prow" href="${playerHref(leagueOf(team), pid)}">${photo(leagueOf(team), team, pid, 36)}
         <span class="prow-main"><b>${esc(name)}</b><span class="muted small">${mark(team)} ${esc(teamName(team))} · ${esc(pos || "")}</span></span></a>`).join("")}</div>` : ""}`;
@@ -1755,14 +1819,28 @@ function toast(text, bad = false) {
 function teamGroups() {
   const groups = {};
   for (const [abbr, t] of Object.entries(TEAMS)) {
+    if (isCollege(leagueOf(abbr))) continue;
     const g = leagueOf(abbr) === "pwhl" ? "PWHL" : t.div || "NHL";
     (groups[g] ||= []).push(abbr);
   }
   const order = ["Atlantic", "Metropolitan", "Central", "Pacific", "NHL", "PWHL"];
   return order.filter(g => groups[g]).map(g => [g, groups[g].sort((a, b) => teamName(a).localeCompare(teamName(b)))]);
 }
+// One college league's teams by conference; schools outside Division I (they turn up as opponents) last.
+const CONF_NAME = { HE: "Hockey East", ECAC: "ECAC Hockey", NCHC: "NCHC", CCHA: "CCHA", AHA: "Atlantic Hockey America",
+  "Big Ten": "Big Ten", IND: "Independents", WCHA: "WCHA", NEWHA: "NEWHA" };
+function collegeGroups(lg) {
+  const groups = {};
+  for (const [abbr, t] of Object.entries(TEAMS)) {
+    if (leagueOf(abbr) !== lg) continue;
+    (groups[CONF_NAME[t.div] || "Other schools"] ||= []).push(abbr);
+  }
+  return Object.entries(groups).sort(([x], [y]) => (x === "Other schools") - (y === "Other schools") || x.localeCompare(y))
+    .map(([g, list]) => [g, list.sort((a, b) => teamName(a).localeCompare(teamName(b)))]);
+}
 
 let editingTeams = false;
+const followsCollege = () => shownLeagues().some(isCollege) || (ME.settings.favorites || []).some(a => isCollege(leagueOf(a)));
 function settingsView() {
   setNav("settings");
   const s = ME.settings;
@@ -1775,9 +1853,14 @@ function settingsView() {
   const nhlGroups = teamGroups().filter(([g]) => g !== "PWHL");
 
   const mine = fav.length ? `<div class="myteams">${fav.map(a =>
-    `<a class="myteam" href="#/team/${a}">${mark(a, true)}<span><b>${esc(fullName(a))}</b><span class="muted small">${leagueOf(a) === "pwhl" ? "PWHL" : esc(TEAMS[a]?.div || "NHL")}</span></span></a>`).join("")}</div>` : "";
-  const picker = `<div class="team-picker">${teamGroups().map(([g, list]) => `<div class="subhead">${esc(g)}</div><div class="chips">${list.map(a =>
-    `<label>${mark(a)}<input type="checkbox" name="favorites" value="${a}" ${fav.includes(a) ? "checked" : ""}>${esc(teamName(a))}</label>`).join("")}</div>`).join("")}</div>`;
+    `<a class="myteam" href="#/team/${a}">${mark(a, true)}<span><b>${esc(fullName(a))}</b><span class="muted small">${esc(leagueLabel(a))}</span></span></a>`).join("")}</div>` : "";
+  const chips = groups => groups.map(([g, list]) => `<div class="subhead">${esc(g)}</div><div class="chips">${list.map(a =>
+    `<label>${mark(a)}<input type="checkbox" name="favorites" value="${a}" ${fav.includes(a) ? "checked" : ""}>${esc(teamName(a))}</label>`).join("")}</div>`).join("");
+  // College: 160 schools, so each league folds away (open when you follow one of its teams).
+  const picker = `<div class="team-picker">${chips(teamGroups())}${COLLEGE.map(lg => {
+    const n = fav.filter(a => leagueOf(a) === lg).length;
+    return `<details class="college-pick"${n ? " open" : ""}><summary>${esc(LEAGUE_NAME[lg])}${n ? ` · ${n} picked` : ""}</summary>${chips(collegeGroups(lg))}</details>`;
+  }).join("")}</div>`;
 
   view.innerHTML = `
     <h1>Settings</h1>
@@ -1805,7 +1888,7 @@ function settingsView() {
           `<option value="${a}" ${a === local ? "selected" : ""}>${esc(fullName(a))}</option>`).join("")}</optgroup>`).join("")}</select></label>
       ${guess ? `<div class="pad small suggest">Live near ${esc(TEAMS[guess].place)}? <button class="btn small" id="useguess">Use the ${esc(teamName(guess))}</button></div>` : ""}
       <div class="subhead">What you can watch with</div>
-      <div class="checks">${Object.entries(ME.services).filter(([, v]) => (v.country || "US") === country).map(([k, v]) =>
+      <div class="checks">${Object.entries(ME.services).filter(([, v]) => (v.country || "US") === country && (!v.college || followsCollege())).map(([k, v]) =>
         `<label><input type="checkbox" name="services" value="${k}" ${services.includes(k) ? "checked" : ""}>${esc(v.label)}</label>`).join("")}</div>
     </div>
     <p class="help">Each game then says whether you have it. ${ca ? "In Winnipeg the home region is the Jets." : "In Massachusetts the home market is the Bruins."}</p>
@@ -1819,7 +1902,7 @@ function settingsView() {
 
     <h2>Spoiler-free</h2>
     ${fav.length ? `<div class="card checks">${fav.map(a =>
-      `<label><input type="checkbox" name="spoilteams" value="${a}" ${spoilers().teams.includes(a) ? "checked" : ""}>Always hide ${esc(teamName(a))} scores</label>`).join("")}</div>` : ""}
+      `<label><input type="checkbox" name="spoilteams" value="${a}" ${spoilers().teams.includes(a) ? "checked" : ""}>Always hide ${esc(teamName(a))}${isCollege(leagueOf(a)) ? ` (${esc(LEAGUE_NAME[leagueOf(a)].replace("NCAA ", ""))})` : ""} scores</label>`).join("")}</div>` : ""}
     <p class="help">A hidden game stays out of sight everywhere (scores, goal and final alerts, standings, the Wire) until you tap
       "I've seen it". ${fav.length ? "Tick a team to hide all their games, or open" : "Open"} any game and tap "🙈 Watching later" to hide just that one. It switches off by itself the day after.</p>
 
@@ -2196,10 +2279,11 @@ function shotFrom(prev, next) {
 const VIEWS = {};
 // Same checks as renderRoute: a page whose argument it rejects is counted as what it shows instead.
 const VIEW_PAGE = { standings: "league", teams: "league" };
+const TEAM_KEY = /^((PW-)?[A-Z]{2,3}|C[MW]-\d{1,7})$/;
 const VIEW_ARG = { day: ["date", /^\d{4}-\d{2}-\d{2}$/], picks: ["date", /^\d{4}-\d{2}-\d{2}$/], game: ["id", /^\d+$/],
-  pgame: ["id", /^\d+$/], team: ["team", /^(PW-)?[A-Z]{2,3}$/], player: ["id", /^\d+$/], pplayer: ["id", /^\d+$/] };
+  pgame: ["id", /^\d+$/], cgame: ["league", /^ncaa[mw]$/], team: ["team", TEAM_KEY], player: ["id", /^\d+$/], pplayer: ["id", /^\d+$/] };
 const VIEW_PLAIN = new Set(["picks", "wire", "league", "settings", "app", "new", "report", "leaders", "search"]);   // fine without an argument
-const VIEW_NAME = { tonight: "Tonight", "day/:date": "Another day", "game/:id": "NHL game", "pgame/:id": "PWHL game",
+const VIEW_NAME = { tonight: "Tonight", "day/:date": "Another day", "game/:id": "NHL game", "pgame/:id": "PWHL game", "cgame/:league": "College game",
   picks: "Pick'em", "picks/:date": "Pick'em, another day", wire: "Wire", league: "League", "team/:team": "Team page",
   settings: "Settings", app: "Get the app", new: "What's new", report: "Report a problem",
   "player/:id": "NHL player", "pplayer/:id": "PWHL player", leaders: "Leaders", search: "Search" };
@@ -2313,7 +2397,7 @@ function renderRoute() {
   setCompact(false);
   if (ME.status !== "approved") return gateView();
   document.getElementById("tabs").hidden = false;
-  const [, page, arg] = (location.hash || "#/").split("/");
+  const [, page, arg, arg2] = (location.hash || "#/").split("/");
   if (page !== "settings") editingTeams = false;
   if (page !== "report") reportFrom = location.hash || "#/";
   document.getElementById("foot").hidden = page === "report";
@@ -2322,6 +2406,7 @@ function renderRoute() {
   if (page === "day" && /^\d{4}-\d{2}-\d{2}$/.test(arg || "")) return tonightView(arg);
   if (page === "game" && /^\d+$/.test(arg || "")) return gameView(arg);
   if (page === "pgame" && /^\d+$/.test(arg || "")) return gameView(arg, false, "pwhl");
+  if (page === "cgame" && isCollege(arg) && /^\d+$/.test(arg2 || "")) return gameView(arg2, false, arg);
   if (page === "picks") return pickemView(/^\d{4}-\d{2}-\d{2}$/.test(arg || "") ? arg : undefined);
   if (page === "wire") return wireView();
   if (page === "standings" || page === "league" || page === "teams") {  // Standings and Teams became one League tab
@@ -2329,7 +2414,7 @@ function renderRoute() {
     try { mode = localStorage.getItem("standingsMode") || mode; } catch { /* fine */ }
     return standingsView(mode);
   }
-  if (page === "team" && /^(PW-)?[A-Z]{2,3}$/.test(arg || "")) return teamView(arg);
+  if (page === "team" && TEAM_KEY.test(arg || "")) return teamView(arg);
   if (page === "player" && /^\d+$/.test(arg || "")) return playerView(arg);
   if (page === "pplayer" && /^\d+$/.test(arg || "")) return playerView(arg, "pwhl");
   if (page === "leaders") return leadersView();
@@ -2355,7 +2440,7 @@ async function start() {
   if (ME.status === "approved") CHANGES = await api("/api/changes").catch(() => []);
   updateNewDot();
   const asked = new URLSearchParams(location.search).get("league");  // a shared link can pick the league
-  if (["nhl", "pwhl", "both"].includes(asked)) { LEAGUE = asked; try { localStorage.setItem("league", asked); } catch { /* fine */ } }
+  if (["nhl", "pwhl", "ncaa", "both"].includes(asked)) { LEAGUE = asked; try { localStorage.setItem("league", asked); } catch { /* fine */ } }
   applyLeague();
   document.querySelectorAll("[data-league]").forEach(b => b.addEventListener("click", () => setLeague(b.dataset.league)));
   window.addEventListener("hashchange", navigate);

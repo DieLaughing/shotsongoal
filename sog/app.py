@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import access, bugs, alerts, changes, home, ics, moneypuck, nhl, odds, picks, pwhl, slow, social, spoilers, teams, usage, watch, wire
+from . import access, bugs, alerts, changes, home, ics, moneypuck, ncaa, nhl, odds, picks, pwhl, slow, social, spoilers, teams, usage, watch, wire
 from .db import Store, parse_iso
 from .feed import PWHL_TEAM_IDS, Feed, eastern_today
 from . import images as images_mod
@@ -31,7 +31,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname
 
 DATA_DIR = Path(os.environ.get("SOG_DATA", Path(__file__).resolve().parent.parent / "data"))
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
-ABBR = re.compile(r"^(PW-)?[A-Z]{2,3}$")  # NHL "BOS", PWHL "PW-BOS"
+ABBR = re.compile(r"^((PW-)?[A-Z]{2,3}|C[MW]-\d{1,7})$")  # NHL "BOS", PWHL "PW-BOS", college "CM-103" / "CW-103"
+LEAGUES = ("nhl", "pwhl", *ncaa.LEAGUES)
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 REREQUEST_AFTER = timedelta(days=7)    # a denied or revoked person may ask again after this
 RENOTIFY_AFTER = timedelta(hours=12)   # pressing Request twice doesn't ping the phone twice
@@ -187,7 +188,8 @@ async def me(request: Request):
     return {"email": email, "status": (user or {}).get("status", "none") if email else "signed-out",
             "admin": access.is_admin(email), "settings": _settings(request) if user else None,
             "services": watch.services(), "teams": teams.as_list(),
-            "logos": logos_url() if user and (_settings(request).get("marks") == "logos") else None}
+            "logos": logos_url() if user and (_settings(request).get("marks") == "logos") else None,
+            "college_logos": college_logos_url() if user and (_settings(request).get("marks") == "logos") else None}
 
 
 @app.post("/api/request")
@@ -230,7 +232,7 @@ def friend_names() -> dict[str, str]:
 async def save_settings(request: Request):
     body = await request.json()
     clean = {
-        "favorites": [t for t in body.get("favorites") or [] if t in teams.ALL][:44],
+        "favorites": [t for t in body.get("favorites") or [] if t in teams.ALL][:60],
         "local": [t for t in body.get("local") or [] if t in teams.TEAMS][:8],  # blackouts are an NHL thing
         "country": "CA" if body.get("country") == "CA" else "US",  # where-to-watch rules and services
         "services": [s for s in body.get("services") or [] if s in watch.services()],
@@ -447,6 +449,9 @@ def _with_watch(games: list[dict], s: dict) -> list[dict]:
         if g.get("league") == "pwhl":
             g["watch"] = dict(PWHL_WATCH)  # the feed lists no broadcasters; the league's page does
             continue
+        if g.get("league") in ncaa.LEAGUES:
+            g["watch"] = watch.college(g, have, s.get("country"))
+            continue
         g["watch"] = watch.watch_for(g, s["local"], have, s.get("country"))
         if have is None:
             g["watch"]["have"] = None  # services not set yet: don't claim they're missing
@@ -478,8 +483,8 @@ def _with_watchers(games: list[dict], request: Request) -> list[dict]:
 async def games(request: Request, date: str | None = None, league: str = "nhl"):
     if date and not DATE.match(date):
         raise HTTPException(400)
-    if league == "pwhl":
-        day = await _upstream(feed.pwhl_day(date))
+    if league == "pwhl" or league in ncaa.LEAGUES:
+        day = await _upstream(feed.pwhl_day(date) if league == "pwhl" else feed.ncaa_day(league, date))
         return {**day, "games": _with_watchers(_with_watch([dict(g) for g in day["games"]], _settings(request)), request)}
     # No date = today in Eastern time (last night's games until 6 am); see feed.slate_date.
     target = date or feed.opening_day()
@@ -532,6 +537,23 @@ async def pwhl_game(game_id: int, request: Request):
     return {**detail, "social": social.for_game(request.state.email, detail["game"], people())}
 
 
+@app.get("/api/college/{league}/game/{game_id}")
+async def college_game(league: str, game_id: int, request: Request):
+    if league not in ncaa.LEAGUES:
+        raise HTTPException(404)
+    detail = await _upstream(feed.ncaa_game(league, game_id))
+    g = dict(detail["game"])
+    # The game page's NHL shape, with what ESPN has for college: goals by period, no scorers, shots or players.
+    n = max(len(g["away"].get("periods") or []), len(g["home"].get("periods") or []))
+    per = lambda side, i: (g[side].get("periods") or [])[i] if i < len(g[side].get("periods") or []) else None
+    linescore = [{"period": ncaa.period_label(i + 1), "away": per("away", i), "home": per("home", i)} for i in range(n)]
+    detail = {**detail, "game": g, "linescore": linescore if g["state"] in ("live", "final") else [], "shots": [],
+              "scoring": [], "penalties": [], "stars": [], "team_stats": [], "players": {}, "shotmap": [],
+              "situation": None, "recap": None}
+    _with_watch([detail["game"]], _settings(request))
+    return {**detail, "social": social.for_game(request.state.email, detail["game"], people())}
+
+
 # ---- finished responses ------------------------------------------------------------------------
 # The biggest shared answers (the Wire, standings) are turned into JSON and compressed once per change of the data,
 # then sent as they are. Keyed by what they depend on; a handful of entries, so no eviction policy beyond a cap.
@@ -553,10 +575,17 @@ def _finished(request: Request, key: tuple, version, build) -> Response:
 
 @app.get("/api/standings")
 async def standings(request: Request, league: str = "nhl"):
-    key = "pwhl:standings" if league == "pwhl" else "standings"
-    rows = await _upstream(feed.pwhl_standings() if league == "pwhl" else feed.standings())
+    league = league if league in LEAGUES else "nhl"
+    key = {"pwhl": "pwhl:standings", "nhl": "standings"}.get(league, f"{league}:standings")
+    rows = await _upstream(_standings(league))
     meta = store.meta(key)
     return _finished(request, ("standings", key), meta[:2] if meta else None, lambda: rows)
+
+
+def _standings(league: str):
+    if league in ncaa.LEAGUES:
+        return feed.ncaa_standings(league)
+    return feed.pwhl_standings() if league == "pwhl" else feed.standings()
 
 
 @app.get("/api/team/{abbr}")
@@ -564,12 +593,12 @@ async def team(abbr: str, request: Request):
     abbr = abbr.upper()
     if not ABBR.match(abbr) or abbr not in teams.ALL:
         raise HTTPException(404)
-    data, items = await asyncio.gather(feed.pwhl_team(abbr) if abbr.startswith("PW-") else feed.team(abbr), feed.wire())
+    data, items = await asyncio.gather(feed.any_team(abbr), feed.wire())
     sched = [dict(g) for g in data["schedule"] if g.get("type") in (2, 3)] or [dict(g) for g in data["schedule"]]
     # The page shows recent results and what's coming up: send those, not the whole season (or two, for the PWHL).
     done = [g for g in sched if g.get("state") == "final"]
     sched = done[-10:] + [g for g in sched if g.get("state") != "final"][:10]
-    career = feed.careers(abbr) if not abbr.startswith("PW-") else None
+    career = feed.careers(abbr) if teams.league_of(abbr) == "nhl" else None
     return {**data, "schedule": _with_watch(sched, _settings(request)),
             "wire": [i for i in items if abbr in i["teams"]][:20],
             "milestones": home.near_milestones(career["players"]) if career else []}
@@ -638,24 +667,40 @@ async def player_photo(league: str, team: str, name: str):
 
 
 _logos = {"mtime": None, "v": None, "building": None}
+_college_logos = {"mtime": None, "v": None, "building": None}
 
 
-def logos_url() -> str | None:
-    """/img/logos.css?v=<content hash> once it's built (the phone keeps each version for good); None until then, and
+def _sheet_url(name: str, state: dict, build) -> str | None:
+    """/img/<name>?v=<content hash> once it's built (the phone keeps each version for good); None until then, and
     the first ask starts the build in the background, so the app opens with badges and never waits for logos."""
-    path = DATA_DIR / "img" / "logos.css"
+    path = DATA_DIR / "img" / name
     try:
         mtime = path.stat().st_mtime
     except FileNotFoundError:
         mtime = None
     if mtime is None or time.time() - mtime > images_mod.LOGO_TTL:
-        if not _logos["building"] or _logos["building"].done():
-            _logos["building"] = asyncio.get_running_loop().create_task(_build_logos())
+        if not state["building"] or state["building"].done():
+            state["building"] = asyncio.get_running_loop().create_task(build())
     if mtime is None:
         return None
-    if _logos["mtime"] != mtime:
-        _logos.update(mtime=mtime, v=images_mod.css_version(path))
-    return f"/img/logos.css?v={_logos['v']}"
+    if state["mtime"] != mtime:
+        state.update(mtime=mtime, v=images_mod.css_version(path))
+    return f"/img/{name}?v={state['v']}"
+
+
+def logos_url() -> str | None:
+    return _sheet_url("logos.css", _logos, _build_logos)
+
+
+def college_logos_url() -> str | None:
+    return _sheet_url("college-logos.css", _college_logos, _build_college_logos)
+
+
+async def _build_college_logos():
+    try:  # Division I only: schools outside it (the odd exhibition opponent) keep their badge
+        return await images_mod.college_logos_css(images, [k for k, t in teams.COLLEGE_INFO.items() if t["conf"]])
+    except Exception:
+        log.exception("college-logos.css build failed")
 
 
 async def _build_logos():
@@ -668,6 +713,14 @@ async def _build_logos():
 @app.get("/img/logos.css")
 async def logos_css():
     path = await _build_logos()
+    if not path:
+        return IMG_MISS
+    return FileResponse(path, media_type="text/css", headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+@app.get("/img/college-logos.css")
+async def college_logos_css():
+    path = await _build_college_logos()
     if not path:
         return IMG_MISS
     return FileResponse(path, media_type="text/css", headers={"Cache-Control": "public, max-age=31536000, immutable"})
@@ -698,7 +751,7 @@ async def my_teams(request: Request):
 
     leagues = {teams.league_of(a) for a in picks}
     rows = dict(zip(leagues, await asyncio.gather(
-        *[(feed.pwhl_standings() if lg == "pwhl" else feed.standings()) for lg in leagues], return_exceptions=True)))
+        *[_standings(lg) for lg in leagues], return_exceptions=True)))
     rows = {lg: [] if isinstance(r, Exception) else r for lg, r in rows.items()}
     cards = await asyncio.gather(*[one(a, rows[teams.league_of(a)]) for a in picks])
     return {"date": today, "teams": [c for c in cards if c]}
@@ -707,11 +760,13 @@ async def my_teams(request: Request):
 async def _slate(league: str, date: str) -> dict:
     if league == "pwhl":
         return await feed.pwhl_day(date)
+    if league in ncaa.LEAGUES:
+        return await feed.ncaa_day(league, date)
     return await (feed.today_page() if date == feed.today else feed.day(date))
 
 
-async def _game_from(body: dict) -> dict:
-    lg = "pwhl" if body.get("league") == "pwhl" else "nhl"
+async def _game_from(body: dict, leagues: tuple = LEAGUES) -> dict:
+    lg = body.get("league") if body.get("league") in leagues else "nhl"
     date, gid = str(body.get("date") or ""), body.get("id")
     if not DATE.match(date) or not isinstance(gid, int):
         raise HTTPException(400)
@@ -750,7 +805,9 @@ async def hidden_games(request: Request):
         return {"games": []}
     today = feed.opening_day()
     found = []
-    for lg in ("nhl", "pwhl"):
+    leagues = {teams.league_of(t) for t in _settings(request)["favorites"] + sp["teams"]} | {"nhl", "pwhl"}
+    leagues |= {k.split(":")[0] for k in sp["games"]}
+    for lg in [x for x in LEAGUES if x in leagues]:   # college slates only for people who follow college teams
         try:
             day = await _slate(lg, today)
             prev = await _slate(lg, day["prev"]) if day.get("prev") and day["prev"] >= _day_before(today) else {"games": []}
@@ -795,7 +852,7 @@ async def pickem(request: Request, date: str | None = None, leagues: str = "nhl"
 @app.post("/api/pickem")
 async def pickem_save(request: Request):
     body = await request.json()
-    g = await _game_from(body)
+    g = await _game_from(body, ("nhl", "pwhl"))  # no college in Pick'em
     try:
         picks.set_pick(request.state.email, g, body.get("team") or None, bool(body.get("lock")))
     except ValueError as exc:
@@ -847,7 +904,7 @@ async def calendar(token: str, codes: str):
     cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
     games, seen = [], set()
     for abbr in abbrs:
-        data = await (feed.pwhl_team(abbr) if abbr.startswith("PW-") else feed.team(abbr))
+        data = await feed.any_team(abbr)
         for g in data["schedule"]:
             if g["id"] in seen or g.get("type") not in (2, 3) or (g.get("start") or "") < cutoff:
                 continue
@@ -855,7 +912,7 @@ async def calendar(token: str, codes: str):
             games.append(dict(g))
     games.sort(key=lambda g: g.get("start") or "")
     _with_watch(games, s)
-    title = "Hockey: " + ", ".join(teams.ALL[a][1] for a in abbrs)
+    title = "Hockey: " + ", ".join(teams.ALL[a][1] for a in abbrs)  # college: the school
     return Response(ics.build(games, access.BASE_URL, title), media_type="text/calendar; charset=utf-8",
                     headers={"Cache-Control": "max-age=900"})
 
