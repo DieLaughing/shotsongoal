@@ -739,7 +739,7 @@ async function tonightView(date, quiet = false) {
         <summary class="league-head ${league}">${esc(LEAGUE_TITLE[league])}<span class="lf-count">${n} game${n > 1 ? "s" : ""}${yours}</span></summary>
         ${section("Your teams", mine)}${section(mine.length ? "Around college hockey" : "All games", rest)}</details>`;
     }
-    return head + section("Your teams", mine) + section(mine.length ? (isCollege(league) ? "Around college hockey" : "Around the league") : "All games", rest);
+    return head + section("Your teams", mine) + section(mine.length ? "Around the league" : "All games", rest);
   };
   const dates = days.map(d => d.date).filter(Boolean);
   const day = { date: days[0].date || dates[0],
@@ -1482,6 +1482,7 @@ function rosterTables(d, abbr, lg) {
 }
 
 const TEAM_TABS = [["games", "Games"], ["players", "Players"], ["news", "News"]];
+const nw = s => `<span class="nw">${esc(s)}</span>`;   // a phrase that wraps as one piece
 
 // College team pages: the season worked out from the schedule (sog/ncaa.py season_summary), the roster ESPN has (no
 // player stats exist for college) and the game videos, each final matched to its game.
@@ -1556,8 +1557,8 @@ async function teamView(abbr) {
       ${mark(abbr, true)}
       <div style="flex:1;min-width:0"><h1 style="margin:0">${esc(fullName(abbr))}</h1>
       ${isCollege(lg) ? `<div class="muted small">${[C.season?.record || (st ? `${st.w}-${st.l}-${st.t}` : ""),
-          C.poll ? `No. ${C.poll.rank} in the poll${pollMove(C.poll)}` : "", leagueLabel(abbr)].filter(Boolean).map(esc).join(" · ")}</div>
-        ${C.venue ? `<div class="muted small">${esc([C.venue.name, C.venue.town].filter(Boolean).join(" · "))}</div>` : ""}`
+          C.poll ? `No. ${C.poll.rank} in the poll${pollMove(C.poll)}` : "", leagueLabel(abbr)].filter(Boolean).map(nw).join(" · ")}</div>
+        ${C.venue ? `<div class="muted small">${[C.venue.name, C.venue.town].filter(Boolean).map(nw).join(" · ")}</div>` : ""}`
         : st && lg === "pwhl" ? `<div class="muted small">${st.w}-${st.otw}-${st.otl}-${st.l} · ${st.pts} pts · ${esc(ordinal(st.league_rank))} in the PWHL${st.season ? ` (${esc(st.season)})` : ""}</div>`
         : st ? `<div class="muted small">${st.w}-${st.l}-${st.otl} · ${st.pts} pts · ${esc(ordinal(st.div_rank))} in the ${esc(st.div)}${st.streak ? ` · ${esc(st.streak)}` : ""}</div>` : ""}</div>
       <button class="btn small" id="fav">${isFav ? "★ Favorite" : "☆ Favorite"}</button>

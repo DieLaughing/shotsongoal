@@ -559,6 +559,7 @@ table.seasons td:nth-child(2) { white-space: normal; min-width: 7em; }
 .prow-val { font-weight: 750; font-size: 16px; font-variant-numeric: tabular-nums; }
 .search-box { width: 100%; font-size: 16px; padding: 11px 12px; margin: 4px 0 6px; }
 .team-head { display: flex; align-items: center; gap: 14px; }
+.nw { white-space: nowrap; }
 /* college team page: this season */
 .sgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px 16px; }
 .sstat { display: grid; gap: 2px; }

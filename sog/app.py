@@ -906,8 +906,7 @@ async def calendar(token: str, codes: str):
     cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
     games, seen = [], set()
     for abbr in abbrs:
-        data = await feed.any_team(abbr)
-        for g in data["schedule"]:
+        for g in await feed.team_schedule(abbr):
             if g["id"] in seen or g.get("type") not in (2, 3) or (g.get("start") or "") < cutoff:
                 continue
             seen.add(g["id"])

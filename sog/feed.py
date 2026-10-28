@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from . import moneypuck, ncaa, nhl, odds, pwhl, wire
-from .teams import TEAMS as NHL_TEAMS
+from .teams import COLLEGE_INFO, TEAMS as NHL_TEAMS
 from .db import Store, parse_iso
 
 log = logging.getLogger("sog.feed")
@@ -488,7 +488,6 @@ class Feed:
     async def ncaa_team(self, abbr: str) -> dict:
         """A college team page: schedule, plus what ESPN has beyond it (roster for some, game highlights, arena, poll
         move) and the season worked out from the schedule. Every extra is optional: a missing one just isn't shown."""
-        from .teams import COLLEGE_INFO
         league, sid = ncaa.league_of(abbr), abbr[3:]
 
         async def roster():
@@ -572,7 +571,6 @@ class Feed:
     async def ncaa_standings(self, league: str) -> list[dict]:
         async def fetch():
             ranks = await self.ncaa_ranks(league)
-            from .teams import COLLEGE_INFO
             return ncaa.parse_standings(await ncaa.get(league, "standings", base=ncaa.STANDINGS), league, ranks,
                                         {k: t["conf"] for k, t in COLLEGE_INFO.items()})
         return await self.cached(f"{league}:standings", league, fetch, STANDINGS_TTL * 2)
