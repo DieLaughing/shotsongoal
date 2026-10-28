@@ -3,6 +3,10 @@
 Every update to [Shots on Goal](https://github.com/DieLaughing/shotsongoal), newest first. The same list is on the app's What's new page.
 This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit that file, not this one.
 
+## October 28, 2026
+
+- **New: College hockey.** Men's and women's college hockey is here. Tap NCAA at the top for every college game, or All for everything at once. Tap a college league's heading to fold its games away on a busy night, and it stays the way you left it (under All it starts folded, so the NHL isn't buried). Pick your schools in Settings › Your teams, grouped by conference, and they get the same cards on Tonight, alerts for puck drop, goals and finals, calendar feeds and spoiler-free. Games show poll ranks, goals by period and where each one streams (ESPN+, B1G+, FloHockey, NCHC.tv…; tick the ones you have in Settings). The League tab has each conference's records, and team pages show the season at a glance (home, away and conference records, goals a game, last five, poll moves, the arena), the roster where ESPN has one, and game highlight videos. ESPN doesn't publish scorers or shots for college games, so game pages link to ESPN's box score for those.
+
 ## October 23, 2026
 
 - **Fixed: The top and bottom bars sit right on iPhone.** In the app saved to an iPhone home screen, the top bar no longer fades out under the Dynamic Island, and the clock now sits on a solid strip that matches the app. On Tonight, the bottom bar sits flush with the bottom of the screen again. If you saved the app before today, delete its icon and add it to your home screen again to get the new top.

@@ -178,9 +178,19 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .more-stats { margin-top: 22px; }
 .more-stats > summary { cursor: pointer; list-style: none; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px;
   background: var(--surface); font-weight: 650; font-size: 14px; }
-.more-stats > summary::-webkit-details-marker { display: none; }
-.more-stats > summary::after { content: "＋"; float: right; color: var(--muted); }
-.more-stats[open] > summary::after { content: "−"; }
+.college-pick { border-top: 1px solid var(--border); }
+.college-pick > summary { cursor: pointer; list-style: none; padding: 12px 14px; font-weight: 650; font-size: 14px; }
+.more-stats > summary::-webkit-details-marker, .college-pick > summary::-webkit-details-marker, .league-fold > summary::-webkit-details-marker { display: none; }
+.more-stats > summary::after, .college-pick > summary::after { content: "＋"; float: right; color: var(--muted); }
+.more-stats[open] > summary::after, .college-pick[open] > summary::after { content: "−"; }
+/* A college league's heading on Tonight is its drop-down: chevron at the end, game count beside the name. */
+.league-fold > summary { cursor: pointer; list-style: none; padding: 6px 0; user-select: none; }
+.league-fold:not([open]) > summary { margin-bottom: 0; }
+.league-fold > summary::after { content: ""; width: 7px; height: 7px; margin: 0 4px 0 auto; border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted); transform: translateY(-2px) rotate(45deg); transition: transform 160ms ease; }
+.league-fold[open] > summary::after { transform: translateY(2px) rotate(-135deg); }
+.lf-count { font-weight: 600; letter-spacing: 0; color: var(--muted); font-size: 12.5px; }
+.rk { font-size: 11px; font-weight: 700; color: var(--muted); margin-right: 4px; font-variant-numeric: tabular-nums; }
 
 /* momentum + shot quality */
 .momentum { width: 100%; height: auto; display: block; }
@@ -230,6 +240,7 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .scorebug { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 18px 14px; text-align: center; }
 .scorebug .side { display: grid; justify-items: center; gap: 6px; text-decoration: none; }
 .scorebug .side .nm { font-weight: 650; font-size: 14px; }
+.scorebug .side .small { font-size: 11.5px; }
 .scorebug .score { font-size: 38px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 .scorebug .state { font-size: 13px; color: var(--muted); }
 .links { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 14px 14px; justify-content: center; }
@@ -364,6 +375,9 @@ body.league-pwhl .league button.on { background: var(--accent); color: var(--on-
 .league-head::before { content: ""; width: 4px; height: 16px; border-radius: 2px; background: #d7263d; }
 .league-head.pwhl::before { background: #163F36; }
 @media (prefers-color-scheme: dark) { .league-head.pwhl::before { background: #B3DFD7; } }
+.league-head.ncaam::before, .league-head.ncaaw::before { background: #2E6DB4; }
+@media (max-width: 440px) { .league button { padding: 5px 7px; } }
+@media (max-width: 400px) { .league button { padding: 5px 5px; font-size: 12px; } }
 @media (max-width: 480px) { .brand-name { display: none; } .top { gap: 8px; } }
 
 /* PWHL mode: Boston Fleet colours (from the Fleet logo) */
@@ -545,6 +559,17 @@ table.seasons td:nth-child(2) { white-space: normal; min-width: 7em; }
 .prow-val { font-weight: 750; font-size: 16px; font-variant-numeric: tabular-nums; }
 .search-box { width: 100%; font-size: 16px; padding: 11px 12px; margin: 4px 0 6px; }
 .team-head { display: flex; align-items: center; gap: 14px; }
+.nw { white-space: nowrap; }
+/* college team page: this season */
+.sgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px 16px; }
+.sstat { display: grid; gap: 2px; }
+.sstat b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.form5 { display: flex; align-items: center; gap: 6px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.form5 .muted { margin-right: 4px; }
+.f5 { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; font-size: 12px; font-weight: 750; }
+.f5-w { background: var(--have-bg); color: var(--have-fg); }
+.f5-l { background: var(--need-bg); color: var(--need-fg); }
+.f5-t { background: var(--info-bg); color: var(--info-fg); }
 .grow { display: grid; grid-template-columns: 88px 1fr auto; align-items: center; gap: 10px; padding: 10px 14px; text-decoration: none; color: inherit; border-top: 1px solid var(--border); font-size: 14px; }
 .grow:first-child { border-top: 0; }
 .grow-date { color: var(--muted); font-size: 13px; }
@@ -556,6 +581,8 @@ table.log .tm { display: inline-flex; align-items: center; gap: 6px; }
 .res-l { color: var(--need-fg); }
 table.roster th:first-child, table.roster td:first-child { text-align: left; }
 table.roster td:first-child { white-space: normal; }
+table.croster th, table.croster td { text-align: left; }
+table.croster td:first-child { width: 2.5em; }
 table.roster .pcell > span { display: flex; flex-direction: column; line-height: 1.25; }
 .board td.upsets, .board td:nth-child(4) { white-space: nowrap; }
 .board td.upsets span[aria-hidden] { color: var(--accent); }

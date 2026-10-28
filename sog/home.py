@@ -34,7 +34,7 @@ def result(g: dict, abbr: str) -> dict | None:
     if g.get("state") != "final" or us.get("score") is None or them.get("score") is None:
         return None
     won = us["score"] > them["score"]
-    code = "W" if won else "OT" if g.get("outcome") in ("OT", "SO") else "L"
+    code = "T" if us["score"] == them["score"] else "W" if won else "OT" if g.get("outcome") in ("OT", "SO") else "L"
     return {"id": g["id"], "league": g.get("league", "nhl"), "date": g.get("date"), "opp": them["abbr"], "home": home,
             "us": us["score"], "them": them["score"], "code": code, "outcome": g.get("outcome"),
             "playoffs": g.get("type") == 3}
@@ -42,6 +42,9 @@ def result(g: dict, abbr: str) -> dict | None:
 
 def record(results: list[dict]) -> str:
     w = sum(r["code"] == "W" for r in results)
+    # College: W-L-T (a tie stands, overtime losses are losses). Pro: W-L-OT.
+    if any(r["league"] in ("ncaam", "ncaaw") for r in results):
+        return f"{w}-{sum(r['code'] in ('L', 'OT') for r in results)}-{sum(r['code'] == 'T' for r in results)}"
     return f"{w}-{sum(r['code'] == 'L' for r in results)}-{sum(r['code'] == 'OT' for r in results)}"
 
 
@@ -80,6 +83,8 @@ def standing(abbr: str, rows: list[dict], league: str) -> dict | None:
         return None
     if league == "pwhl":
         return {"place": f"{ordinal(row.get('league_rank'))} in the PWHL", "pts": row.get("pts"), "race": None}
+    if league in ("ncaam", "ncaaw"):
+        return {"place": f"No. {row['rank']} in the poll" if row.get("rank") else None, "pts": None, "race": None}
     return {"place": f"{ordinal(row.get('div_rank'))} in the {row.get('div')}", "pts": row.get("pts"),
             "race": race(row, rows)}
 

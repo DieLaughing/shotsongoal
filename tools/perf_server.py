@@ -44,7 +44,7 @@ class _Reply:
 
 
 def install() -> None:
-    from sog import images, moneypuck, nhl, odds, pwhl, wire
+    from sog import images, moneypuck, ncaa, nhl, odds, pwhl, wire
 
     async def nhl_get(path: str) -> dict:
         for part, name in NHL:
@@ -58,6 +58,13 @@ def install() -> None:
                 return _json(name)
         raise Missing(str(params))
 
+    async def ncaa_get(league: str, path: str, base: str = "", **params) -> dict:   # college: one Saturday's slate
+        if path == "scoreboard":
+            return _json("ncaa_scoreboard")
+        if path == "standings":
+            return _json("ncaa_standings")
+        raise Missing(path)
+
     async def wire_get(url: str, **params) -> _Reply:
         for part, name in WIRE:
             if part in url:
@@ -70,7 +77,7 @@ def install() -> None:
     async def no_images(self, url: str) -> bytes:   # photos and logos: "not found", so pages draw without them
         raise images.Missing(url)
 
-    nhl.get, pwhl.get, wire._get, odds.get_url = nhl_get, pwhl_get, wire_get, wire_get
+    nhl.get, pwhl.get, ncaa.get, wire._get, odds.get_url = nhl_get, pwhl_get, ncaa_get, wire_get, wire_get
     moneypuck.get, images.Images._get = moneypuck_get, no_images
 
 

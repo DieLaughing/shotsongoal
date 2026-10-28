@@ -1,0 +1,1482 @@
+{
+ "ncaam": [
+  {
+   "id": "110134",
+   "code": "ADR",
+   "school": "Adrian",
+   "full": "Adrian Bulldogs",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "2005",
+   "code": "AF",
+   "school": "Air Force",
+   "full": "Air Force Falcons",
+   "conf": "AHA",
+   "color": "#0C3C9C",
+   "light": false
+  },
+  {
+   "id": "2008",
+   "code": "AH",
+   "school": "Alabama Huntsville",
+   "full": "Alabama Huntsville Chargers",
+   "conf": "CHA",
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "298",
+   "code": "AKFB",
+   "school": "Alaska",
+   "full": "Alaska Nanooks",
+   "conf": "IND",
+   "color": "#0C54B4",
+   "light": false
+  },
+  {
+   "id": "1",
+   "code": "UAA",
+   "school": "Alaska Anchorage",
+   "full": "Alaska Anchorage Seawolves",
+   "conf": "IND",
+   "color": "#0C543C",
+   "light": false
+  },
+  {
+   "id": "14196",
+   "code": "ABCA",
+   "school": "Alberta",
+   "full": "Alberta Golden Bears & Pandas",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "2022",
+   "code": "AIC",
+   "school": "American International",
+   "full": "American International Yellow Jackets",
+   "conf": "AHA",
+   "color": "#CCB484",
+   "light": true
+  },
+  {
+   "id": "126807",
+   "code": "ANMR",
+   "school": "Anna Maria",
+   "full": "Anna Maria Amcats",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "12",
+   "code": "ARIZ",
+   "school": "Arizona",
+   "full": "Arizona Wildcats",
+   "conf": null,
+   "color": "#0C0C3C",
+   "light": false
+  },
+  {
+   "id": "9",
+   "code": "ASU",
+   "school": "Arizona State",
+   "full": "Arizona State Sun Devils",
+   "conf": "NCHC",
+   "color": "#FCCC24",
+   "light": true
+  },
+  {
+   "id": "349",
+   "code": "ARMY",
+   "school": "Army",
+   "full": "Army Black Knights",
+   "conf": "AHA",
+   "color": "#CCB484",
+   "light": true
+  },
+  {
+   "id": "2038",
+   "code": "ASP",
+   "school": "Assumption",
+   "full": "Assumption Greyhounds",
+   "conf": null,
+   "color": "#0C5484",
+   "light": false
+  },
+  {
+   "id": "124",
+   "code": "AUGS",
+   "school": "Augsburg",
+   "full": "Augsburg Auggies",
+   "conf": null,
+   "color": "#6C243C",
+   "light": false
+  },
+  {
+   "id": "2043",
+   "code": "AUSD",
+   "school": "Augustana (SD)",
+   "full": "Augustana (SD) Vikings",
+   "conf": "CCHA",
+   "color": "#0C246C",
+   "light": false
+  },
+  {
+   "id": "132",
+   "code": "BST",
+   "school": "Bemidji State",
+   "full": "Bemidji State Beavers",
+   "conf": "CCHA",
+   "color": "#CCB484",
+   "light": true
+  },
+  {
+   "id": "2060",
+   "code": "BENT",
+   "school": "Bentley",
+   "full": "Bentley Falcons",
+   "conf": "AHA",
+   "color": "#2484CC",
+   "light": false
+  },
+  {
+   "id": "2802",
+   "code": "BET",
+   "school": "Bethel College Minnesota",
+   "full": "Bethel College Minnesota Falcons",
+   "conf": null,
+   "color": "#0C246C",
+   "light": false
+  },
+  {
+   "id": "103",
+   "code": "BC",
+   "school": "Boston College",
+   "full": "Boston College Eagles",
+   "conf": "HE",
+   "color": "#84243C",
+   "light": false
+  },
+  {
+   "id": "104",
+   "code": "BU",
+   "school": "Boston University",
+   "full": "Boston University Terriers",
+   "conf": "HE",
+   "color": "#CC2424",
+   "light": false
+  },
+  {
+   "id": "189",
+   "code": "BGSU",
+   "school": "Bowling Green",
+   "full": "Bowling Green Falcons",
+   "conf": "CCHA",
+   "color": "#542424",
+   "light": false
+  },
+  {
+   "id": "2781",
+   "code": "BRO",
+   "school": "Brockport",
+   "full": "Brockport Golden Eagles",
+   "conf": null,
+   "color": "#0C3C24",
+   "light": false
+  },
+  {
+   "id": "225",
+   "code": "BRWN",
+   "school": "Brown",
+   "full": "Brown Bears",
+   "conf": "ECAC",
+   "color": "#543C24",
+   "light": false
+  },
+  {
+   "id": "2099",
+   "code": "CAN",
+   "school": "Canisius",
+   "full": "Canisius Golden Griffins",
+   "conf": "AHA",
+   "color": "#FCB40C",
+   "light": true
+  },
+  {
+   "id": "2137",
+   "code": "CLAR",
+   "school": "Clarkson",
+   "full": "Clarkson Golden Knights",
+   "conf": "ECAC",
+   "color": "#0C543C",
+   "light": false
+  },
+  {
+   "id": "2142",
+   "code": "COLG",
+   "school": "Colgate",
+   "full": "Colgate Raiders",
+   "conf": "ECAC",
+   "color": "#840C24",
+   "light": false
+  },
+  {
+   "id": "2144",
+   "code": "COLC",
+   "school": "Colorado College",
+   "full": "Colorado College Tigers",
+   "conf": "NCHC",
+   "color": "#FCB424",
+   "light": true
+  },
+  {
+   "id": "2152",
+   "code": "CCMN",
+   "school": "Concordia (MN)",
+   "full": "Concordia (MN) Cobbers",
+   "conf": null,
+   "color": "#6C243C",
+   "light": false
+  },
+  {
+   "id": "172",
+   "code": "COR",
+   "school": "Cornell",
+   "full": "Cornell Big Red",
+   "conf": "ECAC",
+   "color": "#B42424",
+   "light": false
+  },
+  {
+   "id": "159",
+   "code": "DART",
+   "school": "Dartmouth",
+   "full": "Dartmouth Big Green",
+   "conf": "ECAC",
+   "color": "#0C5424",
+   "light": false
+  },
+  {
+   "id": "2172",
+   "code": "DEN",
+   "school": "Denver",
+   "full": "Denver Pioneers",
+   "conf": "NCHC",
+   "color": "#B40C24",
+   "light": false
+  },
+  {
+   "id": "2217",
+   "code": "FAIR",
+   "school": "Fairfield",
+   "full": "Fairfield Badgers",
+   "conf": "MAAC",
+   "color": "#CC2424",
+   "light": false
+  },
+  {
+   "id": "2222",
+   "code": "FRST",
+   "school": "Ferris State",
+   "full": "Ferris State Bulldogs",
+   "conf": "CCHA",
+   "color": "#FCCC24",
+   "light": true
+  },
+  {
+   "id": "2224",
+   "code": "FIN",
+   "school": "Findlay",
+   "full": "Findlay Falcons",
+   "conf": "CHA",
+   "color": "#FC840C",
+   "light": false
+  },
+  {
+   "id": "126815",
+   "code": "FRSU",
+   "school": "Framingham State",
+   "full": "Framingham State Rams",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "112334",
+   "code": "FP",
+   "school": "Franklin Pierce",
+   "full": "FRANKLIN PIERCE",
+   "conf": null,
+   "color": "#6C0C24",
+   "light": false
+  },
+  {
+   "id": "108",
+   "code": "HARV",
+   "school": "Harvard",
+   "full": "Harvard Crimson",
+   "conf": "ECAC",
+   "color": "#9C243C",
+   "light": false
+  },
+  {
+   "id": "107",
+   "code": "HC",
+   "school": "Holy Cross",
+   "full": "Holy Cross Crusaders",
+   "conf": "AHA",
+   "color": "#6C249C",
+   "light": false
+  },
+  {
+   "id": "314",
+   "code": "IONA",
+   "school": "Iona",
+   "full": "Iona Gaels",
+   "conf": "MAAC",
+   "color": "#6C243C",
+   "light": false
+  },
+  {
+   "id": "285",
+   "code": "LSS",
+   "school": "Lake Superior State",
+   "full": "Lake Superior State Lakers",
+   "conf": "CCHA",
+   "color": "#FCCC24",
+   "light": true
+  },
+  {
+   "id": "2768",
+   "code": "LAUREN",
+   "school": "Laurentian",
+   "full": "Laurentian Voyageur",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "2335",
+   "code": "LIB",
+   "school": "Liberty",
+   "full": "Liberty Flames",
+   "conf": null,
+   "color": "#0C2454",
+   "light": false
+  },
+  {
+   "id": "2815",
+   "code": "LIN",
+   "school": "Lindenwood",
+   "full": "Lindenwood Lions",
+   "conf": "IND",
+   "color": "#B49C6C",
+   "light": false
+  },
+  {
+   "id": "110133",
+   "code": "LIU",
+   "school": "Long Island University",
+   "full": "Long Island University Sharks",
+   "conf": "IND",
+   "color": "#54B4E4",
+   "light": false
+  },
+  {
+   "id": "311",
+   "code": "ME",
+   "school": "Maine",
+   "full": "Maine Black Bears",
+   "conf": "HE",
+   "color": "#9CCCE4",
+   "light": true
+  },
+  {
+   "id": "2879",
+   "code": "MNHV",
+   "school": "Manhattanville",
+   "full": "Manhattanville Valiants",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "113",
+   "code": "MASS",
+   "school": "Massachusetts",
+   "full": "Massachusetts Minutemen",
+   "conf": "HE",
+   "color": "#842424",
+   "light": false
+  },
+  {
+   "id": "2385",
+   "code": "MERC",
+   "school": "Mercyhurst",
+   "full": "Mercyhurst Lakers",
+   "conf": "AHA",
+   "color": "#0C6C54",
+   "light": false
+  },
+  {
+   "id": "2771",
+   "code": "MRMK",
+   "school": "Merrimack",
+   "full": "Merrimack Warriors",
+   "conf": "HE",
+   "color": "#0C3C6C",
+   "light": false
+  },
+  {
+   "id": "193",
+   "code": "M-OH",
+   "school": "Miami (OH)",
+   "full": "Miami (OH) RedHawks",
+   "conf": "NCHC",
+   "color": "#CC0C3C",
+   "light": false
+  },
+  {
+   "id": "130",
+   "code": "MICH",
+   "school": "Michigan",
+   "full": "Michigan Wolverines",
+   "conf": "Big Ten",
+   "color": "#FCCC0C",
+   "light": true
+  },
+  {
+   "id": "127",
+   "code": "MSU",
+   "school": "Michigan State",
+   "full": "Michigan State Spartans",
+   "conf": "Big Ten",
+   "color": "#0C3C3C",
+   "light": false
+  },
+  {
+   "id": "2392",
+   "code": "MTU",
+   "school": "Michigan Tech",
+   "full": "Michigan Tech Huskies",
+   "conf": "CCHA",
+   "color": "#FCCC0C",
+   "light": true
+  },
+  {
+   "id": "2394",
+   "code": "MIDB",
+   "school": "Middlebury",
+   "full": "Middlebury Panthers",
+   "conf": null,
+   "color": "#3C5484",
+   "light": false
+  },
+  {
+   "id": "135",
+   "code": "MINN",
+   "school": "Minnesota",
+   "full": "Minnesota Golden Gophers",
+   "conf": "Big Ten",
+   "color": "#540C24",
+   "light": false
+  },
+  {
+   "id": "134",
+   "code": "UMD",
+   "school": "Minnesota Duluth",
+   "full": "Minnesota Duluth Bulldogs",
+   "conf": "NCHC",
+   "color": "#FCCC54",
+   "light": true
+  },
+  {
+   "id": "2364",
+   "code": "MNST",
+   "school": "Minnesota State",
+   "full": "Minnesota State Mavericks",
+   "conf": "CCHA",
+   "color": "#3C0C54",
+   "light": false
+  },
+  {
+   "id": "2772",
+   "code": "MNCK",
+   "school": "Minnesota-Crookston",
+   "full": "Minnesota-Crookston Golden Eagles",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "6858",
+   "code": "NEC",
+   "school": "New England College",
+   "full": "New England College Pilgrims",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "160",
+   "code": "UNH",
+   "school": "New Hampshire",
+   "full": "New Hampshire Wildcats",
+   "conf": "HE",
+   "color": "#0C2454",
+   "light": false
+  },
+  {
+   "id": "315",
+   "code": "NIA",
+   "school": "Niagara",
+   "full": "Niagara Purple Eagles",
+   "conf": "AHA",
+   "color": "#3C2484",
+   "light": false
+  },
+  {
+   "id": "6887",
+   "code": "NICC",
+   "school": "Nichols",
+   "full": "Nichols Bison",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "155",
+   "code": "UND",
+   "school": "North Dakota",
+   "full": "North Dakota Fighting Hawks",
+   "conf": "NCHC",
+   "color": "#0C9C3C",
+   "light": false
+  },
+  {
+   "id": "111",
+   "code": "NE",
+   "school": "Northeastern",
+   "full": "Northeastern Huskies",
+   "conf": "HE",
+   "color": "#E40C0C",
+   "light": false
+  },
+  {
+   "id": "128",
+   "code": "NMI",
+   "school": "Northern Michigan",
+   "full": "Northern Michigan Wildcats",
+   "conf": "CCHA",
+   "color": "#0C543C",
+   "light": false
+  },
+  {
+   "id": "87",
+   "code": "ND",
+   "school": "Notre Dame",
+   "full": "Notre Dame Fighting Irish",
+   "conf": "Big Ten",
+   "color": "#0C243C",
+   "light": false
+  },
+  {
+   "id": "195",
+   "code": "OHIO",
+   "school": "Ohio",
+   "full": "Ohio Bobcats",
+   "conf": null,
+   "color": "#0C3C3C",
+   "light": false
+  },
+  {
+   "id": "194",
+   "code": "OSU",
+   "school": "Ohio State",
+   "full": "Ohio State Buckeyes",
+   "conf": "Big Ten",
+   "color": "#B40C24",
+   "light": false
+  },
+  {
+   "id": "2437",
+   "code": "OMA",
+   "school": "Omaha",
+   "full": "Omaha Mavericks",
+   "conf": "NCHC",
+   "color": "#E4243C",
+   "light": false
+  },
+  {
+   "id": "213",
+   "code": "PSU",
+   "school": "Penn State",
+   "full": "Penn State Nittany Lions",
+   "conf": "Big Ten",
+   "color": "#0C0C3C",
+   "light": false
+  },
+  {
+   "id": "430",
+   "code": "POST",
+   "school": "Post",
+   "full": "Post Eagles",
+   "conf": "NE10",
+   "color": "#542454",
+   "light": false
+  },
+  {
+   "id": "163",
+   "code": "PRIN",
+   "school": "Princeton",
+   "full": "Princeton Tigers",
+   "conf": "ECAC",
+   "color": "#FC6C24",
+   "light": false
+  },
+  {
+   "id": "2507",
+   "code": "PROV",
+   "school": "Providence",
+   "full": "Providence Friars",
+   "conf": "HE",
+   "color": "#0C0C0C",
+   "light": false
+  },
+  {
+   "id": "2514",
+   "code": "QUIN",
+   "school": "Quinnipiac",
+   "full": "Quinnipiac Bobcats",
+   "conf": "ECAC",
+   "color": "#FCB43C",
+   "light": true
+  },
+  {
+   "id": "178",
+   "code": "RIT",
+   "school": "RIT",
+   "full": "RIT Tigers",
+   "conf": "AHA",
+   "color": "#FC840C",
+   "light": false
+  },
+  {
+   "id": "2528",
+   "code": "RPI",
+   "school": "Rensselaer",
+   "full": "Rensselaer Engineers",
+   "conf": "ECAC",
+   "color": "#FC3C24",
+   "light": false
+  },
+  {
+   "id": "126814",
+   "code": "RIVI",
+   "school": "Rivier",
+   "full": "Rivier Raiders",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "599",
+   "code": "RM",
+   "school": "Rob Morris Ill",
+   "full": "Rob Morris Ill Falcons",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "2523",
+   "code": "RMU",
+   "school": "Robert Morris",
+   "full": "Robert Morris Colonials",
+   "conf": "AHA",
+   "color": "#0C243C",
+   "light": false
+  },
+  {
+   "id": "126809",
+   "code": "NYCA",
+   "school": "SUNY Canton",
+   "full": "SUNY Canton SUNY CANT",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "7536",
+   "code": "CORTLAND",
+   "school": "SUNY Cortland",
+   "full": "SUNY Cortland Red Dragons",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "126812",
+   "code": "NYCL",
+   "school": "SUNY Cortland",
+   "full": "SUNY Cortland Red Dragons",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "2783",
+   "code": "SNYG",
+   "school": "SUNY Geneseo",
+   "full": "SUNY Geneseo SUNY-GENESEO",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "126813",
+   "code": "NYMS",
+   "school": "SUNY Morrisville",
+   "full": "SUNY Morrisville Mustangs",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "182",
+   "code": "NYPM",
+   "school": "SUNY Potsdam",
+   "full": "SUNY Potsdam SUNY-POTSDAM",
+   "conf": null,
+   "color": "#843C54",
+   "light": false
+  },
+  {
+   "id": "2529",
+   "code": "SHU",
+   "school": "Sacred Heart",
+   "full": "Sacred Heart Pioneers",
+   "conf": "AHA",
+   "color": "#CC0C3C",
+   "light": false
+  },
+  {
+   "id": "2830",
+   "code": "SANS",
+   "school": "Saint Anselm",
+   "full": "Saint Anselm Hawks",
+   "conf": "NE10",
+   "color": "#0C243C",
+   "light": false
+  },
+  {
+   "id": "260",
+   "code": "STM",
+   "school": "Saint Michael's",
+   "full": "Saint Michael's Purple Knights",
+   "conf": null,
+   "color": "#6C2484",
+   "light": false
+  },
+  {
+   "id": "2531",
+   "code": "SAST",
+   "school": "Salem State",
+   "full": "Salem State Vikings",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "2778",
+   "code": "SCRN",
+   "school": "Scranton",
+   "full": "Scranton Falcons",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "14197",
+   "code": "SEN",
+   "school": "Seneca",
+   "full": "Seneca Sting",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "126811",
+   "code": "SME",
+   "school": "Southern Maine",
+   "full": "Southern Maine Huskies",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "3256",
+   "code": "SNH",
+   "school": "Southern New Hampshire",
+   "full": "SOUTHERN NEW HAMPSHIRE",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "2594",
+   "code": "SCSU",
+   "school": "St. Cloud State",
+   "full": "St. Cloud State Huskies",
+   "conf": "NCHC",
+   "color": "#CC0C3C",
+   "light": false
+  },
+  {
+   "id": "2779",
+   "code": "USL",
+   "school": "St. Lawrence",
+   "full": "St. Lawrence Saints",
+   "conf": "ECAC",
+   "color": "#6C3C24",
+   "light": false
+  },
+  {
+   "id": "127963",
+   "code": "ST.",
+   "school": "St. Michael'S College",
+   "full": "St. Michael'S College Purple Knights",
+   "conf": null,
+   "color": "#0C3C3C",
+   "light": false
+  },
+  {
+   "id": "2900",
+   "code": "STMN",
+   "school": "St. Thomas",
+   "full": "St. Thomas Tommies",
+   "conf": "CCHA",
+   "color": "#54246C",
+   "light": false
+  },
+  {
+   "id": "284",
+   "code": "STO",
+   "school": "Stonehill",
+   "full": "Stonehill Skyhawks",
+   "conf": "IND",
+   "color": "#3C2484",
+   "light": false
+  },
+  {
+   "id": "111400",
+   "code": "TMU",
+   "school": "Toronto Metropolitan",
+   "full": "Toronto Metropolitan",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "2651",
+   "code": "TRNE",
+   "school": "Trine",
+   "full": "Trine Thunder",
+   "conf": null,
+   "color": "#0C3C54",
+   "light": false
+  },
+  {
+   "id": "41",
+   "code": "CONN",
+   "school": "UConn",
+   "full": "UConn Huskies",
+   "conf": "HE",
+   "color": "#0C243C",
+   "light": false
+  },
+  {
+   "id": "379",
+   "code": "MDAR",
+   "school": "UMass Dartmouth",
+   "full": "UMASS DARTMOUTH",
+   "conf": null,
+   "color": "#0C243C",
+   "light": false
+  },
+  {
+   "id": "2349",
+   "code": "UML",
+   "school": "UMass Lowell",
+   "full": "UMass Lowell River Hawks",
+   "conf": "HE",
+   "color": "#0C6CB4",
+   "light": false
+  },
+  {
+   "id": "2785",
+   "code": "UNNY",
+   "school": "Union",
+   "full": "Union Garnet Chargers",
+   "conf": "ECAC",
+   "color": "#840C24",
+   "light": false
+  },
+  {
+   "id": "128554",
+   "code": "UTIC",
+   "school": "Utica",
+   "full": "Utica Pioneers",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "261",
+   "code": "UVM",
+   "school": "Vermont",
+   "full": "Vermont Catamounts",
+   "conf": "HE",
+   "color": "#0C5424",
+   "light": false
+  },
+  {
+   "id": "14194",
+   "code": "WTLO",
+   "school": "Waterloo",
+   "full": "Waterloo King Warrior",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "131",
+   "code": "WAY",
+   "school": "Wayne St.",
+   "full": "Wayne St. Falcons",
+   "conf": "CHA",
+   "color": "#0C5454",
+   "light": false
+  },
+  {
+   "id": "2711",
+   "code": "WMU",
+   "school": "Western Michigan",
+   "full": "Western Michigan Broncos",
+   "conf": "NCHC",
+   "color": "#54240C",
+   "light": false
+  },
+  {
+   "id": "126808",
+   "code": "WFST",
+   "school": "Westfield State",
+   "full": "Westfield State Owls",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "2731",
+   "code": "WLM",
+   "school": "Williams",
+   "full": "Williams Ephs",
+   "conf": null,
+   "color": "#FCB40C",
+   "light": true
+  },
+  {
+   "id": "14195",
+   "code": "WIND",
+   "school": "Windsor",
+   "full": "WINDSOR",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "275",
+   "code": "WIS",
+   "school": "Wisconsin",
+   "full": "Wisconsin Badgers",
+   "conf": "Big Ten",
+   "color": "#9C0C0C",
+   "light": false
+  },
+  {
+   "id": "2738",
+   "code": "UWEC",
+   "school": "Wisconsin Eau Claire",
+   "full": "Wisconsin Eau Claire Blugolds",
+   "conf": null,
+   "color": "#0C3C6C",
+   "light": false
+  },
+  {
+   "id": "2744",
+   "code": "UWST",
+   "school": "Wisconsin Stout",
+   "full": "Wisconsin Stout Blue Devils",
+   "conf": null,
+   "color": "#0C243C",
+   "light": false
+  },
+  {
+   "id": "126810",
+   "code": "WORC",
+   "school": "Worcester State",
+   "full": "Worcester State Lancers",
+   "conf": null,
+   "color": "#555555",
+   "light": false
+  },
+  {
+   "id": "43",
+   "code": "YALE",
+   "school": "Yale",
+   "full": "Yale Bulldogs",
+   "conf": "ECAC",
+   "color": "#0C243C",
+   "light": false
+  }
+ ],
+ "ncaaw": [
+  {
+   "id": "127962",
+   "code": "ASP",
+   "school": "Assumption",
+   "full": "Assumption Greyhounds",
+   "conf": "NEWHA",
+   "color": "#0C549C",
+   "light": false
+  },
+  {
+   "id": "132",
+   "code": "BST",
+   "school": "Bemidji State",
+   "full": "Bemidji State Beavers",
+   "conf": "WCHA",
+   "color": "#CCB484",
+   "light": true
+  },
+  {
+   "id": "103",
+   "code": "BC",
+   "school": "Boston College",
+   "full": "Boston College Eagles",
+   "conf": "HE",
+   "color": "#84243C",
+   "light": false
+  },
+  {
+   "id": "104",
+   "code": "BU",
+   "school": "Boston University",
+   "full": "Boston University Terriers",
+   "conf": "HE",
+   "color": "#CC2424",
+   "light": false
+  },
+  {
+   "id": "225",
+   "code": "BRWN",
+   "school": "Brown",
+   "full": "Brown Bears",
+   "conf": "ECAC",
+   "color": "#543C24",
+   "light": false
+  },
+  {
+   "id": "2137",
+   "code": "CLAR",
+   "school": "Clarkson",
+   "full": "Clarkson Golden Knights",
+   "conf": "ECAC",
+   "color": "#0C543C",
+   "light": false
+  },
+  {
+   "id": "2142",
+   "code": "COLG",
+   "school": "Colgate",
+   "full": "Colgate Raiders",
+   "conf": "ECAC",
+   "color": "#840C24",
+   "light": false
+  },
+  {
+   "id": "172",
+   "code": "COR",
+   "school": "Cornell",
+   "full": "Cornell Big Red",
+   "conf": "ECAC",
+   "color": "#B42424",
+   "light": false
+  },
+  {
+   "id": "159",
+   "code": "DART",
+   "school": "Dartmouth",
+   "full": "Dartmouth Big Green",
+   "conf": "ECAC",
+   "color": "#0C5424",
+   "light": false
+  },
+  {
+   "id": "48",
+   "code": "DEL",
+   "school": "Delaware",
+   "full": "Delaware Blue Hens",
+   "conf": null,
+   "color": "#0C549C",
+   "light": false
+  },
+  {
+   "id": "121934",
+   "code": "FP",
+   "school": "Franklin Pierce",
+   "full": "Franklin Pierce Ravens",
+   "conf": "NEWHA",
+   "color": "#6C243C",
+   "light": false
+  },
+  {
+   "id": "108",
+   "code": "HARV",
+   "school": "Harvard",
+   "full": "Harvard Crimson",
+   "conf": "ECAC",
+   "color": "#9C243C",
+   "light": false
+  },
+  {
+   "id": "107",
+   "code": "HC",
+   "school": "Holy Cross",
+   "full": "Holy Cross Crusaders",
+   "conf": "HE",
+   "color": "#6C249C",
+   "light": false
+  },
+  {
+   "id": "2815",
+   "code": "LIN",
+   "school": "Lindenwood",
+   "full": "Lindenwood Lions",
+   "conf": "AHA",
+   "color": "#B49C6C",
+   "light": false
+  },
+  {
+   "id": "2341",
+   "code": "LIU",
+   "school": "Long Island University",
+   "full": "Long Island University Sharks",
+   "conf": "NEWHA",
+   "color": "#6CB4E4",
+   "light": false
+  },
+  {
+   "id": "311",
+   "code": "ME",
+   "school": "Maine",
+   "full": "Maine Black Bears",
+   "conf": "HE",
+   "color": "#9CCCE4",
+   "light": true
+  },
+  {
+   "id": "2385",
+   "code": "MERC",
+   "school": "Mercyhurst",
+   "full": "Mercyhurst Lakers",
+   "conf": "AHA",
+   "color": "#0C6C54",
+   "light": false
+  },
+  {
+   "id": "2771",
+   "code": "MRMK",
+   "school": "Merrimack",
+   "full": "Merrimack Warriors",
+   "conf": "HE",
+   "color": "#0C3C6C",
+   "light": false
+  },
+  {
+   "id": "135",
+   "code": "MINN",
+   "school": "Minnesota",
+   "full": "Minnesota Golden Gophers",
+   "conf": "WCHA",
+   "color": "#540C24",
+   "light": false
+  },
+  {
+   "id": "134",
+   "code": "UMD",
+   "school": "Minnesota Duluth",
+   "full": "Minnesota Duluth Bulldogs",
+   "conf": "WCHA",
+   "color": "#FCCC54",
+   "light": true
+  },
+  {
+   "id": "24059",
+   "code": "MNST",
+   "school": "Minnesota St",
+   "full": "Minnesota State Mavericks",
+   "conf": "WCHA",
+   "color": "#3C0C54",
+   "light": false
+  },
+  {
+   "id": "160",
+   "code": "UNH",
+   "school": "New Hampshire",
+   "full": "New Hampshire Wildcats",
+   "conf": "HE",
+   "color": "#0C2454",
+   "light": false
+  },
+  {
+   "id": "315",
+   "code": "NIA",
+   "school": "Niagara",
+   "full": "Niagara Purple Eagles",
+   "conf": null,
+   "color": "#3C2484",
+   "light": false
+  },
+  {
+   "id": "155",
+   "code": "UND",
+   "school": "North Dakota",
+   "full": "North Dakota Fighting Hawks",
+   "conf": null,
+   "color": "#0C9C3C",
+   "light": false
+  },
+  {
+   "id": "111",
+   "code": "NE",
+   "school": "Northeastern",
+   "full": "Northeastern Huskies",
+   "conf": "HE",
+   "color": "#E40C0C",
+   "light": false
+  },
+  {
+   "id": "194",
+   "code": "OSU",
+   "school": "Ohio State",
+   "full": "Ohio State Buckeyes",
+   "conf": "WCHA",
+   "color": "#B40C24",
+   "light": false
+  },
+  {
+   "id": "213",
+   "code": "PSU",
+   "school": "Penn State",
+   "full": "Penn State Nittany Lions",
+   "conf": "AHA",
+   "color": "#0C0C3C",
+   "light": false
+  },
+  {
+   "id": "430",
+   "code": "POST",
+   "school": "Post",
+   "full": "Post Eagles",
+   "conf": "NEWHA",
+   "color": "#542454",
+   "light": false
+  },
+  {
+   "id": "163",
+   "code": "PRIN",
+   "school": "Princeton",
+   "full": "Princeton Tigers",
+   "conf": "ECAC",
+   "color": "#FC6C24",
+   "light": false
+  },
+  {
+   "id": "2507",
+   "code": "PROV",
+   "school": "Providence",
+   "full": "Providence Friars",
+   "conf": "HE",
+   "color": "#0C0C0C",
+   "light": false
+  },
+  {
+   "id": "2514",
+   "code": "QUIN",
+   "school": "Quinnipiac",
+   "full": "Quinnipiac Bobcats",
+   "conf": "ECAC",
+   "color": "#FCB43C",
+   "light": true
+  },
+  {
+   "id": "178",
+   "code": "RIT",
+   "school": "RIT",
+   "full": "RIT Tigers",
+   "conf": "AHA",
+   "color": "#FC840C",
+   "light": false
+  },
+  {
+   "id": "2528",
+   "code": "RPI",
+   "school": "Rensselaer",
+   "full": "Rensselaer Engineers",
+   "conf": "ECAC",
+   "color": "#FC3C24",
+   "light": false
+  },
+  {
+   "id": "2523",
+   "code": "RMU",
+   "school": "Robert Morris",
+   "full": "Robert Morris Colonials",
+   "conf": "AHA",
+   "color": "#0C243C",
+   "light": false
+  },
+  {
+   "id": "2529",
+   "code": "SHU",
+   "school": "Sacred Heart",
+   "full": "Sacred Heart Pioneers",
+   "conf": "NEWHA",
+   "color": "#CC0C3C",
+   "light": false
+  },
+  {
+   "id": "2830",
+   "code": "SANS",
+   "school": "Saint Anselm",
+   "full": "Saint Anselm Hawks",
+   "conf": "NEWHA",
+   "color": "#0C243C",
+   "light": false
+  },
+  {
+   "id": "260",
+   "code": "STM",
+   "school": "Saint Michael's",
+   "full": "Saint Michael's Purple Knights",
+   "conf": "NEWHA",
+   "color": "#6C2484",
+   "light": false
+  },
+  {
+   "id": "2594",
+   "code": "SCSU",
+   "school": "St. Cloud State",
+   "full": "St. Cloud State Huskies",
+   "conf": "WCHA",
+   "color": "#CC0C3C",
+   "light": false
+  },
+  {
+   "id": "2779",
+   "code": "USL",
+   "school": "St. Lawrence",
+   "full": "St. Lawrence Saints",
+   "conf": "ECAC",
+   "color": "#6C3C24",
+   "light": false
+  },
+  {
+   "id": "127963",
+   "code": "ST.",
+   "school": "St. Michael'S College",
+   "full": "St. Michael'S College Purple Knights",
+   "conf": null,
+   "color": "#0C3C3C",
+   "light": false
+  },
+  {
+   "id": "2900",
+   "code": "STMN",
+   "school": "St. Thomas-Minnesota",
+   "full": "St. Thomas-Minnesota Tommies",
+   "conf": "WCHA",
+   "color": "#54246C",
+   "light": false
+  },
+  {
+   "id": "284",
+   "code": "STO",
+   "school": "Stonehill",
+   "full": "Stonehill Skyhawks",
+   "conf": "NEWHA",
+   "color": "#3C2484",
+   "light": false
+  },
+  {
+   "id": "183",
+   "code": "SYR",
+   "school": "Syracuse",
+   "full": "Syracuse Orange",
+   "conf": "AHA",
+   "color": "#FC3C24",
+   "light": false
+  },
+  {
+   "id": "41",
+   "code": "CONN",
+   "school": "UConn",
+   "full": "UConn Huskies",
+   "conf": "HE",
+   "color": "#0C243C",
+   "light": false
+  },
+  {
+   "id": "2785",
+   "code": "UNNY",
+   "school": "Union",
+   "full": "Union Garnet Chargers",
+   "conf": "ECAC",
+   "color": "#840C24",
+   "light": false
+  },
+  {
+   "id": "261",
+   "code": "UVM",
+   "school": "Vermont",
+   "full": "Vermont Catamounts",
+   "conf": "HE",
+   "color": "#0C5424",
+   "light": false
+  },
+  {
+   "id": "275",
+   "code": "WIS",
+   "school": "Wisconsin",
+   "full": "Wisconsin Badgers",
+   "conf": "WCHA",
+   "color": "#9C0C0C",
+   "light": false
+  },
+  {
+   "id": "43",
+   "code": "YALE",
+   "school": "Yale",
+   "full": "Yale Bulldogs",
+   "conf": "ECAC",
+   "color": "#0C243C",
+   "light": false
+  }
+ ]
+}

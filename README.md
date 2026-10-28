@@ -1,6 +1,6 @@
 # Shots on Goal
 
-**NHL and PWHL scores, games, news and "where can I actually watch this?" in one place.**
+**NHL, PWHL and college hockey scores, games, news and "where can I actually watch this?" in one place.**
 
 Shots on Goal is a small self-hosted web app for hockey fans and their friends. It shows tonight's games with live
 scores, game pages with shot maps, standings and team pages, a Wire of trades and news, alerts for your teams, and,
@@ -24,7 +24,10 @@ It installs on a phone like an app (no app store), and you host it yourself for 
 - **Standings and team pages:** schedules, rosters, team news and moves.
 - **The Wire:** trades and roster moves, headlines, and hockey insiders from Bluesky (editable list) in one feed.
 - **PWHL:** scores, game pages with shot maps, standings, team pages, news and alerts. Switch with the
-  NHL | PWHL | Both pill at the top. The PWHL side wears Boston Fleet colors.
+  NHL | PWHL | NCAA | All pill at the top. The PWHL side wears Boston Fleet colors.
+- **College hockey (NCAA men's and women's):** scores with poll ranks, goals by period, where each game streams,
+  records by conference, team schedules and alerts for your college teams. ESPN publishes no college box scores, so
+  game pages link to ESPN's for scorers and shots.
 - **Alerts** (web push) for your favorite teams: puck drop with where to watch, every goal, finals, trades.
 - **Calendar feed** with every game for your teams, each person with their own private link.
 - **Ticket links** before puck drop, a **What's new** page, an offline page when the server is down, a
@@ -32,7 +35,7 @@ It installs on a phone like an app (no app store), and you host it yourself for 
 
 ## Not affiliated with anyone
 
-Shots on Goal is an unofficial fan project. It is not affiliated with or endorsed by the NHL, the PWHL, any team,
+Shots on Goal is an unofficial fan project. It is not affiliated with or endorsed by the NHL, the PWHL, the NCAA, any team or school,
 ESPN, Sportsnet, Bluesky or any broadcaster. It reads the same public feeds their own websites use, politely, and
 those can change or disappear at any time. It shows no league or team logos: teams are colored squares with their
 abbreviation. News items link to the original articles. Please don't run a public instance for strangers. Run it for
@@ -206,6 +209,7 @@ HTML/CSS/JS in `web/`.
 | --- | --- |
 | `sog/nhl.py` | NHL web API client and parsers |
 | `sog/pwhl.py` | PWHL (HockeyTech) client and parsers into the same shapes |
+| `sog/ncaa.py` + `sog/data/college.json` | College hockey (ESPN) client and parsers; the team list comes from `tools/college_teams.py` |
 | `sog/feed.py` | The saved copy and the pollers. Pages never call the leagues directly |
 | `sog/watch.py` + `sog/data/networks.yaml` | US where-to-watch rules and networks |
 | `sog/wire.py` | The Wire: ESPN moves + news, RSS, Bluesky insiders; team tagging |

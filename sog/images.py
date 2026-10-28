@@ -32,6 +32,7 @@ ESPN_CODE = {"LAK": "la", "NJD": "nj", "SJS": "sj", "TBL": "tb", "UTA": "utah"} 
 LOGO_SIZE = 56   # a badge draws its logo 22 px tall (34 px on big ones): sharp enough, ~1.4 KB each
 LOGO_WEBP = {"quality": 75, "alpha_quality": 60, "method": 6}
 PWHL_LOGO = "https://assets.leaguestat.com/pwhl/logos/{tid}.png"
+COLLEGE_LOGO = "https://a.espncdn.com/i/teamlogos/ncaa/{folder}/{id}.png"   # per school: men's and women's share it
 log = logging.getLogger("sog.images")
 
 
@@ -121,6 +122,39 @@ class Images:
             raw = await self._get(PWHL_LOGO.format(tid=tid))
             await asyncio.to_thread(_shrink, raw, folder, key, (LOGO_SIZE,), LOGO_WEBP)
         return await self._cached(folder / f"{key}-{LOGO_SIZE}.webp", LOGO_TTL, make)
+
+    async def college_logo(self, school: str, variant: str) -> Path | None:
+        folder, name = self.root / "logo", f"ncaa-{school}-{variant}"
+
+        async def make():
+            raw = await self._get(COLLEGE_LOGO.format(folder="500-dark" if variant == "dark" else "500", id=school))
+            await asyncio.to_thread(_shrink, raw, folder, name, (LOGO_SIZE,), LOGO_WEBP)
+        return await self._cached(folder / f"{name}-{LOGO_SIZE}.webp", LOGO_TTL, make)
+
+
+async def college_logos_css(imgs: Images, keys: list[str]) -> Path | None:
+    """college-logos.css, like logos.css for college teams (CM-<id>, CW-<id>): kept apart because only people who
+    follow college hockey need ~110 more logos. A school's men's and women's teams share one picture."""
+    path = imgs.root / "college-logos.css"
+    if Images._fresh(path, LOGO_TTL):
+        return path
+    async with imgs.locks.setdefault(str(path), asyncio.Lock()):
+        if Images._fresh(path, LOGO_TTL):
+            return path
+        schools = sorted({k[3:] for k in keys})
+        got = await asyncio.gather(*[imgs.college_logo(sid, v) for sid in schools for v in ("light", "dark")], return_exceptions=True)
+        pics = {sid: (got[2 * i], got[2 * i + 1]) for i, sid in enumerate(schools)}
+        light, dark = [], []
+        for sid, (lp, dp) in pics.items():
+            sel = ",".join(f".mark.lg-{k}" for k in keys if k[3:] == sid)
+            if isinstance(lp, Path):
+                light.append(f'{sel}{{background:url("{_data_url(lp)}") center/contain no-repeat;color:transparent}}')
+                if isinstance(dp, Path) and dp.read_bytes() != lp.read_bytes():
+                    dark.append(f'{sel}{{background-image:url("{_data_url(dp)}")}}')
+        if not light:
+            return path if path.exists() else None
+        _write(path, ("\n".join(light) + "\n@media (prefers-color-scheme: dark) {\n" + "\n".join(dark) + "\n}\n").encode())
+        return path
 
 
 def _write(path: Path, data: bytes) -> None:

@@ -3,6 +3,12 @@
 # After editing: `.venv/bin/python tools/changelog.py` rewrites CHANGELOG.md (a test checks they match),
 # and `.venv/bin/python tools/release.py` publishes the day's GitHub Release.
 
+- date: 2026-10-28
+  kind: new
+  title: College hockey
+  text: Men's and women's college hockey is here. Tap NCAA at the top for every college game, or All for everything at once. Tap a college league's heading to fold its games away on a busy night, and it stays the way you left it (under All it starts folded, so the NHL isn't buried). Pick your schools in Settings › Your teams, grouped by conference, and they get the same cards on Tonight, alerts for puck drop, goals and finals, calendar feeds and spoiler-free. Games show poll ranks, goals by period and where each one streams (ESPN+, B1G+, FloHockey, NCHC.tv…; tick the ones you have in Settings). The League tab has each conference's records, and team pages show the season at a glance (home, away and conference records, goals a game, last five, poll moves, the arena), the roster where ESPN has one, and game highlight videos. ESPN doesn't publish scorers or shots for college games, so game pages link to ESPN's box score for those.
+  link: "#/?league=ncaa"
+
 - date: 2026-10-23
   kind: fixed
   title: The top and bottom bars sit right on iPhone

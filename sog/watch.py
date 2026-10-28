@@ -98,6 +98,33 @@ def watch_for(game: dict, local: list[str] | None = None, have: list[str] | None
     return _result("ESPN+", "Out of market", have_set)
 
 
+# ---- college -------------------------------------------------------------------------------------
+def college(game: dict, have: list[str] | None = None, country: str | None = None) -> dict:
+    """College games stream wherever ESPN lists them, with no blackouts. The first listed stream the person has
+    leads; ESPN+ and B1G+ are US services, so in Canada nothing is claimed either way."""
+    cfg, svcs = config().get("college") or {}, config()["services"]
+    have_set = set(have or [])
+    nets = game.get("networks") or []
+    if not nets:
+        return {"network": None, "app": None, "why": "No stream listed yet", "service": None, "have": None, "url": None}
+    nets = sorted(nets, key=lambda n: (cfg.get(n) or {}).get("service") not in have_set)
+    links, seen = [], set()
+    for n in nets:
+        info = cfg.get(n) or {}
+        url = info.get("url") or (svcs.get(info.get("service")) or {}).get("url")
+        app = info.get("app") or n
+        if url and app not in seen:
+            seen.add(app)
+            links.append({"name": app, "url": url})
+    first = cfg.get(nets[0]) or {}
+    service = first.get("service")
+    ca = country == "CA"
+    return {"network": nets[0], "app": first.get("app") or nets[0], "service": service,
+            "why": "US streams; may not play in Canada" if ca else ("Streaming" if len(nets) == 1 else f"Also on {', '.join(nets[1:])}"),
+            "have": None if ca or not service or have is None else service in have_set, "url": links[0]["url"] if links else None,
+            "links": links[:2]}
+
+
 # ---- Canada --------------------------------------------------------------------------------------
 def _ca_result(network: str | None, info: dict, why: str, have: set[str]) -> dict:
     svcs = config()["canada"]["services"]
