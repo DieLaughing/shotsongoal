@@ -872,6 +872,7 @@ async function pickemView(date, quiet = false) {
       ${d.next ? `<a href="#/picks/${d.next}" aria-label="Next day">→</a>` : "<span></span>"}
     </div>
     <p class="help">Tap who wins: <b>1 point</b> for every one you get right${pro.some(g => g.bonus) ? `, or <b>2 points</b> if they win as the underdog (marked <b>2×</b>)` : ""}. Tap ★ on one game a night to make it your lock: it <b>doubles</b> that game's points (nothing if it's wrong). Picks lock at puck drop.${college.length ? ` College gets its own ★ and table; no underdog bonus there, and a tie counts as wrong.` : ""}</p>
+    <div class="pick-dice"><button class="btn small" id="dice" hidden></button><span class="muted small">Only games you haven't picked</span></div>
     ${rows || `<div class="empty">No games this day.</div>`}
     ${hid.length ? `<h2>The table</h2>${spoilCover(hid, "The Pick'em table")}` : `
       ${pools.length > 1 ? `<div class="seg seg-top" role="tablist" style="margin-top:22px">${pools.map(p => `<button data-board="${p}" class="${p === boardPick ? "on" : ""}">${esc(POOL_NAME[p])}</button>`).join("")}</div>` : ""}
@@ -895,6 +896,24 @@ async function pickemView(date, quiet = false) {
     view.querySelectorAll(`.lockbtn[data-pool="${btn.dataset.pool}"]`).forEach(x => x.classList.toggle("on", x === btn && !g.lock));
     send(g, g.mine, !g.lock);
   }));
+  // 🎲 Pick for me: every game you haven't picked that hasn't started, in the sections that are open (fold a college
+  // league away to leave it out). The server leans on the odds where there are any, else flips a coin.
+  const dice = document.getElementById("dice");
+  const open = lg => !isCollege(lg) || view.querySelector(`details[data-fold="${lg}"]`)?.open;
+  const unpicked = () => d.games.filter(g => !g.mine && g.state === "pre" && !begun(g) && open(g.league || "nhl"));
+  const diceLabel = () => { const n = unpicked().length; dice.hidden = !n; dice.parentElement.hidden = !n;
+    dice.textContent = `🎲 Pick ${n === 1 ? "this one" : n} for me`; };
+  diceLabel();
+  dice.addEventListener("click", async () => {
+    const list = unpicked();
+    dice.disabled = true;
+    try {
+      const r = await api("/api/pickem/random", { method: "POST", body: JSON.stringify({ date: d.date,
+        games: list.map(g => ({ league: g.league || "nhl", id: g.id })) }) });
+      toast(r.picked ? `Picked ${r.picked} game${r.picked > 1 ? "s" : ""} for you. Tap any to change it.` : "Nothing left to pick");
+    } catch (e) { toast(e.detail || "Couldn't pick those. Try again.", true); }
+    pickemView(date, true);
+  });
   // Switching tables swaps them in place: the page doesn't move (see docs/motion.md).
   view.querySelectorAll("[data-board]").forEach(btn => btn.addEventListener("click", () => {
     try { localStorage.setItem("pickBoard", btn.dataset.board); } catch { /* fine */ }
@@ -903,6 +922,7 @@ async function pickemView(date, quiet = false) {
   }));
   view.querySelectorAll("details[data-fold]").forEach(el => el.addEventListener("toggle", () => {
     try { localStorage.setItem(foldKey(el.dataset.fold, "picks:"), el.open ? "1" : "0"); } catch { /* fine */ }
+    diceLabel();
   }));
   if (d.games.some(g => g.state === "live" || (g.state === "pre" && Date.parse(g.start) - Date.now() < 30 * 60000))) {
     autoRefresh(q => pickemView(date, q), 30);

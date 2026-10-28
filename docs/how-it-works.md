@@ -85,6 +85,9 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   swaps the tables in place). Pick'em follows the league pill like Tonight: college games fold under their league
   heading (fold:picks:<pill>:<lg>), your teams first. No underdog bonus for college (no odds); a college tie settles
   every pick on it as wrong. Long school names on pick buttons show the ESPN code (pickName).
+  "🎲 Pick N for me" (POST /api/pickem/random, picks.fill_random): the page sends the unpicked, unstarted games in its
+  open sections (a folded college league is left out); the server keeps those on that date's slate and picks each one
+  this person hasn't, weighted by odds.attach's win % (coin flip without odds). Never touches a pick or a lock.
 - Odds, for fun (sog/odds.py; Settings > Display > Show odds, on by default): the DraftKings moneyline comes free in the
   NHL score feed (oddsPartners, matched by name; nhl.parse_score -> g.odds) but vanishes at puck drop, so the
   scoreboard loop saves each pre-game line to game_odds (write on change; all rows kept in memory, pages never

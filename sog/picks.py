@@ -7,6 +7,7 @@ Friends' picks show once a game has started."""
 from __future__ import annotations
 
 import os
+import random
 import sqlite3
 import threading
 from datetime import date as Date, datetime, timedelta, timezone
@@ -112,6 +113,26 @@ def set_pick(email: str, g: dict, team: str | None, lock: bool = False, now: dat
                          ON CONFLICT (email, league, game_id) DO UPDATE SET team=excluded.team, lock=excluded.lock,
                          start=excluded.start""",
                       (email, lg, gid, g["date"], g.get("start"), team, int(bool(lock)), _iso(now or _now())))
+
+
+def fill_random(email: str, games: list[dict], now: datetime | None = None, rng: random.Random | None = None) -> int:
+    """"Pick for me": a pick on every game in the list this person hasn't picked and that hasn't started. Leans on the
+    odds where there are any (a 65% favourite gets the pick 65% of the time), else a coin flip. Never changes a pick
+    or a lock. Returns how many it picked."""
+    rng = rng or random.Random()
+    if not games:
+        return 0
+    marks = ",".join("?" * len(games))
+    have = {(r["league"], r["game_id"]) for r in _rows(f"SELECT league, game_id FROM pick WHERE email=? AND game_id IN ({marks})",
+                                                      (email, *(g["id"] for g in games)))}
+    n = 0
+    for g in games:
+        if (league(g), g["id"]) in have or g.get("state") != "pre" or started(g, now):
+            continue
+        away = ((g.get("odds") or {}).get("away_pct") or 50) / 100
+        set_pick(email, g, g["away"]["abbr"] if rng.random() < away else g["home"]["abbr"], now=now)
+        n += 1
+    return n
 
 
 def record_results(games: list[dict]) -> int:

@@ -87,3 +87,26 @@ def test_a_tie_is_a_wrong_pick():
     assert picks.pending("2026-10-14") == []   # settled, not waiting forever
     assert picks.board("a@x", {"a@x": "Al"}, ["ncaam"], "2026-10-14")["table"][0] == {
         "name": "Al", "me": True, "pts": 0, "w": 0, "l": 1, "upsets": 0}
+
+
+def test_pick_for_me_fills_only_open_unpicked_games():
+    import random
+    picks.set_pick("a@x", g(1, "TOR", "BOS"), "TOR", lock=True, now=NOW)
+    games = [g(1, "TOR", "BOS"), g(2, "DET", "OTT"), g(3, "MTL", "FLA", state="live"),
+             g(4, "CM-103", "CM-2172", league="ncaam"), g(5, "NYR", "NJD", start="2026-10-13T19:00:00Z")]
+    assert picks.fill_random("a@x", games, now=NOW, rng=random.Random(1)) == 2   # 2 and 4: 1 is picked, 3 and 5 started
+    mine = {m["id"]: m for m in picks.for_games("a@x", games, {"a@x": "Al"}, now=NOW)}
+    assert mine[1]["mine"] == "TOR" and mine[1]["lock"] is True   # untouched
+    assert mine[2]["mine"] in ("DET", "OTT") and mine[4]["mine"] in ("CM-103", "CM-2172")
+    assert not mine[2]["lock"] and not mine[4]["lock"] and mine[3]["mine"] is None
+    assert picks.fill_random("a@x", games, now=NOW) == 0   # nothing left to pick
+
+
+def test_pick_for_me_leans_on_the_odds():
+    import random
+    rng, heavy = random.Random(7), []
+    for i in range(200):
+        game = {**g(100 + i, "TOR", "BOS"), "odds": {"away_pct": 80, "home_pct": 20}}
+        picks.fill_random("a@x", [game], now=NOW, rng=rng)
+    heavy = [m["mine"] for m in picks.for_games("a@x", [g(100 + i, "TOR", "BOS") for i in range(200)], {}, now=NOW)]
+    assert 140 < heavy.count("TOR") < 180   # about 80%

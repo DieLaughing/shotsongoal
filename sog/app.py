@@ -854,6 +854,21 @@ async def pickem(request: Request, date: str | None = None, leagues: str = "nhl"
             "name": names.get(me, me.split("@")[0])}
 
 
+@app.post("/api/pickem/random")
+async def pickem_random(request: Request):
+    """"🎲 Pick for me": the page sends the games it shows (folded sections left out); the server checks each one is on
+    that date's slate, then picks the ones this person hasn't."""
+    body = await request.json()
+    date = str(body.get("date") or "")
+    wanted = {(str(x.get("league")), x.get("id")) for x in body.get("games") or [] if isinstance(x, dict)}
+    lgs = [lg for lg in LEAGUES if any(w[0] == lg for w in wanted)]
+    if not DATE.match(date) or not lgs:
+        raise HTTPException(400)
+    days = await asyncio.gather(*[_upstream(_slate(lg, date)) for lg in lgs])
+    games = odds.attach([dict(g, league=lg) for lg, d in zip(lgs, days) for g in d["games"] if (lg, g["id"]) in wanted])
+    return {"picked": picks.fill_random(request.state.email, games)}
+
+
 @app.post("/api/pickem")
 async def pickem_save(request: Request):
     body = await request.json()
