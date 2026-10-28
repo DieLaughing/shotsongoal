@@ -829,7 +829,7 @@ def _day_before(day: str) -> str:
 async def pickem(request: Request, date: str | None = None, leagues: str = "nhl"):
     if date and not DATE.match(date):
         raise HTTPException(400)
-    lgs = [lg for lg in ("nhl", "pwhl") if lg in leagues.split(",")] or ["nhl"]
+    lgs = [lg for lg in LEAGUES if lg in leagues.split(",")] or ["nhl"]
     today = feed.opening_day()
     date = date or today
     days = await asyncio.gather(*[_upstream(_slate(lg, date)) for lg in lgs])
@@ -847,14 +847,17 @@ async def pickem(request: Request, date: str | None = None, leagues: str = "nhl"
     return {"date": date, "today": today,
             "prev": max((d["prev"] for d in days if d.get("prev")), default=None),
             "next": min((d["next"] for d in days if d.get("next")), default=None),
-            "games": picks.for_games(me, games, names), "board": picks.board(me, names, lgs, today),
+            "games": picks.for_games(me, games, names),
+            # One table per pool shown (the pros, college): they score differently, so they never mix.
+            "boards": {p: picks.board(me, names, [lg for lg in lgs if lg in pl], today)
+                       for p, pl in picks.POOLS.items() if any(lg in pl for lg in lgs)},
             "name": names.get(me, me.split("@")[0])}
 
 
 @app.post("/api/pickem")
 async def pickem_save(request: Request):
     body = await request.json()
-    g = await _game_from(body, ("nhl", "pwhl"))  # no college in Pick'em
+    g = await _game_from(body)
     try:
         picks.set_pick(request.state.email, g, body.get("team") or None, bool(body.get("lock")))
     except ValueError as exc:

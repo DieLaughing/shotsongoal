@@ -62,3 +62,28 @@ def test_lock_cant_move_off_a_started_game():
 def test_seasons_and_weeks():
     assert picks.season_of("2027-03-01") == "2026-27" and picks.season_of("2026-10-13") == "2026-27"
     assert picks.week_start("2026-10-15") == "2026-10-12"
+
+
+def test_college_is_its_own_pool_with_its_own_lock_and_table():
+    picks.set_pick("a@x", g(1, "TOR", "BOS"), "BOS", lock=True, now=NOW)
+    picks.set_pick("a@x", g(401, "CM-103", "CM-2172", league="ncaam"), "CM-103", lock=True, now=NOW)  # college lock
+    picks.set_pick("a@x", g(402, "CW-104", "CW-111", league="ncaaw"), "CW-104", lock=True, now=NOW)  # moves it in college
+    mine = picks.for_games("a@x", [g(1, "TOR", "BOS"), g(401, "CM-103", "CM-2172", league="ncaam"),
+                                   g(402, "CW-104", "CW-111", league="ncaaw")], {"a@x": "Al"}, now=NOW)
+    assert [m["lock"] for m in mine] == [True, False, True]   # the NHL lock stays put
+    picks.set_pick("b@x", g(1, "TOR", "BOS"), "BOS", now=NOW)
+    picks.record_results([g(1, "TOR", "BOS", state="final", a=1, h=3),
+                          g(402, "CW-104", "CW-111", state="final", a=2, h=0, league="ncaaw")])
+    names = {"a@x": "Al", "b@x": "Bo"}
+    pro = picks.board("a@x", names, ["nhl", "pwhl"], "2026-10-14")["table"]
+    college = picks.board("a@x", names, ["ncaam", "ncaaw"], "2026-10-14")["table"]
+    assert [p["name"] for p in pro] == ["Al", "Bo"] and pro[0]["pts"] == 2
+    assert [(p["name"], p["pts"]) for p in college] == [("Al", 2)]   # only people with college picks; the lock doubled
+
+
+def test_a_tie_is_a_wrong_pick():
+    picks.set_pick("a@x", g(401, "CM-103", "CM-2172", league="ncaam"), "CM-103", lock=True, now=NOW)
+    assert picks.record_results([g(401, "CM-103", "CM-2172", state="final", a=2, h=2, league="ncaam")]) == 1
+    assert picks.pending("2026-10-14") == []   # settled, not waiting forever
+    assert picks.board("a@x", {"a@x": "Al"}, ["ncaam"], "2026-10-14")["table"][0] == {
+        "name": "Al", "me": True, "pts": 0, "w": 0, "l": 1, "upsets": 0}

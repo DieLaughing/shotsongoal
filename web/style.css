@@ -189,6 +189,7 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .league-fold > summary::after { content: ""; width: 7px; height: 7px; margin: 0 4px 0 auto; border-right: 2px solid var(--muted);
   border-bottom: 2px solid var(--muted); transform: translateY(-2px) rotate(45deg); transition: transform 160ms ease; }
 .league-fold[open] > summary::after { transform: translateY(2px) rotate(-135deg); }
+.league-head + .card, .league-fold > summary + .card { margin-top: 12px; }
 .lf-count { font-weight: 600; letter-spacing: 0; color: var(--muted); font-size: 12.5px; }
 .rk { font-size: 11px; font-weight: 700; color: var(--muted); margin-right: 4px; font-variant-numeric: tabular-nums; }
 
