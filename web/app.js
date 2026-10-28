@@ -8,6 +8,7 @@ let STANDINGS = {};     // per league: team names, records and divisions
 // Which leagues the app shows: nhl | pwhl | ncaa (college, men's and women's) | both (the "All" pill). Per device.
 let LEAGUE = (() => { try { return localStorage.getItem("league") || "nhl"; } catch { return "nhl"; } })();
 const LEAGUE_NAME = { nhl: "NHL", pwhl: "PWHL", ncaam: "NCAA men", ncaaw: "NCAA women" };
+const LEAGUE_TITLE = { ...LEAGUE_NAME, ncaam: "NCAA Men's Hockey", ncaaw: "NCAA Women's Hockey" };   // Tonight's league headings
 const COLLEGE = ["ncaam", "ncaaw"];
 const isCollege = lg => COLLEGE.includes(lg);
 const shownLeagues = () => ({ nhl: ["nhl"], pwhl: ["pwhl"], ncaa: COLLEGE, both: ["nhl", "pwhl", ...COLLEGE] }[LEAGUE] || ["nhl"]);
@@ -695,7 +696,7 @@ function heroes(data, leagues, slateGames) {
     + (cards.length > 1 ? `<div class="hero-dots" aria-hidden="true">${cards.map((_, i) => `<span${i === Math.min(heroAt, cards.length - 1) ? ' class="on"' : ""}></span>`).join("")}</div>` : "");
 }
 let heroAt = 0;   // the team card swiped into view, kept across the live refresh
-// College slates on Tonight are drop-downs (your teams stay out): open by default under NCAA, shut under All. What you
+// College slates on Tonight fold under their heading: open by default under NCAA, shut under All. What you
 // pick is kept per league and pill on this device, so a busy Saturday stays folded the next time.
 const foldKey = league => `fold:${LEAGUE}:${league}`;
 function foldIsOpen(league) {
@@ -731,10 +732,11 @@ async function tonightView(date, quiet = false) {
     rest.sort((x, y) => order(x) - order(y) || (x.start || "").localeCompare(y.start || ""));
     const head = leagues.length > 1 ? `<div class="league-head ${league}">${LEAGUE_NAME[league]}</div>` : "";
     if (!(day.games || []).length) return LEAGUE === "both" && isCollege(league) ? "" : head + `<div class="empty">No ${LEAGUE_NAME[league]} games this day.</div>`;
-    if (isCollege(league) && rest.length) {
-      const open = foldIsOpen(league) ? " open" : "";
-      return head + section("Your teams", mine) + `<details class="more-games" data-fold="${league}"${open}><summary>${mine.length ? "Other" : "All"} ${esc(LEAGUE_NAME[league])} games (${rest.length})</summary>
-        <div class="card">${rest.map(g => gameCard(g, fav)).join("")}</div></details>`;
+    if (isCollege(league)) {   // the heading is the drop-down: a busy college night folds away in one tap
+      const n = day.games.length, yours = mine.length ? ` · ${mine.length} of yours` : "";
+      return `<details class="league-fold" data-fold="${league}"${foldIsOpen(league) ? " open" : ""}>
+        <summary class="league-head ${league}">${esc(LEAGUE_TITLE[league])}<span class="lf-count">${n} game${n > 1 ? "s" : ""}${yours}</span></summary>
+        ${section("Your teams", mine)}${section(mine.length ? "Around college hockey" : "All games", rest)}</details>`;
     }
     return head + section("Your teams", mine) + section(mine.length ? (isCollege(league) ? "Around college hockey" : "Around the league") : "All games", rest);
   };

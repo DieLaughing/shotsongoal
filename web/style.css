@@ -176,15 +176,20 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .watch .no { color: var(--need-fg); font-weight: 650; }
 .tiles-top { margin: 12px 0 4px; }
 .more-stats { margin-top: 22px; }
-.more-games { margin-top: 12px; }
-.more-games[open] > summary { margin-bottom: 10px; }
-.more-stats > summary, .more-games > summary { cursor: pointer; list-style: none; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px;
+.more-stats > summary { cursor: pointer; list-style: none; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px;
   background: var(--surface); font-weight: 650; font-size: 14px; }
 .college-pick { border-top: 1px solid var(--border); }
 .college-pick > summary { cursor: pointer; list-style: none; padding: 12px 14px; font-weight: 650; font-size: 14px; }
-.more-stats > summary::-webkit-details-marker, .more-games > summary::-webkit-details-marker, .college-pick > summary::-webkit-details-marker { display: none; }
-.more-stats > summary::after, .more-games > summary::after, .college-pick > summary::after { content: "＋"; float: right; color: var(--muted); }
-.more-stats[open] > summary::after, .more-games[open] > summary::after, .college-pick[open] > summary::after { content: "−"; }
+.more-stats > summary::-webkit-details-marker, .college-pick > summary::-webkit-details-marker, .league-fold > summary::-webkit-details-marker { display: none; }
+.more-stats > summary::after, .college-pick > summary::after { content: "＋"; float: right; color: var(--muted); }
+.more-stats[open] > summary::after, .college-pick[open] > summary::after { content: "−"; }
+/* A college league's heading on Tonight is its drop-down: chevron at the end, game count beside the name. */
+.league-fold > summary { cursor: pointer; list-style: none; padding: 6px 0; user-select: none; }
+.league-fold:not([open]) > summary { margin-bottom: 0; }
+.league-fold > summary::after { content: ""; width: 7px; height: 7px; margin: 0 4px 0 auto; border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted); transform: translateY(-2px) rotate(45deg); transition: transform 160ms ease; }
+.league-fold[open] > summary::after { transform: translateY(2px) rotate(-135deg); }
+.lf-count { font-weight: 600; letter-spacing: 0; color: var(--muted); font-size: 12.5px; }
 .rk { font-size: 11px; font-weight: 700; color: var(--muted); margin-right: 4px; font-variant-numeric: tabular-nums; }
 
 /* momentum + shot quality */
