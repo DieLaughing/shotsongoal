@@ -245,7 +245,11 @@ async def save_settings(request: Request):
         "animations": body.get("animations") is not False,  # page transitions (Settings > Display); on unless turned off
         "marks": "badges" if body.get("marks") == "badges" else "logos",  # team marks: logos (default) or coloured badges
         "photos": body.get("photos") is not False,  # player photos (Settings > Display); on unless turned off
+        "welcomed": bool(body.get("welcomed")),  # has seen first-run setup (web/welcome.js)
+        "accent": body["accent"] if body.get("accent") == "none" or body.get("accent") in teams.ALL else "",  # team colours: "" = follow the league switch
     }
+    if "services" not in body:
+        del clean["services"]   # never answered isn't the same as having none: cards don't call a game "not in your services"
     store.save_settings(request.state.email, clean)
     return clean
 

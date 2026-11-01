@@ -8,7 +8,8 @@
   --border: #e2e5ea;
   --text: #14171c;
   --muted: #5d6470;
-  --accent: #d7263d;        /* goal light */
+  --accent: #d7263d;        /* the app's colour: yours if you have a team (web/app.js applyAccent) */
+  --red: #d7263d;           /* goal light: live, losses and the rink's lines stay red for every team */
   --have-bg: #e3f5e8; --have-fg: #13692f;
   --need-bg: #fdf0dc; --need-fg: #8a5300;
   --info-bg: #e6edf8; --info-fg: #1d4f9c;
@@ -198,6 +199,13 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .pick-dice { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 14px; }
 @media (pointer: coarse) { :root[data-hand="right"] .pick-dice { flex-direction: row-reverse; justify-content: flex-start; } }
 .pick-dice[hidden] { display: none; }
+.pick-clock { min-height: 22px; margin: 0 0 8px; font-size: 13.5px; color: var(--muted); font-weight: 600; }
+.pick-clock b { font: 800 20px/1 Score, system-ui, sans-serif; color: var(--text); font-variant-numeric: tabular-nums; }
+.pick-clock.soon b { color: var(--red); }
+.pick-clock.done { color: var(--have-fg); }
+.streak { font-size: 12px; font-weight: 750; white-space: nowrap; }
+.recs { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 18px; font-size: 12.5px; color: var(--muted); }
+.rec b { font: 800 20px/1 Score, system-ui, sans-serif; color: var(--text); }
 .lf-count { font-weight: 600; letter-spacing: 0; color: var(--muted); font-size: 12.5px; }
 .rk { font-size: 11px; font-weight: 700; color: var(--muted); margin-right: 4px; font-variant-numeric: tabular-nums; }
 
@@ -216,7 +224,7 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
   text-decoration: none; padding: 7px 12px; border-radius: 9px; border: 1px solid var(--border);
   background: var(--surface); color: var(--text); font-weight: 600; font-size: 13px; cursor: pointer;
 }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn.small { padding: 4px 10px; font-size: 12px; }
 .btn:disabled { opacity: .5; cursor: default; }
 
@@ -231,8 +239,8 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .team-line.lost .nm, .team-line.lost .sc { color: var(--muted); font-weight: 500; }
 .status { grid-row: span 2; text-align: right; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 74px; }
 .status .t { font: 800 19px/1.15 Score, system-ui, sans-serif; color: var(--text); }
-.live { color: var(--accent); font-weight: 750; font-size: 12px; letter-spacing: .03em; }
-.live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 5px; animation: pulse 1.4s infinite; vertical-align: 1px; }
+.live { color: var(--red); font-weight: 750; font-size: 12px; letter-spacing: .03em; }
+.live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--red); margin-right: 5px; animation: pulse 1.4s infinite; vertical-align: 1px; }
 @keyframes pulse { 50% { opacity: .3; } }
 
 /* where to watch */
@@ -279,7 +287,7 @@ td.team { text-align: left; }
 td.team .tm { display: inline-flex; align-items: center; gap: 8px; vertical-align: middle; }
 td.team a { text-decoration: none; font-weight: 600; }
 tr.fav td:first-child { box-shadow: inset 3px 0 0 var(--fav); }
-tr.cut td { border-top: 2px dashed var(--accent); }
+tr.cut td { border-top: 2px dashed var(--red); }
 .scroll { overflow-x: auto; }
 .rank { color: var(--muted); width: 1%; }
 
@@ -319,7 +327,7 @@ tr.cut td { border-top: 2px dashed var(--accent); }
 .done { color: var(--have-fg); font-weight: 650; margin: 0; }
 
 /* live extras */
-.sit { font-size: 11px; font-weight: 750; color: var(--accent); margin-top: 2px; }
+.sit { font-size: 11px; font-weight: 750; color: var(--red); margin-top: 2px; }
 .recap { margin: 12px 2px 0; line-height: 1.55; }
 .linkish { background: none; border: 0; color: var(--muted); font-size: 12.5px; text-decoration: underline; cursor: pointer; padding: 2px; }
 .rink { width: 100%; height: auto; display: block; margin: 6px 0; }
@@ -367,7 +375,7 @@ tr.cut td { border-top: 2px dashed var(--accent); }
 /* Springs out from the middle like an island (OpenUI's trip planner demo), shrinks away on the way out. */
 .toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); transition: opacity .15s, transform .45s cubic-bezier(.3, 1.35, .5, 1); }
 @media (prefers-reduced-motion: reduce) { .toast, .toast.show { transition: opacity .2s; } }
-.toast.bad { background: var(--accent); color: #fff; }
+.toast.bad { background: var(--red); color: #fff; }
 
 /* admin */
 .person { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); flex-wrap: wrap; }
@@ -409,9 +417,9 @@ body.league-pwhl .league button.on { background: var(--accent); color: var(--on-
 
 /* PWHL mode: Boston Fleet colours (from the Fleet logo) */
 :root { --on-accent: #fff; }
-body.league-pwhl { --accent: #163F36; --fav: #163F36; --on-accent: #fff; }
+body.league-pwhl { --accent: #163F36; --red: #163F36; --fav: #163F36; --on-accent: #fff; }
 @media (prefers-color-scheme: dark) {
-  body.league-pwhl { --accent: #B3DFD7; --fav: #B3DFD7; --on-accent: #081D2B; }
+  body.league-pwhl { --accent: #B3DFD7; --red: #B3DFD7; --fav: #B3DFD7; --on-accent: #081D2B; }
 }
 .btn.primary { color: var(--on-accent); }
 
@@ -520,7 +528,7 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 .dots { display: flex; gap: 4px; }
 .dots i, .pre-note i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .res-W { background: var(--have-fg); }
-.res-L { background: var(--accent); }
+.res-L { background: var(--red); }
 .res-OT { background: var(--muted); }
 .pre-note { padding: 8px 14px 10px; font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--border); }
 .pre-note i { width: 8px; height: 8px; margin: 0 2px 0 6px; vertical-align: 0; }
@@ -586,6 +594,7 @@ table.seasons td:nth-child(2) { white-space: normal; min-width: 7em; }
 .prow-val { font-weight: 750; font-size: 16px; font-variant-numeric: tabular-nums; }
 .search-box { width: 100%; font-size: 16px; padding: 11px 12px; margin: 4px 0 6px; }
 .team-head { display: flex; align-items: center; gap: 14px; }
+.films { justify-content: center; padding-top: 12px; }
 .nw { white-space: nowrap; }
 /* college team page: this season */
 .sgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px 16px; }
@@ -679,3 +688,18 @@ body.bug-gone .top.tucked ~ #view .ministrip { transform: none; }
 .rp-read small { font: 700 13px system-ui, sans-serif; color: var(--muted); }
 .rp-line { display: contents; }
 .rp-goal-by { flex-basis: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 32px; color: var(--text); font-weight: 650; }
+
+/* Team and player pages: the jumbotron's cousin, one team's colour with the same slant and one big number. Always dark. */
+.card.banner { position: relative; display: flex; align-items: center; gap: 14px; padding: 18px 16px; border: 0; color: #fff;
+  background: linear-gradient(101deg, color-mix(in srgb, var(--c) 64%, #0a0d12) 66%, color-mix(in srgb, var(--c) 40%, #0a0d12) 66%); }
+.banner .mark.big { width: 64px; height: 46px; flex: none; }
+.bn-text { flex: 1; min-width: 0; }
+.bn-text h1 { margin: 0 0 2px; font-size: 21px; line-height: 1.15; }
+.banner .muted { color: rgba(255, 255, 255, .78); }
+.bn-text .btn { margin-top: 8px; color: #fff; background: rgba(255, 255, 255, .14); border-color: rgba(255, 255, 255, .3); }
+.bn-big { flex: none; display: grid; justify-items: center; line-height: 1; text-shadow: 0 2px 14px rgba(0, 0, 0, .4); }
+.bn-big b { font: 800 66px/.95 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.bn-big span { margin-top: 3px; font-size: 11px; font-weight: 650; letter-spacing: .04em; color: rgba(255, 255, 255, .8); }
+.bn-num b { font-size: 92px; opacity: .92; }
+.banner .phero-team { color: #fff; }
+@media (min-width: 700px) { .bn-big b { font-size: 84px; } .bn-num b { font-size: 112px; } .card.banner { padding: 22px 24px; } .bn-text h1 { font-size: 26px; } }

@@ -24,10 +24,10 @@ const CSS = `
   .cv-foot a { margin: 4px 0 0; }
 }`;
 
-export function open({ reel, at, mark, esc, motionOn, colour }) {
+export function open({ reel, at, nextLabel, mark, esc, motionOn, colour }) {
   if (!document.getElementById("cv-css")) document.head.append(Object.assign(document.createElement("style"), { id: "cv-css", textContent: CSS }));
   const root = Object.assign(document.createElement("div"), { className: "clipview", tabIndex: -1 });
-  root.setAttribute("role", "dialog"); root.setAttribute("aria-modal", "true"); root.setAttribute("aria-label", "Goal clip");
+  root.setAttribute("role", "dialog"); root.setAttribute("aria-modal", "true"); root.setAttribute("aria-label", "Video");
   const scroller = document.documentElement, overflow = scroller.style.overflow;
   const from = document.activeElement, behind = [...document.body.children];
   scroller.style.overflow = "hidden";
@@ -58,8 +58,8 @@ export function open({ reel, at, mark, esc, motionOn, colour }) {
     const c = reel[at];
     root.innerHTML = `<div class="cv-box"><div class="cv-top" style="--c:${esc(colour(c.team))}">${mark(c.team)}<div class="cv-who"><b>${esc(c.who)}</b><span>${esc(c.when)} · ${esc(c.score)}</span></div>
         <button class="cv-x" aria-label="Close">✕</button></div>
-      <div class="cv-frame"><iframe title="Goal by ${esc(c.who)}" src="${PLAYER}?videoId=${esc(c.id)}&autoplay=any" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen></iframe></div>
-      <div class="cv-foot">${reel.length > 1 ? `<button id="cv-prev"${at ? "" : " disabled"}>‹ Previous</button><button id="cv-next"${at < reel.length - 1 ? "" : " disabled"}>Next goal ›</button>` : ""}
+      <div class="cv-frame"><iframe title="${esc(c.who)}" src="${PLAYER}?videoId=${esc(c.id)}&autoplay=any" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen></iframe></div>
+      <div class="cv-foot">${reel.length > 1 ? `<button id="cv-prev"${at ? "" : " disabled"}>‹ Previous</button><button id="cv-next"${at < reel.length - 1 ? "" : " disabled"}>${esc(nextLabel)} ›</button>` : ""}
         <a href="${esc(c.url)}" target="_blank" rel="noopener">Open on NHL.com ↗</a></div></div>`;
     root.querySelector(".cv-x").onclick = close;
     const prev = root.querySelector("#cv-prev"), next = root.querySelector("#cv-next");

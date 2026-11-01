@@ -19,7 +19,7 @@ log = logging.getLogger("sog.feed")
 
 STALE_OK = timedelta(days=1)          # an expired saved copy this young is shown while a fresh one loads
 GAME_STALE_OK = timedelta(minutes=1)
-GAME_SHAPE = 2                        # bump when parse_detail gains fields pages need: older saved copies are refetched
+GAME_SHAPE = 3                        # bump when parse_detail gains fields pages need: older saved copies are refetched
 CAREER_TTL = timedelta(hours=20)      # milestone watch: career totals, about once a day
 CAREER_POLL = 1800                    # seconds between checks that careers are saved
 WARM_LIVE_POLL = 90                   # seconds between refreshes of live games nobody is watching or follows
@@ -875,6 +875,10 @@ def _game_ttl(detail: dict) -> timedelta | None:
         return timedelta(seconds=DETAIL_POLL)
     if g["state"] == "final":
         started = parse_iso(g["start"]) if g.get("start") else datetime.now(timezone.utc)
-        # Stars and stats settle in the hour after the horn; after that it's history.
-        return None if datetime.now(timezone.utc) - started > timedelta(hours=8) else timedelta(minutes=10)
+        # Stars and stats settle in the hour after the horn; after that it's history. A recap or condensed game the NHL
+        # hasn't published yet is still worth a look for two days.
+        age, video = datetime.now(timezone.utc) - started, detail.get("video")
+        if age <= timedelta(hours=8):
+            return timedelta(minutes=10)
+        return timedelta(minutes=30) if video is not None and not all(video.values()) and age <= timedelta(hours=48) else None
     return timedelta(minutes=30)

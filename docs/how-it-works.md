@@ -90,6 +90,13 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   "🎲 Pick N for me" (POST /api/pickem/random, picks.fill_random): the page sends the unpicked, unstarted games in its
   open sections (a folded college league is left out); the server keeps those on that date's slate and picks each one
   this person hasn't, weighted by odds.attach's win % (coin flip without odds). Never touches a pick or a lock.
+  Countdown: showClock() on the page, one 1-second timer that stops when its element is gone, redrawing as a game locks.
+  Streaks: picks.runs() from settled picks in game order, per pool and season: current run, best run, perfect nights
+  (PERFECT_MIN 3 picks, all right); board() returns `me` plus `streak` on each table row. They sit inside `tables()`,
+  so a spoiler-free game hiding the table hides them too.
+- First-run setup (web/welcome.js): approved people with no favourites who haven't `welcomed` get teams, home market
+  and services, one screen each. Order matters: the first team in a league is the main one, a tray chip moves a team to the
+  front. College teams stay in Settings (hundreds of schools). Saves once at the end; Settings > Your teams runs it again.
 - Odds, for fun (sog/odds.py; Settings > Display > Show odds, on by default): the DraftKings moneyline comes free in the
   NHL score feed (oddsPartners, matched by name; nhl.parse_score -> g.odds) but vanishes at puck drop, so the
   scoreboard loop saves each pre-game line to game_odds (write on change; all rows kept in memory, pages never
@@ -126,6 +133,15 @@ How the app moves (what animates, what must hold still, timings, rules for new U
     is the end of the goal's highlightClipSharingUrl (no server change). gameUi.reel lists the game's clips for Next
     goal and for Replay's button. It's the league's player, ads included: never play the stream directly. Terms:
     embedding is for non-commercial use only and the NHL can turn it off at any time, so the theatre always links to the page on NHL.com too.
+  - Recaps: nhl.parse_detail keeps right-rail `gameVideo` as d.video (recap, condensed) and gameUi.films lists them for
+    finals, in the same theatre. They arrive after the horn; final copies re-fetch for 8 hours (_game_ttl), so they appear on their own.
+  - Team and player pages: `.card.banner` (--c = the team's colour, same slant as the jumbotron, always dark), with one
+    big number: points, poll place, or the jersey number.
+  - Team colours: settings.accent = "" (your first favourite in the leagues on show), a team (always that one) or "none".
+    applyAccent() runs on every league switch and favourites change, and writes CSS into <style id="team-accent">;
+    the same CSS is kept in localStorage `accentCss`, and an inline script in index.html puts it back before the first paint.
+    readableOn() shifts a colour's lightness until it has 3.2:1 on the page background, keeping the hue. --accent is the
+    app's colour; --red is the goal light (live, losses, the rink's lines) and doesn't follow your team.
   - Replay: timeline() in app.js turns shots into one game clock (regulation 20 min, overtime 5 or longer in the
     playoffs, ending at an overtime goal or at the last shot while live); replayBar() draws it; the puck is the thumb of a
     plain range input, so touch and keyboard work for nothing. Dots carry `data-i` (index in d.shotmap); a move only

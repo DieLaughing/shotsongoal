@@ -118,7 +118,36 @@ def clip_check(page) -> tuple[str, bool]:
     return "opened and closed", "videoId=" in src and not page.query_selector(".clipview") and page.evaluate("scrollY") == y and page.evaluate("document.documentElement.style.overflow") == ""
 
 
-PLAY = [(REPLAY_GAME, "replay", replay_check), (REPLAY_GAME, "clip", clip_check), ("#/league", "what if", what_if_check), ("#/picks", "flick", flick_check)]
+def welcome_check(page) -> tuple[str, bool]:
+    """Someone new gets one question a screen; several teams keep their order, and finishing saves it all and leaves the
+    app usable."""
+    saved = []
+
+    def me(route):
+        res = route.fetch()
+        data = res.json()
+        data["settings"].update(favorites=[], welcomed=False)
+        route.fulfill(response=res, json=data)
+
+    def settings(route):
+        saved.append(route.request.post_data_json)
+        route.fulfill(json=route.request.post_data_json)
+
+    page.route("**/api/me", me)
+    page.route("**/api/settings", settings)
+    page.reload()
+    page.wait_for_selector(".wl-t", timeout=3000)
+    for team in ("LAK", "BOS"):
+        page.evaluate("t => document.querySelector(`[data-t=${t}]`).click()", team)
+    page.evaluate("document.querySelector('[data-main=BOS]').click()")   # the second tap becomes the main team
+    for _ in range(3):
+        page.evaluate("document.querySelector('.wl .go').click()")
+    page.wait_for_timeout(200)
+    got = saved[-1] if saved else {}
+    return f"saved {got.get('favorites')}", got.get("favorites") == ["BOS", "LAK"] and got.get("welcomed") is True and not page.query_selector(".wl") and not page.evaluate("document.querySelector('main').inert")
+
+
+PLAY = [(REPLAY_GAME, "replay", replay_check), (REPLAY_GAME, "clip", clip_check), ("#/", "welcome", welcome_check), ("#/league", "what if", what_if_check), ("#/picks", "flick", flick_check)]
 
 # ---- the checks (the same in both apps) ---------------------------------------------------------------------------
 OPEN_MS, SETTLE_MS, STILL_MS, STILL_PX, PILL_PX = 8000, 3200, 800, 1, 2
@@ -147,12 +176,19 @@ MORPHS = """async tap => {
 }"""
 
 
+def prepare(ctx, url: str) -> None:
+    """Someone who's been here before: first-run setup would otherwise cover every page."""
+    me = ctx.request.get(f"{url}/api/me").json()["settings"]
+    ctx.request.put(f"{url}/api/settings", data={**me, "welcomed": True})
+
+
 def check(url: str) -> list[tuple[str, str, str, bool]]:
     from playwright.sync_api import TimeoutError as PwTimeout, sync_playwright
     rows: list[tuple[str, str, str, bool]] = []
     with sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=os.environ.get("PERF_CHROMIUM") or None)
         ctx = browser.new_context(viewport=VIEWPORT, is_mobile=True, has_touch=True, service_workers="block")
+        prepare(ctx, url)
 
         def fresh(hash_: str):
             page = ctx.new_page()

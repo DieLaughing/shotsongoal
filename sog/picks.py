@@ -192,24 +192,45 @@ def for_games(email: str, games: list[dict], names: dict[str, str], now: datetim
     return out
 
 
+PERFECT_MIN = 3   # picks on a night, all of them right, for it to count as a perfect night
+
+
+def runs(results: list[dict]) -> dict:
+    """One person's settled picks, in the order they were played: right now's run of right picks, the best run this
+    season and the perfect nights."""
+    best = now = 0
+    for r in results:
+        now = now + 1 if r["won"] else 0
+        best = max(best, now)
+    nights: dict[str, list[bool]] = {}
+    for r in results:
+        nights.setdefault(r["date"], []).append(bool(r["won"]))
+    return {"streak": now, "best": best, "perfect": sum(len(n) >= PERFECT_MIN and all(n) for n in nights.values())}
+
+
 def board(email: str, names: dict[str, str], leagues: list[str], today: str) -> dict:
-    """Season table, this week and the last night with results, for the given leagues."""
+    """Season table, this week and the last night with results, for the given leagues, plus each person's run."""
     lo, hi = season_bounds(season_of(today))
     marks = ",".join("?" * len(leagues))
     rows = _rows(f"SELECT email, date, lock, won, dog FROM pick WHERE won IS NOT NULL AND date BETWEEN ? AND ? "
-                 f"AND league IN ({marks})", (lo, hi, *leagues))
+                 f"AND league IN ({marks}) ORDER BY date, start, game_id", (lo, hi, *leagues))
     rows = [r for r in rows if r["email"] in names]
     week_from = week_start(today)
+    by_person: dict[str, list[dict]] = {}
+    for r in rows:
+        by_person.setdefault(r["email"], []).append(r)
+    run = {who: runs(results) for who, results in by_person.items()}
 
     def table(picked: list[dict]) -> list[dict]:
         people: dict[str, dict] = {}
         for r in picked:
-            p = people.setdefault(r["email"], {"name": names[r["email"]], "me": r["email"] == email, "pts": 0, "w": 0, "l": 0, "upsets": 0})
+            p = people.setdefault(r["email"], {"name": names[r["email"]], "me": r["email"] == email, "pts": 0, "w": 0, "l": 0, "upsets": 0,
+                                               "streak": run[r["email"]]["streak"]})
             p["w" if r["won"] else "l"] += 1
             p["upsets"] += 1 if r["won"] and r["dog"] else 0
             p["pts"] += points(bool(r["won"]), bool(r["lock"]), bool(r["dog"]))
         return sorted(people.values(), key=lambda p: (-p["pts"], -p["w"], p["l"], p["name"].lower()))
 
     last_day = max((r["date"] for r in rows), default=None)
-    return {"season": season_of(today), "table": table(rows), "week": table([r for r in rows if r["date"] >= week_from]),
+    return {"season": season_of(today), "me": run.get(email), "table": table(rows), "week": table([r for r in rows if r["date"] >= week_from]),
             "last": {"date": last_day, "table": table([r for r in rows if r["date"] == last_day])} if last_day else None}
