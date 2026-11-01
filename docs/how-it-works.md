@@ -108,6 +108,31 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   (watching, reactions per event key g:<period>-<time>-<scorer> / p:...-<player>, mine, rivals). Rival = a friend
   whose first favourite in that league is the other team; the final alert appends "Tell X." / "X will enjoy this one."
   Watching rows go a day after the game, reactions at the July 1 season rollover (cleanup hourly from /api/games).
+- The arena (form as well as function, all from data the page already has):
+  - Scoreboard digits: Big Shoulders Display ExtraBold, subset to digits and a few marks (1.8 KB) and inlined in
+    style.css as the `Score` font: no request, no late swap. unicode-range lets letters in the same run fall through to
+    the system font. Licence: web/fonts/BigShoulders-OFL.txt. To rebuild: `pyftsubset <font> --text="0123456789:–-.%"
+    --flavor=woff2 --layout-features='tnum,lnum' --no-hinting --desubroutinize`, then base64 it into the @font-face.
+  - Jumbotron: `.scorebug` is always dark, with --a/--h (team colours, apart() keeps them different) meeting on a
+    slant. `.ministrip` stands in once it's scrolled off: watchBug() puts `bug-gone` on <body> (which a morph doesn't
+    touch) from an IntersectionObserver; route() clears it.
+  - Goal lamp: paint() compares every `[data-sc]` before and after a quiet morph; one that went up gets lamp() (roll
+    plus a temporary `.lamp` that removes itself). Only quiet morphs, so opening a page never fires it, and spoiler-hidden
+    scores have no `[data-sc]` at all. Tapping a number on the jumbotron lights it too.
+  - Code that isn't needed for a first paint loads on demand, as ES modules with the page's `?v=` (V in app.js): web/replay.js on
+    idle after a game page with 10+ shots, web/flick.js and web/whatif.js on tap. Each brings its own CSS, except
+    Replay's, which the page needs to draw.
+  - Replay: timeline() in app.js turns shots into one game clock (regulation 20 min, overtime 5 or longer in the
+    playoffs, ending at an overtime goal or at the last shot while live); replayBar() draws it; the puck is the thumb of a
+    plain range input, so touch and keyboard work for nothing. Dots carry `data-i` (index in d.shotmap); a move only
+    touches the dots between the old and new spot. While gameUi.replaying, quiet redraws skip and the page catches up
+    when the replay ends.
+  - Flick your picks: an overlay on <body> (so refreshes can't touch it) over the same unpicked() list as 🎲. Saves go
+    out in order through POST /api/pickem; closing waits for them before redrawing.
+  - What if?: NHL only. project() in web/whatif.js applies the picked results to a copy of the standings rows and
+    re-ranks them (division, conference, league, wild card); standingsBody() draws any list of rows, so the real table
+    and the pretend one share a renderer. Ties go points, fewer games, regulation wins, wins, goal difference: close to
+    the NHL's order, not exact. Nothing is saved; picks stay in memory across mode switches until Close.
 - Layout (2026-10-13 tidy-up): tabs Tonight / Pick'em / Wire / League (#/league = standings + your-team tiles;
   #/standings and #/teams route there). Admin is a link in Settings. Tonight: team cards replace the "Your teams"
   list; one banner slot (get-app/alerts first, else What's new). Cards use cardWatch() (app + have it); the full

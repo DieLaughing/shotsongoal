@@ -294,7 +294,7 @@ function spoilCover(games, what, verb = "includes") {
 function gameCard(g, fav) {
   const a = g.away, h = g.home, hide = spoilerHidden(g), done = g.state === "final" && !hide;
   const lost = side => done && a.score != null && h.score != null && side.score < (side === a ? h.score : a.score) ? " lost" : "";
-  const sc = t => g.state === "pre" || g.state === "postponed" || hide ? "" : `<span class="sc">${t.score ?? ""}</span>`;
+  const sc = t => g.state === "pre" || g.state === "postponed" || hide ? "" : `<span class="sc" data-sc="${g.id}${t === a ? "a" : "h"}">${t.score ?? ""}</span>`;
   const isFav = fav.has(a.abbr) || fav.has(h.abbr);
   // The watch line sits outside the game link so its own link (ESPN+, NESN 360...) can be tapped.
   return `<div class="game${isFav ? " fav" : ""}">
@@ -478,12 +478,26 @@ let morph = null;
 const loadMorph = () => morph || import("./idiomorph.js?v=1").then(m => { morph = m.Idiomorph.morph; }).catch(() => {});
 // An opened or closed <details> stays the way the person left it.
 const MORPH = { morphStyle: "innerHTML",
-  callbacks: { beforeAttributeUpdated: (name, el) => !(name === "open" && el.tagName === "DETAILS") } };
+  callbacks: { beforeAttributeUpdated: (name, el) => !(name === "open" && el.tagName === "DETAILS"),
+    beforeNodeMorphed: el => !(gameUi.replaying && el.classList?.contains("shotcard")) } };  // a replay owns the shot map until it ends
 // Quiet draws (the live refresh, fresher data) change only what moved, so a scroll, an open section or a tap in
 // progress survives; navigations replace the page.
 function paint(html, quiet) {
-  if (quiet && morph) morph(view, html, MORPH);
-  else view.innerHTML = html;
+  if (!quiet || !morph) { view.innerHTML = html; return; }
+  const was = new Map([...view.querySelectorAll("[data-sc]")].map(el => [el.dataset.sc, +el.textContent]));
+  morph(view, html, MORPH);
+  if (motionOn()) for (const el of view.querySelectorAll("[data-sc]")) if (+el.textContent > (was.get(el.dataset.sc) ?? Infinity)) lamp(el);
+}
+// A goal: the new number rolls up into place and a red beacon sweeps what it's on, the way the lamp behind the net goes
+// on. Only ever on a score that went up while you were looking at it (a correction downwards stays quiet). The strip
+// stands in for the jumbotron once that's scrolled away.
+function lamp(el) {
+  el.animate([{ transform: "translateY(26px)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 340, easing: "cubic-bezier(.3, 1.3, .5, 1)" });
+  const host = document.body.classList.contains("bug-gone") ? view.querySelector(".ministrip") : el.closest(".scorebug, .game, .hero, .shotcard");
+  if (!host) return;
+  const glow = host.appendChild(Object.assign(document.createElement("i"), { className: "lamp" }));
+  glow.animate([{ opacity: 0 }, { opacity: .9, offset: .1 }, { opacity: .9, offset: .75 }, { opacity: 0 }], { duration: 1600, easing: "ease-out" }).finished.finally(() => glow.remove());
+  glow.animate({ rotate: ["0deg", "540deg"] }, { duration: 1600, easing: "linear", pseudoElement: "::before" });
 }
 // Pages that paint() put their listeners on #view, not on controls (a morph keeps controls, so theirs would pile up):
 // each draw takes a fresh set, and every route drops the last page's.
@@ -640,7 +654,7 @@ function heroCard(c, live) {
       acts = spoilButton("peek", g, "Show score") + spoilButton("seen", g, "I've seen it");
     } else if (g.state === "live") {
       kicker = "Live now";
-      right = `<b class="hero-sc">${side.us.score ?? 0}–${side.them.score ?? 0}</b><span>${esc(g.intermission ? `${g.period} INT` : `${g.period} ${g.clock || ""}`)}</span>`;
+      right = `<b class="hero-sc"><span data-sc="${g.id}u">${side.us.score ?? 0}</span>–<span data-sc="${g.id}t">${side.them.score ?? 0}</span></b><span>${esc(g.intermission ? `${g.period} INT` : `${g.period} ${g.clock || ""}`)}</span>`;
     } else if (g.state === "final") {
       const won = side.us.score > side.them.score, extra = g.outcome && !["REG", "T"].includes(g.outcome);
       kicker = "Final tonight";
@@ -872,7 +886,7 @@ async function pickemView(date, quiet = false) {
       ${d.next ? `<a href="#/picks/${d.next}" aria-label="Next day">→</a>` : "<span></span>"}
     </div>
     <p class="help">Tap who wins: <b>1 point</b> for every one you get right${pro.some(g => g.bonus) ? `, or <b>2 points</b> if they win as the underdog (marked <b>2×</b>)` : ""}. Tap ★ on one game a night to make it your lock: it <b>doubles</b> that game's points (nothing if it's wrong). Picks lock at puck drop.${college.length ? ` College gets its own ★ and table; no underdog bonus there, and a tie counts as wrong.` : ""}</p>
-    <div class="pick-dice"><button class="btn small" id="dice" hidden></button><span class="muted small">Only games you haven't picked</span></div>
+    <div class="pick-dice"><button class="btn small primary" id="flick" hidden>🏒 Flick your picks</button><button class="btn small" id="dice" hidden></button></div>
     ${rows || `<div class="empty">No games this day.</div>`}
     ${hid.length ? `<h2>The table</h2>${spoilCover(hid, "The Pick'em table")}` : `
       ${pools.length > 1 ? `<div class="seg seg-top" role="tablist" style="margin-top:22px">${pools.map(p => `<button data-board="${p}" class="${p === boardPick ? "on" : ""}">${esc(POOL_NAME[p])}</button>`).join("")}</div>` : ""}
@@ -901,9 +915,34 @@ async function pickemView(date, quiet = false) {
   const dice = document.getElementById("dice");
   const open = lg => !isCollege(lg) || view.querySelector(`details[data-fold="${lg}"]`)?.open;
   const unpicked = () => d.games.filter(g => !g.mine && g.state === "pre" && !begun(g) && open(g.league || "nhl"));
-  const diceLabel = () => { const n = unpicked().length; dice.hidden = !n; dice.parentElement.hidden = !n;
+  const flick = document.getElementById("flick");
+  const diceLabel = () => { const n = unpicked().length; dice.hidden = flick.hidden = !n; dice.parentElement.hidden = !n;
     dice.textContent = `🎲 Pick ${n === 1 ? "this one" : n} for me`; };
   diceLabel();
+  // Flick your picks: the same games one at a time, your teams first. Saves go out in order behind the animation.
+  flick.addEventListener("click", async () => {
+    let m;
+    try { m = await import(`./flick.js${V}`); } catch { toast("Couldn't load that. Try again.", true); return; }
+    let saving = Promise.resolve();
+    const page = location.hash;
+    const games = unpicked().sort((x, y) => (fav.has(y.away.abbr) || fav.has(y.home.abbr)) - (fav.has(x.away.abbr) || fav.has(x.home.abbr)))
+      .map(g => ({ ...g, when: g.start ? time(g.start) : "" }));
+    m.open({ games, mark, esc, name: teamName, record: t => t.record, oddsFor: g => oddsOn() ? g.odds : null, motionOn,
+      colour: (abbr, other) => other ? apart(TEAMS[abbr]?.color || "#888", TEAMS[other]?.color || "#888") : TEAMS[abbr]?.color || "#888",
+      pool: g => poolOf(g.league),
+      lockAt: g => { const x = d.games.find(y => y.lock && poolOf(y.league) === poolOf(g.league)); return !x ? "" : begun(x) ? "stuck" : "moves"; },
+      send: (g, team, lock) => {
+        const post = lock => api("/api/pickem", { method: "POST", body: JSON.stringify({ league: g.league || "nhl", id: g.id, date: g.date, team, lock }) });
+        // A refused lock mustn't cost the pick, so it's tried again without one. Resolves to what got saved.
+        const done = saving.then(() => post(lock)).then(() => (lock ? "locked" : "picked"), e => {
+          toast(e.detail || "Couldn't save that pick.", true);
+          return lock ? post(false).then(() => "picked", () => "") : "";
+        });
+        saving = done;
+        return done;
+      },
+      done: () => saving.then(() => { if (location.hash === page) pickemView(date, true); }) });
+  });
   dice.addEventListener("click", async () => {
     const list = unpicked();
     dice.disabled = true;
@@ -1088,6 +1127,7 @@ async function gameView(id, quiet = false, league = "nhl") {
   loadMorph();
   if (gameUi.id !== id) gameUi = { id, shots: "all", rx: null };
   if (!quiet) showLoading(`Loading game…`);
+  const live = () => autoRefresh(q => gameView(id, q, league), LIVE_REFRESH);
   let d;
   try { d = await fast(gameApi(league, id), () => gameView(id, true, league), quiet); } catch (e) { view.innerHTML = failed(e); return; }
   const g = d.game, a = g.away.abbr, h = g.home.abbr;
@@ -1138,10 +1178,12 @@ async function gameView(id, quiet = false, league = "nhl") {
         ${spoilerMarked(g) ? spoilButton("seen", g, "🙈 Spoiler-free on · turn off") : spoilButton("later", g, "🙈 Watching later")}` : ""}
       ${friendsLine ? `<span class="gsec-note">${friendsLine}</span>` : ""}</div>` : "";
 
+  const paints = `--a:${esc(apart(ac, hc))};--h:${esc(hc)}`;
+  const big = showScore ? `<b data-sc="a">${g.away.score ?? 0}</b><i>–</i><b data-sc="h">${g.home.score ?? 0}</b>` : g.start && g.state === "pre" ? esc(time(g.start)) : "vs";
   let html = `${backLink("#/")}<div class="card">
-    <div class="scorebug">
+    <div class="scorebug" style="${paints}">
       ${side(g.away, a)}
-      <div><div class="score">${showScore ? `${g.away.score ?? 0} – ${g.home.score ?? 0}` : "vs"}</div><div class="state">${state}</div>${sit}</div>
+      <div><div class="score${showScore ? "" : " tbd"}">${big}</div><div class="state">${state}</div>${sit}</div>
       ${side(g.home, h)}
     </div>
     ${watchBlock(g, report)}
@@ -1164,7 +1206,7 @@ async function gameView(id, quiet = false, league = "nhl") {
     }).join("")}`).join("")}</div>`;
   }
 
-  if (d.shotmap?.length) html += shotMap(d.shotmap, a, h, gameUi.shots) + momentumCard(d.shotmap, a, h, ac, hc, league);
+  if (d.shotmap?.length) html += shotMap(d.shotmap, a, h, gameUi.shots, g) + momentumCard(d.shotmap, a, h, ac, hc, league);
 
   if (d.linescore.length) {
     const shots = Object.fromEntries(d.shots.map(s => [s.period, s])), sog = d.shots.length > 0;
@@ -1212,7 +1254,23 @@ async function gameView(id, quiet = false, league = "nhl") {
   if (more) html += `<details class="more-stats" ${moreStatsOpen ? "open" : ""}><summary>More stats: team, penalties, players</summary>${more}</details>`;
 
   if (g.venue) html += `<p class="help" style="text-align:center;margin-top:18px">${esc(g.venue)}</p>`;
+  html += `<div class="ministrip" style="${paints}" aria-hidden="true">${mark(a)}<b class="ms-sc">${showScore ? `${g.away.score ?? 0}–${g.home.score ?? 0}` : ""}</b>${mark(h)}<span class="ms-st">${state}</span></div>`;
   paint(html, quiet);
+  watchBug();
+  const shotCard = view.querySelector(".shotcard");
+  const showShots = pick => {
+    gameUi.shots = pick;
+    view.querySelectorAll("[data-shots]").forEach(x => x.classList.toggle("on", x.dataset.shots === pick));
+    view.querySelectorAll(".rink [data-p]").forEach(dot => { dot.style.display = shotShown(dot.dataset.p, pick) ? "" : "none"; });
+  };
+  const engaged = on => {
+    const was = gameUi.replaying;
+    gameUi.replaying = on;
+    if (on && gameUi.shots !== "all") showShots("all");  // a replay is the whole game
+    if (was && !on && shotCard.isConnected) gameView(id, true, league);  // catch up on what it held back
+  };
+  const wireReplay = () => loadReplay().then(m => { if (shotCard.isConnected) m.attach(shotCard, timeline(d.shotmap, a, h, g), { lamp, motionOn, esc, engaged }); }).catch(() => {});
+  if (shotCard?.querySelector(".rp") && !gameUi.replaying) (window.requestIdleCallback || setTimeout)(wireReplay);
   const on = listen();
   // toggle doesn't bubble: listen while it travels down to the <details>.
   view.addEventListener("toggle", e => { if (e.target.matches?.(".more-stats")) moreStatsOpen = e.target.open; }, { ...on, capture: true });
@@ -1231,18 +1289,33 @@ async function gameView(id, quiet = false, league = "nhl") {
   view.addEventListener("click", e => {
     const t = e.target, open = t.closest("[data-rxopen]"), react = t.closest("[data-rx]"), shots = t.closest("[data-shots]");
     if (t.closest("#report")) sendReport(e);
+    else if (motionOn() && t.closest("[data-sc]")) lamp(t.closest("[data-sc]"));  // the scoreboard is a toy: tap a number, light the lamp
     else if (t.closest("#watching")) post("/api/watching", { on: !S.me_watching });
     else if (open) { gameUi.rx = open.dataset.rxopen; open.parentElement.innerHTML = rxPicker(gameUi.rx); }
     else if (react) {
       gameUi.rx = null;
       post("/api/react", { event: react.dataset.ev, emoji: S.mine[react.dataset.ev] === react.dataset.rx ? null : react.dataset.rx });
     } else if (shots) {
-      gameUi.shots = shots.dataset.shots;
-      view.querySelectorAll("[data-shots]").forEach(x => x.classList.toggle("on", x === shots));
-      view.querySelectorAll(".rink [data-p]").forEach(dot => { dot.style.display = shotShown(dot.dataset.p, gameUi.shots) ? "" : "none"; });
+      shotCard?.endReplay?.();
+      showShots(shots.dataset.shots);
     }
   }, on);
-  if (g.state === "live" || (g.state === "pre" && Date.parse(g.start) - Date.now() < 30 * 60000)) autoRefresh(q => gameView(id, q, league), LIVE_REFRESH);
+  if (g.state === "live" || (g.state === "pre" && Date.parse(g.start) - Date.now() < 30 * 60000)) live();
+}
+
+// The score strip shows once the jumbotron has scrolled off. The flag lives on <body>, which a live morph doesn't touch.
+let bugWatch = null;
+function unwatchBug() { bugWatch?.io.disconnect(); bugWatch = null; document.body.classList.remove("bug-gone"); }
+function watchBug() {
+  const bug = view.querySelector(".scorebug"), bar = document.querySelector(".top");
+  if (!bug || bug === bugWatch?.bug) return;
+  unwatchBug();
+  const io = new IntersectionObserver(([e]) => {
+    document.documentElement.style.setProperty("--top-h", `${bar.offsetHeight}px`);
+    document.body.classList.toggle("bug-gone", !e.isIntersecting);
+  }, { rootMargin: "-64px 0px 0px 0px" });
+  io.observe(bug);
+  bugWatch = { bug, io };
 }
 
 // College game pages: ESPN has no scorers, shots or players for college games, so after the score by period come
@@ -1358,22 +1431,59 @@ function momentumCard(shots, a, h, ac, hc, league) {
 }
 
 // ---- shot map -----------------------------------------------------------------------------
+// The game as one clock in seconds, for Replay: regulation periods are 20 minutes, overtime at least 5, and the clock
+// stops at the last shot while a game is live or when an overtime goal ends it. A shootout has no clock: its shots sit
+// past the end (at() = Infinity), so they show at full time and never on the way there.
+const clockOf = s => { const [m, sec] = String(s.time || "0:0").split(":"); return (+m || 0) * 60 + (+sec || 0); };
+function timeline(shots, a, h, g) {
+  const on = shots.filter(s => s.period !== "SO"), regulation = PERIOD_ORDER.slice(0, 3);
+  const names = [...new Set([...regulation, ...on.map(s => s.period)])];
+  let from = 0;
+  const periods = names.map(name => {
+    const len = regulation.includes(name) ? 1200 : Math.max(300, ...on.filter(s => s.period === name).map(clockOf)), p = { name, from, len };
+    from += len;
+    return p;
+  });
+  const at = s => { const p = periods.find(x => x.name === s.period); return p ? p.from + clockOf(s) : Infinity; };
+  const stamps = on.map(at), lastAt = Math.max(0, ...stamps), last = on[stamps.indexOf(lastAt)];
+  const live = g.state === "live", decided = last?.kind === "goal" && !regulation.includes(last.period);
+  const end = live || decided ? lastAt + 1 : Math.max(from, lastAt + 1);
+  periods.forEach(p => { p.len = Math.min(p.len, end - p.from); });
+  return { shots, on, periods: periods.filter(p => p.len > 0), at, end, home: h, awayCode: TEAMS[a]?.code || a, homeCode: TEAMS[h]?.code || h,
+    endText: `<span>${live ? "Now" : "Final"}</span><b><small>${esc(TEAMS[a]?.code || a)}</small> ${g.away.score ?? 0}–${g.home.score ?? 0} <small>${esc(TEAMS[h]?.code || h)}</small></b>` };
+}
+// The timeline under the rink: goals as pips, periods underneath, the puck is the range input's thumb. A short list (a
+// game that's just started) gets no bar.
+function replayBar(tl, color) {
+  if (tl.on.length < 10) return "";
+  const pos = t => `${(t / tl.end * 100).toFixed(2)}%`;
+  return `<div class="rp"><button class="rp-play" aria-label="Play the game back">▶</button><div class="rp-t">
+      <div class="rp-pips" aria-hidden="true">${tl.on.filter(s => s.kind === "goal").map(s => `<i style="left:${pos(tl.at(s))};background:${color(s.team)}"></i>`).join("")}</div>
+      <input type="range" min="0" max="${tl.end}" value="${tl.end}" step="1" aria-label="Game time">
+      <div class="rp-ps" aria-hidden="true">${tl.periods.map(p => `<span style="flex:${p.len}">${esc(p.name)}</span>`).join("")}</div>
+    </div></div><div class="rp-read">${tl.endText}</div>`;
+}
+// Replay's code comes down once the page is up, or the moment someone reaches for the puck.
+const V = new URL(import.meta.url).search;
+let replayMod = null;
+const loadReplay = () => replayMod ||= import(`./replay.js${V}`);
+
 // NHL rink coordinates: x -100..100 (end boards), y -42.5..42.5. Home shoots right, away shoots left.
 const shotShown = (period, pick) => pick === "all" || period === pick;
-function shotMap(shots, a, h, pick = "all") {
+function shotMap(shots, a, h, pick = "all", g) {
   const color = t => TEAMS[t]?.color || "#888";
   const periods = [...new Set(shots.map(s => s.period))];
   const count = (t, k) => shots.filter(s => s.team === t && (k ? s.kind === k : s.kind !== "miss")).length;
   if (!periods.includes(pick)) pick = "all";
   const dot = s => {
-    const c = color(s.team), cx = s.x.toFixed(1), cy = (-s.y).toFixed(1), p = `data-p="${esc(s.period)}"${shotShown(s.period, pick) ? "" : ` style="display:none"`}`;
+    const c = color(s.team), cx = s.x.toFixed(1), cy = (-s.y).toFixed(1), p = `data-p="${esc(s.period)}" data-i="${shots.indexOf(s)}"${shotShown(s.period, pick) ? "" : ` style="display:none"`}`;
     const title = `<title>${esc(s.shooter)} · ${esc(s.period)} ${esc(s.time)} · ${esc(s.kind === "miss" ? "missed" : s.kind)}${s.shot_type ? ` (${esc(s.shot_type)})` : ""}</title>`;
     if (s.kind === "goal") return `<g ${p}><circle cx="${cx}" cy="${cy}" r="3.4" fill="${c}" stroke="var(--text)" stroke-width="1"/>${title}</g>`;
     if (s.kind === "miss") return `<circle ${p} cx="${cx}" cy="${cy}" r="1.6" fill="none" stroke="${c}" stroke-width=".7" opacity=".8">${title}</circle>`;
     return `<circle ${p} cx="${cx}" cy="${cy}" r="1.8" fill="${c}" opacity=".9">${title}</circle>`;
   };
   const line = "var(--border)";
-  return `<h2>Shot map</h2><div class="card pad">
+  return `<h2>Shot map</h2><div class="card pad shotcard">
     <div class="shotlegend"><span>${mark(a)} shoots ←</span><span class="muted small">● shot · ○ miss · ◉ goal</span><span>→ ${mark(h)}</span></div>
     <svg class="rink" viewBox="-101 -44 202 88" role="img" aria-label="Shot map">
       <rect x="-100" y="-42.5" width="200" height="85" rx="28" fill="none" stroke="var(--muted)" stroke-width=".8"/>
@@ -1391,6 +1501,7 @@ function shotMap(shots, a, h, pick = "all") {
       ${shots.filter(s => s.kind === "goal").map(dot).join("")}
     </svg>
     <div class="shotlegend small"><span>${count(a)} on goal · ${count(a, "miss")} missed</span><span>${count(h)} on goal · ${count(h, "miss")} missed</span></div>
+    ${replayBar(timeline(shots, a, h, g), color)}
     ${periods.length > 1 ? `<div class="seg" style="margin:10px 0 0">${["all", ...periods].map(p => `<button data-shots="${esc(p)}" class="${p === pick ? "on" : ""}">${p === "all" ? "All" : esc(p)}</button>`).join("")}</div>` : ""}
   </div>`;
 }
@@ -1402,10 +1513,10 @@ function standingsTable(rows, opts = {}) {
   const fav = favs();
   return `<div class="card scroll"><table>
     <tr><th colspan="2">Team</th><th>GP</th><th>W</th><th>L</th><th>OT</th><th>PTS</th><th class="wide">RW</th><th>GD</th><th class="wide">L10</th><th>STRK</th></tr>
-    ${rows.map((r, i) => `<tr class="${fav.has(r.abbr) ? "fav" : ""}${opts.cutAfter === i ? " cut" : ""}">
+    ${rows.map((r, i) => `<tr data-t="${r.abbr}" class="${fav.has(r.abbr) ? "fav" : ""}${opts.cutAfter === i ? " cut" : ""}">
       <td class="rank">${opts.rank ? opts.rank(r, i) : i + 1}</td>
       <td class="team"><span class="tm">${mark(r.abbr)}<a href="#/team/${r.abbr}">${esc(r.short || r.abbr)}</a></span></td>
-      <td>${r.gp}</td><td>${r.w}</td><td>${r.l}</td><td>${r.otl}</td><td><b>${r.pts}</b></td><td class="wide">${r.rw}</td>
+      <td>${r.gp}</td><td>${r.w}</td><td>${r.l}</td><td>${r.otl}</td><td><b>${r.pts}</b>${r.more ? `<span class="wi-more">+${r.more}</span>` : ""}</td><td class="wide">${r.rw}</td>
       <td>${r.gd > 0 ? "+" : ""}${r.gd}</td><td class="wide">${esc(r.l10)}</td><td>${esc(r.streak)}</td></tr>`).join("")}
   </table></div>`;
 }
@@ -1443,26 +1554,10 @@ function yourTeamTiles(lg) {
   return mine.length ? `<div class="grid tiles-top">${mine.map(a => `<a class="tile" href="#/team/${a}">${mark(a)}${esc(teamName(a))}</a>`).join("")}</div>` : "";
 }
 
-async function standingsView(mode = "division") {
-  setNav("league");
-  showLoading(`Loading standings…`);
-  const lg = pageLeague();
-  standings(lg).catch(() => null);  // start loading the table while the spoiler check runs
-  const hid = (await hiddenToday().catch(() => [])).filter(g => g.state === "final" && leagueOf(g.home.abbr) === lg);
-  if (hid.length) {
-    view.innerHTML = leagueTabs("standings") + leaguePicker(lg) + spoilCover(hid, "These standings", "include");
-    bindLeaguePicker(() => standingsView(mode));
-    return;
-  }
-  if (lg === "pwhl" || isCollege(lg)) {
-    let rows;
-    try { rows = await standings(lg); } catch (e) { view.innerHTML = failed(e); return; }
-    view.innerHTML = leagueTabs("standings") + leaguePicker(lg) + yourTeamTiles(lg) + (lg === "pwhl" ? pwhlStandings(rows) : collegeStandings(rows, lg));
-    bindLeaguePicker(() => standingsView(mode));
-    return;
-  }
-  let rows;
-  try { rows = await standings(); } catch (e) { view.innerHTML = failed(e); return; }
+// The table for a mode, from any list of rows: the real one, or What if?'s.
+let whatIfOn = false;
+const whatIfPicks = new Map();
+function standingsBody(rows, mode) {
   const by = (key, list) => list.reduce((m, r) => ((m[r[key]] ||= []).push(r), m), {});
   let body = "";
   if (mode === "league") {
@@ -1486,8 +1581,50 @@ async function standingsView(mode = "division") {
       body += `<h2>${esc(div)}</h2>` + standingsTable(list.sort((x, y) => x.div_rank - y.div_rank));
     }
   }
-  view.innerHTML = `${leagueTabs("standings")}${leaguePicker("nhl")}${yourTeamTiles("nhl")}<div class="seg">${STANDING_MODES.map(([k, l]) => `<button data-mode="${k}" class="${k === mode ? "on" : ""}">${l}</button>`).join("")}</div>${body}`;
+  return body;
+}
+
+async function standingsView(mode = "division") {
+  setNav("league");
+  showLoading(`Loading standings…`);
+  const lg = pageLeague();
+  standings(lg).catch(() => null);  // start loading the table while the spoiler check runs
+  const hid = (await hiddenToday().catch(() => [])).filter(g => g.state === "final" && leagueOf(g.home.abbr) === lg);
+  if (hid.length) {
+    view.innerHTML = leagueTabs("standings") + leaguePicker(lg) + spoilCover(hid, "These standings", "include");
+    bindLeaguePicker(() => standingsView(mode));
+    return;
+  }
+  if (lg === "pwhl" || isCollege(lg)) {
+    let rows;
+    try { rows = await standings(lg); } catch (e) { view.innerHTML = failed(e); return; }
+    view.innerHTML = leagueTabs("standings") + leaguePicker(lg) + yourTeamTiles(lg) + (lg === "pwhl" ? pwhlStandings(rows) : collegeStandings(rows, lg));
+    bindLeaguePicker(() => standingsView(mode));
+    return;
+  }
+  let rows;
+  try { rows = await standings(); } catch (e) { view.innerHTML = failed(e); return; }
+  view.innerHTML = `${leagueTabs("standings")}${leaguePicker("nhl")}${yourTeamTiles("nhl")}<div class="seg">${STANDING_MODES.map(([k, l]) => `<button data-mode="${k}" class="${k === mode ? "on" : ""}">${l}</button>`).join("")}</div>
+    <div class="wi-open"><button class="btn small" id="whatif">🔮 What if?</button></div><div id="wi-slot"></div><div id="table">${standingsBody(rows, mode)}</div>`;
   bindLeaguePicker(() => standingsView(mode));
+  const opener = view.querySelector(".wi-open");
+  const whatIf = async () => {
+    opener.hidden = true;
+    let games, m;
+    try {
+      m = await import(`./whatif.js${V}`);
+      let day = await api("/api/games?league=nhl");
+      const left = d => d.games.filter(g => g.state === "pre" || g.state === "live");
+      if (!left(day).length && day.next) day = await api(`/api/games?league=nhl&date=${day.next}`);
+      games = left(day);
+    } catch (e) { opener.hidden = false; toast(e.detail || "Couldn't load tonight's games.", true); return; }
+    m.open({ slot: document.getElementById("wi-slot"), table: document.getElementById("table"), rows, games, picks: whatIfPicks,
+      render: next => standingsBody(next, mode), mark, esc, code: abbr => TEAMS[abbr]?.code || abbr, favs, motionOn,
+      colour: abbr => TEAMS[abbr]?.color || "#666", light: abbr => TEAMS[abbr]?.light, onClose: () => { opener.hidden = false; whatIfOn = false; } });
+    whatIfOn = true;
+  };
+  document.getElementById("whatif").addEventListener("click", whatIf);
+  if (whatIfOn) whatIf();  // the mode switch redraws the page: stay in What if?
   view.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", () => {
     try { localStorage.setItem("standingsMode", b.dataset.mode); } catch { /* fine */ }
     standingsView(b.dataset.mode);
@@ -2426,6 +2563,7 @@ function route() {
   pendingFade = changed && inPage && motionOn();
   keepScroll = changed && inPage;
   if (!keepScroll) view.style.minHeight = "";
+  if (changed) { unwatchBug(); gameUi.replaying = false; }
   inPage = false;
   if (changed) cameFromApp = true; else if (lastHash === null) cameFromApp = false;
   lastHash = location.hash; lastPage = page;

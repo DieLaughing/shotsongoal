@@ -38,6 +38,75 @@ STILL = [
 # Shared-element page changes (View Transitions): (page, card to tap, address it must land on, transition name).
 MORPH = [("#/", "#view a.body", "#/game/", "matchup")]
 SWITCHES, ON, PILL = ".seg, .league", ".on", ".seg-pill"
+# The playful parts, driven by hand. Each returns (what, ok); anything that raises is a failure.
+REPLAY_GAME = "#/game/2026020084"
+SHOWN = "[...document.querySelectorAll('.rink [data-i]')].filter(e => e.style.display !== 'none').length"
+
+
+def replay_check(page) -> tuple[str, bool]:
+    """Dragging the puck hides shots that hadn't happened yet, leaves the page where it is, and the end brings them back."""
+    page.wait_for_selector(".rp input", state="attached", timeout=3000)
+    page.wait_for_timeout(400)   # its code arrives on idle
+    move = "v => { const r = document.querySelector('.rp input'); r.value = v * r.max; r.dispatchEvent(new Event('input', { bubbles: true })); }"
+    before, y = page.evaluate(SHOWN), page.evaluate("scrollY")
+    page.evaluate(move, .4)
+    mid, said = page.evaluate(SHOWN), page.inner_text(".rp-read")
+    page.evaluate(move, 1)
+    after = page.evaluate(SHOWN)
+    ok = 0 < mid < before and after == before and page.evaluate("scrollY") == y and "Final" in page.inner_text(".rp-read")
+    # A period button takes the map back from a replay, and leaving mid-replay must not draw the game over the next page.
+    page.evaluate(move, .4)
+    page.evaluate("document.querySelector('[data-shots]:not([data-shots=all])').click()")
+    ok = ok and "Final" in page.inner_text(".rp-read")
+    page.evaluate(move, .4)
+    page.evaluate("document.querySelector('.rp-play').click(); location.hash = '#/league'")
+    page.wait_for_timeout(700)
+    ok = ok and not page.query_selector(".scorebug")
+    return f"{before} → {mid} → {after} shots, {said.split(chr(10))[0]}", ok
+
+
+def what_if_check(page) -> tuple[str, bool]:
+    """Tapping a winner re-sorts the table with two more points; closing puts the real table back."""
+    table = "[...document.querySelectorAll('tr[data-t]')].map(t => t.dataset.t + t.querySelector('b').textContent).join()"
+    real = page.evaluate(table)
+    page.evaluate("document.getElementById('whatif').click()")
+    page.wait_for_selector(".wi-t", timeout=3000)
+    page.evaluate("document.querySelector('.wi-t').click()")
+    page.wait_for_selector(".wi-more", timeout=1000)
+    changed = page.evaluate(table) != real
+    page.evaluate("document.getElementById('wi-close').click()")
+    return "re-sorted, then restored", changed and page.evaluate(table) == real and not page.query_selector(".wi")
+
+
+def flick_check(page) -> tuple[str, bool]:
+    """A game at a time: flicking saves the pick and moves on; closing lands back on the page, unlocked."""
+    saved = []
+
+    def future(route):   # the fixture's games are long past: put them all back before puck drop
+        res = route.fetch()
+        data = res.json()
+        for g in data["games"]:
+            g.update(state="pre", start="2099-01-01T00:00:00Z", mine=None)
+        route.fulfill(response=res, json=data)
+
+    def answer(route):   # the fixture's days are in the past, so the server would (rightly) refuse the pick
+        route.fulfill(json={"ok": True})
+
+    page.route("**/api/pickem?*", future)
+    page.route("**/api/pickem", answer)
+    page.reload()
+    page.wait_for_selector("#flick:not([hidden])", timeout=3000)
+    page.on("request", lambda r: saved.append(r.post_data) if r.method == "POST" and r.url.endswith("/api/pickem") else None)
+    page.evaluate("document.getElementById('flick').click()")
+    page.wait_for_selector(".fk-side", timeout=3000)
+    page.evaluate("document.querySelector('.fk-side.h').click()")
+    page.wait_for_timeout(400)
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(300)
+    return f"{len(saved)} pick saved", len(saved) == 1 and not page.query_selector(".flick") and page.evaluate("document.documentElement.style.overflow") == ""
+
+
+PLAY = [(REPLAY_GAME, "replay", replay_check), ("#/league", "what if", what_if_check), ("#/picks", "flick", flick_check)]
 
 # ---- the checks (the same in both apps) ---------------------------------------------------------------------------
 OPEN_MS, SETTLE_MS, STILL_MS, STILL_PX, PILL_PX = 8000, 3200, 800, 1, 2
@@ -131,6 +200,15 @@ def check(url: str) -> list[tuple[str, str, str, bool]]:
             res = ("nothing to tap" if not got else "; ".join(errors) or ("no morph" if not played else "didn't land" if not landed
                    else f"{left} names left behind" if left else "morphed" if got["vt"] else "no View Transitions: plain change"))
             rows.append(("morph", f"{hash_} {tap}", res, ok))
+            page.close()
+
+        for hash_, name, drive in PLAY:
+            page, errors = fresh(hash_)
+            try:
+                res, ok = drive(page)
+            except Exception as e:
+                res, ok = str(e).split("\n")[0], False
+            rows.append((name, hash_, "; ".join(errors) or res, ok and not errors))
             page.close()
         browser.close()
     return rows
