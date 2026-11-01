@@ -3,6 +3,42 @@
 # After editing: `.venv/bin/python tools/changelog.py` rewrites CHANGELOG.md (a test checks they match),
 # and `.venv/bin/python tools/release.py` publishes the day's GitHub Release.
 
+- date: 2026-11-01
+  kind: new
+  title: Recaps, and your team's colours
+  text: Finished games now have a 3-minute recap and the condensed game, playing right in the app (they turn up a while after the horn). Team pages wear the team's colours with their points up big, and player pages put the jersey number front and centre. The whole app now dresses in your team's colours too. If you follow several teams, your first favourite in each league leads, so the app can be Bruins gold on NHL and Fleet green on PWHL. To keep one team all the time, or turn it off, go to Settings › Display › Team colours.
+  link: "#/settings"
+
+- date: 2026-11-01
+  kind: new
+  title: Pick'em streaks and a countdown
+  text: Pick'em now shows how long until your next unpicked game locks, once it's within 3 hours. It's the real puck-drop time, nothing invented. Three right in a row earns a 🔥 next to your name, and your best run and ⭐ perfect nights (at least 3 picks, all right) sit above the tables.
+  link: "#/picks"
+
+- date: 2026-11-01
+  kind: new
+  title: Easier first time in
+  text: New friends now set up one question at a time (their teams, where they live, what they watch on) instead of hunting through Settings. Already set up? You can run it again from Settings › Your teams.
+  link: "#/settings"
+
+- date: 2026-11-01
+  kind: new
+  title: Goal clips play right here
+  text: Tap ▶ Watch on a goal and the clip plays over the page in the NHL's own player, so there's no second page to open and nothing to find your way back from. Next goal steps through the rest of the game's goals, and Replay offers the same button when it stops on a goal. The NHL's player runs its usual ads. Close it and you're exactly where you were.
+  link: "#/"
+
+- date: 2026-11-01
+  kind: new
+  title: The arena
+  text: Games got a lot more game. Every game page opens on a jumbotron in both teams' colours, and the score stays on screen as you scroll. When a goal goes in while you're watching, the number rolls up and the red goal lamp sweeps the board (tap a score on the jumbotron to light it yourself). Under the shot map, drag the puck through the game and watch it fill in shot by shot, or press play to see the whole game in about 20 seconds. On Pick'em, tap Flick your picks to go one game at a time and flick the puck at your team. On League, tap What if? and pick tonight's winners to watch the standings shuffle; nothing is saved, it's just for fun. Animations off in Settings › Display, or Reduce Motion on your phone, turns the moving parts off.
+  link: "#/"
+
+- date: 2026-11-01
+  kind: improved
+  title: Opens faster
+  text: The app now asks for what it needs at the very start instead of one thing after another, so a first open on a slow phone connection is about a quarter faster.
+  link: "#/"
+
 - date: 2026-10-28
   kind: new
   title: College Pick'em

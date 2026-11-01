@@ -48,7 +48,7 @@ def test_one_lock_per_night_and_scoring():
     nhl = picks.board("a@x", names, ["nhl"], "2026-10-14")["table"]
     assert [(r["name"], r["pts"], r["w"], r["l"]) for r in nhl] == [("Al", 1, 1, 1), ("Bo", 0, 0, 2)]
     both = picks.board("a@x", names, ["nhl", "pwhl"], "2026-10-14")
-    assert both["table"][0] == {"name": "Al", "me": True, "pts": 2, "w": 2, "l": 1, "upsets": 0}  # the lost lock scores nothing
+    assert both["table"][0] == {"name": "Al", "me": True, "pts": 2, "w": 2, "l": 1, "upsets": 0, "streak": 1}  # the lost lock scores nothing
     assert both["last"]["date"] == "2026-10-13" and both["season"] == "2026-27"
 
 
@@ -86,7 +86,7 @@ def test_a_tie_is_a_wrong_pick():
     assert picks.record_results([g(401, "CM-103", "CM-2172", state="final", a=2, h=2, league="ncaam")]) == 1
     assert picks.pending("2026-10-14") == []   # settled, not waiting forever
     assert picks.board("a@x", {"a@x": "Al"}, ["ncaam"], "2026-10-14")["table"][0] == {
-        "name": "Al", "me": True, "pts": 0, "w": 0, "l": 1, "upsets": 0}
+        "name": "Al", "me": True, "pts": 0, "w": 0, "l": 1, "upsets": 0, "streak": 0}
 
 
 def test_pick_for_me_fills_only_open_unpicked_games():
@@ -110,3 +110,34 @@ def test_pick_for_me_leans_on_the_odds():
         picks.fill_random("a@x", [game], now=NOW, rng=rng)
     heavy = [m["mine"] for m in picks.for_games("a@x", [g(100 + i, "TOR", "BOS") for i in range(200)], {}, now=NOW)]
     assert 140 < heavy.count("TOR") < 180   # about 80%
+
+
+def test_runs_streaks_and_perfect_nights():
+    r = lambda won, day="2026-10-13": {"won": won, "date": day}
+    assert picks.runs([]) == {"streak": 0, "best": 0, "perfect": 0}
+    assert picks.runs([r(1), r(1), r(0), r(1)]) == {"streak": 1, "best": 2, "perfect": 0}   # a miss resets the run
+    assert picks.runs([r(1), r(1), r(1), r(0, "2026-10-14"), r(1, "2026-10-14")])["perfect"] == 1  # 3 for 3, then a miss on another night
+    assert picks.runs([r(1), r(1)])["perfect"] == 0                                      # a night needs three picks
+    assert picks.runs([r(1), r(1), r(1), r(0)])["perfect"] == 0                           # one miss spoils it
+
+
+def test_board_gives_each_person_their_own_run_in_game_order():
+    names = {"a@x": "Sam", "b@x": "Sam"}   # friends can share a name; runs belong to the person
+    early = "2026-10-13T23:00:00Z"
+    late = "2026-10-14T02:00:00Z"
+    for who, teams in (("a@x", ("BOS", "OTT", "CAR")), ("b@x", ("TOR", "DET", "NYR"))):
+        picks.set_pick(who, g(3, "NYR", "CAR", late), teams[2], now=NOW)    # picked first, played last
+        picks.set_pick(who, g(1, "TOR", "BOS", early), teams[0], now=NOW)
+        picks.set_pick(who, g(2, "DET", "OTT", early), teams[1], now=NOW)
+    picks.record_results([g(1, "TOR", "BOS", early, "final", 1, 4), g(2, "DET", "OTT", early, "final", 1, 2), g(3, "NYR", "CAR", late, "final", 0, 3)])
+    b = picks.board("a@x", names, ["nhl"], "2026-10-14")
+    assert b["me"] == {"streak": 3, "best": 3, "perfect": 1}
+    assert sorted(r["streak"] for r in b["table"]) == [0, 3]
+    assert next(r for r in b["table"] if r["me"])["streak"] == 3
+
+
+def test_a_game_with_no_start_time_stays_on_its_night_in_a_run():
+    picks.set_pick("a@x", g(1, "TOR", "BOS", "2026-10-13T23:00:00Z"), "BOS", now=NOW)
+    picks.set_pick("a@x", g(2, "DET", "OTT", None, day="2026-10-14"), "DET", now=NOW)     # time to be decided, and it was lost
+    picks.record_results([g(1, "TOR", "BOS", state="final", a=1, h=4), g(2, "DET", "OTT", None, "final", 1, 3, day="2026-10-14")])
+    assert picks.board("a@x", {"a@x": "Al"}, ["nhl"], "2026-10-14")["me"]["streak"] == 0

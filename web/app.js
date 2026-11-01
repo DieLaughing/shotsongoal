@@ -31,6 +31,47 @@ function applyLeague() {
   document.body.classList.toggle("league-pwhl", LEAGUE === "pwhl");
   document.querySelectorAll("[data-league]").forEach(b => b.classList.toggle("on", b.dataset.league === LEAGUE));
   applyLogos();
+  applyAccent();
+}
+// Team colours: the app wears one of your teams'. Left alone it follows the league switch: your first favourite in the
+// leagues on show, so the Bruins on NHL and the Fleet on PWHL; a league you follow nobody in keeps its own look.
+// Settings > Display can pin one team, or turn it off. The result is saved as CSS, which index.html applies before the
+// first paint, so the app never flashes the wrong colour on opening.
+function accentTeam() {
+  const pick = ME?.settings?.accent, fav = ME?.settings?.favorites || [];
+  if (pick === "none") return null;
+  if (fav.includes(pick) && TEAMS[pick]) return pick;
+  return fav.find(a => shownLeagues().includes(leagueOf(a)) && TEAMS[a]) || null;
+}
+const rgbOf = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+const lumOf = rgb => { const [r, g, b] = rgb.map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126 * r + .7152 * g + .0722 * b; };
+const contrastOf = (x, y) => { const a = lumOf(x), b = lumOf(y); return (Math.max(a, b) + .05) / (Math.min(a, b) + .05); };
+// A navy accent would vanish on the dark background and a gold one on the light: shift its lightness until it reads,
+// keeping the hue (mixing with white instead turns every colour grey).
+function hslOf([r, g, b]) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min, l = (max + min) / 2;
+  const h = !d ? 0 : max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, d ? d / (1 - Math.abs(2 * l - 1)) : 0, l];
+}
+function rgbFrom([h, s, l]) {
+  const a = s * Math.min(l, 1 - l), f = n => { const k = (n + h / 30) % 12; return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); };
+  return [f(0), f(8), f(4)];
+}
+function readableOn(hex, bg) {
+  const page = rgbOf(bg), step = lumOf(page) < .5 ? .04 : -.04, hsl = hslOf(rgbOf(hex));
+  let rgb = rgbOf(hex);
+  for (let l = hsl[2]; contrastOf(rgb, page) < 3.2 && l >= 0 && l <= 1; l += step) rgb = rgbFrom([hsl[0], hsl[1], l]);
+  return rgb;
+}
+function accentCss(hex) {
+  const set = bg => { const rgb = readableOn(hex, bg); return `--accent:rgb(${rgb});--fav:rgb(${rgb});--on-accent:${contrastOf(rgb, [17, 17, 17]) > contrastOf(rgb, [255, 255, 255]) ? "#111" : "#fff"}`; };
+  return `body,body.league-pwhl{${set("#f5f6f8")}}@media(prefers-color-scheme:dark){body,body.league-pwhl{${set("#0e1116")}}}.league>.seg-pill{background:var(--accent)}.league button.on{color:var(--on-accent)}`;
+}
+function applyAccent() {
+  const color = TEAMS[accentTeam()]?.color, css = /^#[0-9a-f]{6}$/i.test(color || "") ? accentCss(color) : "";
+  document.getElementById("team-accent").textContent = css;
+  try { localStorage.setItem("accentCss", css); } catch { /* fine */ }
 }
 const leagueOf = abbr => { const a = abbr || ""; return a.startsWith("PW-") ? "pwhl" : a.startsWith("CM-") ? "ncaam" : a.startsWith("CW-") ? "ncaaw" : "nhl"; };
 const gameHref = g => g.league === "pwhl" ? `#/pgame/${g.id}` : isCollege(g.league) ? `#/cgame/${g.league}/${g.id}` : `#/game/${g.id}`;
@@ -98,7 +139,7 @@ const WATCH_KEYS = [...GAME_KEYS, "/api/team"];      // where-to-watch lines on 
 const SETTING_DROPS = {
   favorites: ["/api/wire", "/api/myteams"], local: WATCH_KEYS, country: WATCH_KEYS, services: WATCH_KEYS,
   spoilers: ["/api/hidden"], nickname: ["/api/pickem"],
-  notify: [], seen_changes: [], hand: [], odds: [], animations: [], marks: [], photos: [],
+  notify: [], seen_changes: [], hand: [], odds: [], animations: [], marks: [], photos: [], accent: [], welcomed: [],
 };
 let settingsOnServer = null;   // the settings the copies were built with (from /api/me, then each save)
 
@@ -294,7 +335,7 @@ function spoilCover(games, what, verb = "includes") {
 function gameCard(g, fav) {
   const a = g.away, h = g.home, hide = spoilerHidden(g), done = g.state === "final" && !hide;
   const lost = side => done && a.score != null && h.score != null && side.score < (side === a ? h.score : a.score) ? " lost" : "";
-  const sc = t => g.state === "pre" || g.state === "postponed" || hide ? "" : `<span class="sc">${t.score ?? ""}</span>`;
+  const sc = t => g.state === "pre" || g.state === "postponed" || hide ? "" : `<span class="sc" data-sc="${g.id}${t === a ? "a" : "h"}">${t.score ?? ""}</span>`;
   const isFav = fav.has(a.abbr) || fav.has(h.abbr);
   // The watch line sits outside the game link so its own link (ESPN+, NESN 360...) can be tapped.
   return `<div class="game${isFav ? " fav" : ""}">
@@ -478,12 +519,26 @@ let morph = null;
 const loadMorph = () => morph || import("./idiomorph.js?v=1").then(m => { morph = m.Idiomorph.morph; }).catch(() => {});
 // An opened or closed <details> stays the way the person left it.
 const MORPH = { morphStyle: "innerHTML",
-  callbacks: { beforeAttributeUpdated: (name, el) => !(name === "open" && el.tagName === "DETAILS") } };
+  callbacks: { beforeAttributeUpdated: (name, el) => !(name === "open" && el.tagName === "DETAILS"),
+    beforeNodeMorphed: el => !(gameUi.replaying && el.classList?.contains("shotcard")) } };  // a replay owns the shot map until it ends
 // Quiet draws (the live refresh, fresher data) change only what moved, so a scroll, an open section or a tap in
 // progress survives; navigations replace the page.
 function paint(html, quiet) {
-  if (quiet && morph) morph(view, html, MORPH);
-  else view.innerHTML = html;
+  if (!quiet || !morph) { view.innerHTML = html; return; }
+  const was = new Map([...view.querySelectorAll("[data-sc]")].map(el => [el.dataset.sc, +el.textContent]));
+  morph(view, html, MORPH);
+  if (motionOn()) for (const el of view.querySelectorAll("[data-sc]")) if (+el.textContent > (was.get(el.dataset.sc) ?? Infinity)) lamp(el);
+}
+// A goal: the new number rolls up into place and a red beacon sweeps what it's on, the way the lamp behind the net goes
+// on. Only ever on a score that went up while you were looking at it (a correction downwards stays quiet). The strip
+// stands in for the jumbotron once that's scrolled away.
+function lamp(el) {
+  el.animate([{ transform: "translateY(26px)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 340, easing: "cubic-bezier(.3, 1.3, .5, 1)" });
+  const host = document.body.classList.contains("bug-gone") ? view.querySelector(".ministrip") : el.closest(".scorebug, .game, .hero, .shotcard");
+  if (!host) return;
+  const glow = host.appendChild(Object.assign(document.createElement("i"), { className: "lamp" }));
+  glow.animate([{ opacity: 0 }, { opacity: .9, offset: .1 }, { opacity: .9, offset: .75 }, { opacity: 0 }], { duration: 1600, easing: "ease-out" }).finished.finally(() => glow.remove());
+  glow.animate({ rotate: ["0deg", "540deg"] }, { duration: 1600, easing: "linear", pseudoElement: "::before" });
 }
 // Pages that paint() put their listeners on #view, not on controls (a morph keeps controls, so theirs would pile up):
 // each draw takes a fresh set, and every route drops the last page's.
@@ -640,7 +695,7 @@ function heroCard(c, live) {
       acts = spoilButton("peek", g, "Show score") + spoilButton("seen", g, "I've seen it");
     } else if (g.state === "live") {
       kicker = "Live now";
-      right = `<b class="hero-sc">${side.us.score ?? 0}–${side.them.score ?? 0}</b><span>${esc(g.intermission ? `${g.period} INT` : `${g.period} ${g.clock || ""}`)}</span>`;
+      right = `<b class="hero-sc"><span data-sc="${g.id}u">${side.us.score ?? 0}</span>–<span data-sc="${g.id}t">${side.them.score ?? 0}</span></b><span>${esc(g.intermission ? `${g.period} INT` : `${g.period} ${g.clock || ""}`)}</span>`;
     } else if (g.state === "final") {
       const won = side.us.score > side.them.score, extra = g.outcome && !["REG", "T"].includes(g.outcome);
       kicker = "Final tonight";
@@ -852,15 +907,19 @@ async function pickemView(date, quiet = false) {
   // One table per pool (the pros, college): they score differently, so they never mix. Both showing = a switch.
   const POOL_NAME = { pro: proName || "NHL & PWHL", college: "College" };
   const table = (list, upsets) => list.length ? `<div class="card"><table class="board"><tr><th></th><th>Name</th><th>Pts</th><th>Right–<wbr>wrong</th>${upsets ? `<th title="Right picks on an underdog that won">Upsets</th>` : ""}</tr>
-    ${list.map((r, i) => `<tr class="${r.me ? "me" : ""}"><td class="muted">${i + 1}</td><td>${esc(r.name)}${r.me ? " (you)" : ""}</td><td><b>${r.pts}</b></td><td>${r.w}–${r.l}</td>${upsets ? `<td class="upsets">${r.upsets ? `<span aria-hidden="true">⚡</span> ${r.upsets}` : `<span class="muted">–</span>`}</td>` : ""}</tr>`).join("")}</table></div>`
+    ${list.map((r, i) => `<tr class="${r.me ? "me" : ""}"><td class="muted">${i + 1}</td><td>${esc(r.name)}${r.me ? " (you)" : ""}${r.streak >= 3 ? ` <span class="streak" title="${r.streak} right in a row">🔥${r.streak}</span>` : ""}</td><td><b>${r.pts}</b></td><td>${r.w}–${r.l}</td>${upsets ? `<td class="upsets">${r.upsets ? `<span aria-hidden="true">⚡</span> ${r.upsets}` : `<span class="muted">–</span>`}</td>` : ""}</tr>`).join("")}</table></div>`
     : `<div class="card"><div class="empty">No results yet. Make some picks!</div></div>`;
   const pools = Object.keys(d.boards);
   let boardPick = pools[0];
   try { const p = localStorage.getItem("pickBoard"); if (pools.includes(p)) boardPick = p; } catch { /* fine */ }
   const tables = p => {
     const b = d.boards[p], last = b.last?.table || [], best = last[0], meLast = last.find(r => r.me);
-    const lastLine = best ? `<div class="card pad small"><b>${esc(shortDate(b.last.date))}</b>: ${esc(best.name)} went ${best.w} for ${best.w + best.l}${meLast && meLast !== best ? `, you went ${meLast.w} for ${meLast.w + meLast.l}` : ""}.</div>` : "";
-    return `${lastLine ? `<h2>Last results</h2>${lastLine}` : ""}
+    const perfect = r => r.w >= 3 && !r.l ? " ⭐" : "";
+    const lastLine = best ? `<div class="card pad small"><b>${esc(shortDate(b.last.date))}</b>: ${esc(best.name)} went ${best.w} for ${best.w + best.l}${perfect(best)}${meLast && meLast !== best ? `, you went ${meLast.w} for ${meLast.w + meLast.l}${perfect(meLast)}` : ""}.</div>` : "";
+    const run = b.me || {}, record = [run.streak >= 2 ? `<span class="rec"><b>🔥 ${run.streak}</b> right in a row</span>` : "",
+      run.best >= 3 ? `<span class="rec"><b>${run.best}</b> your best run</span>` : "",
+      run.perfect ? `<span class="rec"><b>⭐ ${run.perfect}</b> perfect night${run.perfect > 1 ? "s" : ""}</span>` : ""].filter(Boolean).join("");
+    return `${record ? `<div class="card pad recs">${record}</div>` : ""}${lastLine ? `<h2>Last results</h2>${lastLine}` : ""}
       <h2>This week</h2>${table(b.week, p === "pro")}
       <h2>Season ${esc(b.season)}${pools.length > 1 || leagues.length > 1 ? "" : ` · ${LEAGUE_NAME[leagues[0]]}`}</h2>${table(b.table, p === "pro")}`;
   };
@@ -872,7 +931,8 @@ async function pickemView(date, quiet = false) {
       ${d.next ? `<a href="#/picks/${d.next}" aria-label="Next day">→</a>` : "<span></span>"}
     </div>
     <p class="help">Tap who wins: <b>1 point</b> for every one you get right${pro.some(g => g.bonus) ? `, or <b>2 points</b> if they win as the underdog (marked <b>2×</b>)` : ""}. Tap ★ on one game a night to make it your lock: it <b>doubles</b> that game's points (nothing if it's wrong). Picks lock at puck drop.${college.length ? ` College gets its own ★ and table; no underdog bonus there, and a tie counts as wrong.` : ""}</p>
-    <div class="pick-dice"><button class="btn small" id="dice" hidden></button><span class="muted small">Only games you haven't picked</span></div>
+    <div class="pick-clock" id="pickclock"></div>
+    <div class="pick-dice"><button class="btn small primary" id="flick" hidden>🏒 Flick your picks</button><button class="btn small" id="dice" hidden></button></div>
     ${rows || `<div class="empty">No games this day.</div>`}
     ${hid.length ? `<h2>The table</h2>${spoilCover(hid, "The Pick'em table")}` : `
       ${pools.length > 1 ? `<div class="seg seg-top" role="tablist" style="margin-top:22px">${pools.map(p => `<button data-board="${p}" class="${p === boardPick ? "on" : ""}">${esc(POOL_NAME[p])}</button>`).join("")}</div>` : ""}
@@ -901,9 +961,34 @@ async function pickemView(date, quiet = false) {
   const dice = document.getElementById("dice");
   const open = lg => !isCollege(lg) || view.querySelector(`details[data-fold="${lg}"]`)?.open;
   const unpicked = () => d.games.filter(g => !g.mine && g.state === "pre" && !begun(g) && open(g.league || "nhl"));
-  const diceLabel = () => { const n = unpicked().length; dice.hidden = !n; dice.parentElement.hidden = !n;
+  const flick = document.getElementById("flick");
+  const diceLabel = () => { const n = unpicked().length; dice.hidden = flick.hidden = !n; dice.parentElement.hidden = !n;
     dice.textContent = `🎲 Pick ${n === 1 ? "this one" : n} for me`; };
   diceLabel();
+  // Flick your picks: the same games one at a time, your teams first. Saves go out in order behind the animation.
+  flick.addEventListener("click", async () => {
+    let m;
+    try { m = await import(`./flick.js${V}`); } catch { toast("Couldn't load that. Try again.", true); return; }
+    let saving = Promise.resolve();
+    const page = location.hash;
+    const games = unpicked().sort((x, y) => (fav.has(y.away.abbr) || fav.has(y.home.abbr)) - (fav.has(x.away.abbr) || fav.has(x.home.abbr)))
+      .map(g => ({ ...g, when: g.start ? time(g.start) : "" }));
+    m.open({ games, mark, esc, name: teamName, record: t => t.record, oddsFor: g => oddsOn() ? g.odds : null, motionOn,
+      colour: (abbr, other) => other ? apart(TEAMS[abbr]?.color || "#888", TEAMS[other]?.color || "#888") : TEAMS[abbr]?.color || "#888",
+      pool: g => poolOf(g.league),
+      lockAt: g => { const x = d.games.find(y => y.lock && poolOf(y.league) === poolOf(g.league)); return !x ? "" : begun(x) ? "stuck" : "moves"; },
+      send: (g, team, lock) => {
+        const post = lock => api("/api/pickem", { method: "POST", body: JSON.stringify({ league: g.league || "nhl", id: g.id, date: g.date, team, lock }) });
+        // A refused lock mustn't cost the pick, so it's tried again without one. Resolves to what got saved.
+        const done = saving.then(() => post(lock)).then(() => (lock ? "locked" : "picked"), e => {
+          toast(e.detail || "Couldn't save that pick.", true);
+          return lock ? post(false).then(() => "picked", () => "") : "";
+        });
+        saving = done;
+        return done;
+      },
+      done: () => saving.then(() => { if (location.hash === page) pickemView(date, true); }) });
+  });
   dice.addEventListener("click", async () => {
     const list = unpicked();
     dice.disabled = true;
@@ -914,6 +999,30 @@ async function pickemView(date, quiet = false) {
     } catch (e) { toast(e.detail || "Couldn't pick those. Try again.", true); }
     pickemView(date, true);
   });
+  // The honest countdown: the real time until the next game you haven't picked locks, once that's within 3 hours. It
+  // only ever counts down to puck drop, and says so when you're all set.
+  const clock = document.getElementById("pickclock");
+  const hours3 = 3 * 3600e3;
+  const nextLock = () => d.games.filter(g => !g.mine && g.start && Date.parse(g.start) > Date.now() && g.state === "pre")
+    .sort((x, y) => Date.parse(x.start) - Date.parse(y.start))[0];
+  const showClock = () => {
+    const g = nextLock(), left = g ? Date.parse(g.start) - Date.now() : 0;
+    const ahead = d.games.filter(x => x.state === "pre" && !begun(x));
+    if (ahead.length && ahead.every(x => x.mine)) { clock.textContent = "✓ All picked"; clock.className = "pick-clock done"; return true; }
+    if (!g || left > hours3) { clock.textContent = ""; clock.className = "pick-clock"; return false; }
+    const mine = [g.away.abbr, g.home.abbr].find(a => fav.has(a));
+    const s = Math.ceil(left / 1000), hh = Math.floor(s / 3600), mm = Math.floor(s / 60) % 60;
+    clock.className = `pick-clock${left < 600e3 ? " soon" : ""}`;
+    clock.innerHTML = `⏱ ${esc(mine ? teamName(mine) : `${teamName(g.away.abbr)} at ${teamName(g.home.abbr)}`)} ${mine ? "lock" : "locks"} in <b>${hh ? `${hh}:${String(mm).padStart(2, "0")}` : mm}:${String(s % 60).padStart(2, "0")}</b>`;
+    return true;
+  };
+  showClock();
+  const tick = setInterval(() => {
+    if (!clock.isConnected) { clearInterval(tick); return; }
+    const was = nextLock();
+    showClock();
+    if (was && Date.parse(was.start) - Date.now() < 1000) { clearInterval(tick); setTimeout(() => { if (clock.isConnected) pickemView(date, true); }, 1200); }  // that game just locked
+  }, 1000);
   // Switching tables swaps them in place: the page doesn't move (see docs/motion.md).
   view.querySelectorAll("[data-board]").forEach(btn => btn.addEventListener("click", () => {
     try { localStorage.setItem("pickBoard", btn.dataset.board); } catch { /* fine */ }
@@ -1088,6 +1197,7 @@ async function gameView(id, quiet = false, league = "nhl") {
   loadMorph();
   if (gameUi.id !== id) gameUi = { id, shots: "all", rx: null };
   if (!quiet) showLoading(`Loading game…`);
+  const live = () => autoRefresh(q => gameView(id, q, league), LIVE_REFRESH);
   let d;
   try { d = await fast(gameApi(league, id), () => gameView(id, true, league), quiet); } catch (e) { view.innerHTML = failed(e); return; }
   const g = d.game, a = g.away.abbr, h = g.home.abbr;
@@ -1105,7 +1215,8 @@ async function gameView(id, quiet = false, league = "nhl") {
   }
   const ac = TEAMS[a]?.color || "#888", hc = TEAMS[h]?.color || "#888";
   let state = "";
-  if (g.state === "live") state = `<span class="live">LIVE</span> ${esc(g.intermission ? `${g.period} intermission` : `${g.period} · ${g.clock || ""}`)}`;
+  const clock = esc(g.intermission ? `${g.period} intermission` : `${g.period} · ${g.clock || ""}`);
+  if (g.state === "live") state = `<span class="live">LIVE</span> ${clock}`;
   else if (g.state === "final") state = g.outcome === "T" ? `Final · Tie` : `Final${g.outcome && g.outcome !== "REG" ? ` (${esc(g.outcome)})` : ""}`;
   else if (g.state === "postponed") state = "Postponed";
   else state = g.start ? `${esc(shortDate(g.date))} · ${esc(time(g.start))}` : "Time TBD";
@@ -1138,12 +1249,20 @@ async function gameView(id, quiet = false, league = "nhl") {
         ${spoilerMarked(g) ? spoilButton("seen", g, "🙈 Spoiler-free on · turn off") : spoilButton("later", g, "🙈 Watching later")}` : ""}
       ${friendsLine ? `<span class="gsec-note">${friendsLine}</span>` : ""}</div>` : "";
 
+  // Finals: the NHL's recap and condensed game, in the same theatre as the goals.
+  const won = g.away.score > g.home.score ? a : h;
+  gameUi.films = g.state !== "final" ? [] : [[d.video?.recap, "3-minute recap"], [d.video?.condensed, "Condensed game"]].filter(([id]) => id)
+    .map(([id, who]) => ({ id: String(id), who, when: "Final", score: `${g.away.score}–${g.home.score}`, team: won, url: `https://www.nhl.com/gamecenter/${encodeURIComponent(g.id)}` }));
+  const films = gameUi.films.length ? `<div class="gsec gsec-row films">${gameUi.films.map(f => `<button class="clipbtn" data-clip="${esc(f.id)}"><span class="clip-ico" aria-hidden="true">▶</span> ${esc(f.who)}</button>`).join("")}</div>` : "";
+  const paints = `--a:${esc(apart(ac, hc))};--h:${esc(hc)}`;
+  const big = showScore ? `<b data-sc="a">${g.away.score ?? 0}</b><i>–</i><b data-sc="h">${g.home.score ?? 0}</b>` : g.start && g.state === "pre" ? esc(time(g.start)) : "vs";
   let html = `${backLink("#/")}<div class="card">
-    <div class="scorebug">
+    <div class="scorebug" style="${paints}">
       ${side(g.away, a)}
-      <div><div class="score">${showScore ? `${g.away.score ?? 0} – ${g.home.score ?? 0}` : "vs"}</div><div class="state">${state}</div>${sit}</div>
+      <div><div class="score${showScore ? "" : " tbd"}">${big}</div><div class="state">${state}</div>${sit}</div>
       ${side(g.home, h)}
     </div>
+    ${films}
     ${watchBlock(g, report)}
     ${league === "nhl" ? oddsBlock(g, ac, hc) : ""}
     ${social}
@@ -1153,6 +1272,10 @@ async function gameView(id, quiet = false, league = "nhl") {
   if (g.state === "pre" && d.preview) html += previewBlock(d.preview, a, h, ac, hc);
 
   const goals = d.scoring.filter(p => p.goals.length);
+  // Every goal with a clip, in order: what the theatre steps through. The id is the end of the NHL's share link; one
+  // that doesn't fit stays a plain link.
+  gameUi.reel = goals.flatMap(p => p.goals.flatMap(x => { const id = /-(\d{10,})$/.exec(x.clip || "")?.[1];
+    return id ? [{ id, url: x.clip, period: p.period, time: x.time, who: x.scorer, when: `${p.period} ${x.time}`, score: `${x.away}–${x.home}`, team: x.team }] : []; }));
   if (goals.length) {
     html += `<h2>Scoring</h2><div class="card">${goals.map(p => `<div class="subhead">${esc(p.period)}</div>${p.goals.map(x => {
       const tags = [x.strength !== "EV" ? x.strength : "", x.modifier === "empty-net" ? "EN" : ""].filter(Boolean)
@@ -1160,11 +1283,11 @@ async function gameView(id, quiet = false, league = "nhl") {
       const assists = x.assists.length ? x.assists.map(y => `${plink(y.name, y.pid, league)}${y.total ? ` (${y.total})` : ""}`).join(", ") : "Unassisted";
       return `<div class="event"><span class="when">${esc(x.time)}</span>${mark(x.team)}
         <div><span class="run">${x.away}–${x.home}</span><div class="who">${plink(x.scorer, x.pid, league)}${x.total ? ` (${x.total})` : ""}${tags}</div>
-        <div class="detail">${assists}${x.clip ? ` · <a href="${esc(x.clip)}" target="_blank" rel="noopener">clip</a>` : ""}</div>${rx(`g:${p.period}-${x.time}-${x.scorer}`)}</div></div>`;
+        <div class="detail">${assists}</div><div class="ev-acts">${x.clip ? clipLink(x.clip, gameUi.reel.find(c => c.url === x.clip)?.id) : ""}${rx(`g:${p.period}-${x.time}-${x.scorer}`)}</div></div></div>`;
     }).join("")}`).join("")}</div>`;
   }
 
-  if (d.shotmap?.length) html += shotMap(d.shotmap, a, h, gameUi.shots) + momentumCard(d.shotmap, a, h, ac, hc, league);
+  if (d.shotmap?.length) html += shotMap(d.shotmap, a, h, gameUi.shots, g) + momentumCard(d.shotmap, a, h, ac, hc, league);
 
   if (d.linescore.length) {
     const shots = Object.fromEntries(d.shots.map(s => [s.period, s])), sog = d.shots.length > 0;
@@ -1212,7 +1335,25 @@ async function gameView(id, quiet = false, league = "nhl") {
   if (more) html += `<details class="more-stats" ${moreStatsOpen ? "open" : ""}><summary>More stats: team, penalties, players</summary>${more}</details>`;
 
   if (g.venue) html += `<p class="help" style="text-align:center;margin-top:18px">${esc(g.venue)}</p>`;
+  html += `<div class="ministrip" style="${paints}" aria-hidden="true">${mark(a)}<div class="ms-mid"><b class="ms-sc">${showScore ? `<span>${g.away.score ?? 0}</span><i>–</i><span>${g.home.score ?? 0}</span>` : "vs"}</b><span class="ms-st">${g.state === "live" ? clock : state}</span></div>${mark(h)}</div>`;
   paint(html, quiet);
+  watchBug();
+  const shotCard = view.querySelector(".shotcard");
+  const showShots = pick => {
+    gameUi.shots = pick;
+    view.querySelectorAll("[data-shots]").forEach(x => x.classList.toggle("on", x.dataset.shots === pick));
+    view.querySelectorAll(".rink [data-p]").forEach(dot => { dot.style.display = shotShown(dot.dataset.p, pick) ? "" : "none"; });
+  };
+  const engaged = on => {
+    const was = gameUi.replaying;
+    gameUi.replaying = on;
+    if (on && gameUi.shots !== "all") showShots("all");  // a replay is the whole game
+    if (was && !on && shotCard.isConnected) gameView(id, true, league);  // catch up on what it held back
+  };
+  const wireReplay = () => loadReplay().then(m => { if (shotCard.isConnected) m.attach(shotCard, timeline(d.shotmap, a, h, g), { lamp, motionOn, esc, engaged, clipFor: shot => {
+    const c = gameUi.reel?.find(x => x.period === shot.period && x.time === shot.time && x.team === shot.team);
+    return c ? clipLink(c.url, c.id) : ""; } }); }).catch(() => {});
+  if (shotCard?.querySelector(".rp") && !gameUi.replaying) (window.requestIdleCallback || setTimeout)(wireReplay);
   const on = listen();
   // toggle doesn't bubble: listen while it travels down to the <details>.
   view.addEventListener("toggle", e => { if (e.target.matches?.(".more-stats")) moreStatsOpen = e.target.open; }, { ...on, capture: true });
@@ -1229,20 +1370,36 @@ async function gameView(id, quiet = false, league = "nhl") {
     gameView(id, true, league);
   };
   view.addEventListener("click", e => {
-    const t = e.target, open = t.closest("[data-rxopen]"), react = t.closest("[data-rx]"), shots = t.closest("[data-shots]");
-    if (t.closest("#report")) sendReport(e);
+    const t = e.target, open = t.closest("[data-rxopen]"), react = t.closest("[data-rx]"), shots = t.closest("[data-shots]"), clip = t.closest("[data-clip]");
+    if (clip) { if (clip.tagName === "BUTTON" || !(e.metaKey || e.ctrlKey || e.shiftKey)) { e.preventDefault(); openClip(clip.dataset.clip); } }  // a new-tab click on a link still gets a tab
+    else if (t.closest("#report")) sendReport(e);
+    else if (motionOn() && t.closest("[data-sc]")) lamp(t.closest("[data-sc]"));  // the scoreboard is a toy: tap a number, light the lamp
     else if (t.closest("#watching")) post("/api/watching", { on: !S.me_watching });
     else if (open) { gameUi.rx = open.dataset.rxopen; open.parentElement.innerHTML = rxPicker(gameUi.rx); }
     else if (react) {
       gameUi.rx = null;
       post("/api/react", { event: react.dataset.ev, emoji: S.mine[react.dataset.ev] === react.dataset.rx ? null : react.dataset.rx });
     } else if (shots) {
-      gameUi.shots = shots.dataset.shots;
-      view.querySelectorAll("[data-shots]").forEach(x => x.classList.toggle("on", x === shots));
-      view.querySelectorAll(".rink [data-p]").forEach(dot => { dot.style.display = shotShown(dot.dataset.p, gameUi.shots) ? "" : "none"; });
+      shotCard?.endReplay?.();
+      showShots(shots.dataset.shots);
     }
   }, on);
-  if (g.state === "live" || (g.state === "pre" && Date.parse(g.start) - Date.now() < 30 * 60000)) autoRefresh(q => gameView(id, q, league), LIVE_REFRESH);
+  if (g.state === "live" || (g.state === "pre" && Date.parse(g.start) - Date.now() < 30 * 60000)) live();
+}
+
+// The score strip shows once the jumbotron has scrolled off. The flag lives on <body>, which a live morph doesn't touch.
+let bugWatch = null;
+function unwatchBug() { bugWatch?.io.disconnect(); bugWatch = null; document.body.classList.remove("bug-gone"); }
+function watchBug() {
+  const bug = view.querySelector(".scorebug"), bar = document.querySelector(".top");
+  if (!bug || bug === bugWatch?.bug) return;
+  unwatchBug();
+  const io = new IntersectionObserver(([e]) => {
+    document.documentElement.style.setProperty("--top-h", `${bar.offsetHeight}px`);
+    document.body.classList.toggle("bug-gone", !e.isIntersecting);
+  }, { rootMargin: "-64px 0px 0px 0px" });
+  io.observe(bug);
+  bugWatch = { bug, io };
 }
 
 // College game pages: ESPN has no scorers, shots or players for college games, so after the score by period come
@@ -1358,30 +1515,83 @@ function momentumCard(shots, a, h, ac, hc, league) {
 }
 
 // ---- shot map -----------------------------------------------------------------------------
+// The game as one clock in seconds, for Replay: regulation periods are 20 minutes, overtime at least 5, and the clock
+// stops at the last shot while a game is live or when an overtime goal ends it. A shootout has no clock: its shots sit
+// past the end (at() = Infinity), so they show at full time and never on the way there.
+const clockOf = s => { const [m, sec] = String(s.time || "0:0").split(":"); return (+m || 0) * 60 + (+sec || 0); };
+function timeline(shots, a, h, g) {
+  const on = shots.filter(s => s.period !== "SO"), regulation = PERIOD_ORDER.slice(0, 3);
+  const names = [...new Set([...regulation, ...on.map(s => s.period)])];
+  let from = 0;
+  const periods = names.map(name => {
+    const len = regulation.includes(name) ? 1200 : Math.max(300, ...on.filter(s => s.period === name).map(clockOf)), p = { name, from, len };
+    from += len;
+    return p;
+  });
+  const at = s => { const p = periods.find(x => x.name === s.period); return p ? p.from + clockOf(s) : Infinity; };
+  const stamps = on.map(at), lastAt = Math.max(0, ...stamps), last = on[stamps.indexOf(lastAt)];
+  const live = g.state === "live", decided = last?.kind === "goal" && !regulation.includes(last.period);
+  const end = live || decided ? lastAt + 1 : Math.max(from, lastAt + 1);
+  periods.forEach(p => { p.len = Math.min(p.len, end - p.from); });
+  return { shots, on, periods: periods.filter(p => p.len > 0), at, end, home: h, awayCode: TEAMS[a]?.code || a, homeCode: TEAMS[h]?.code || h,
+    endText: `<span>${live ? "Now" : "Final"}</span><b><small>${esc(TEAMS[a]?.code || a)}</small> ${g.away.score ?? 0}–${g.home.score ?? 0} <small>${esc(TEAMS[h]?.code || h)}</small></b>` };
+}
+// The timeline under the rink: goals as pips, periods underneath, the puck is the range input's thumb. A short list (a
+// game that's just started) gets no bar.
+function replayBar(tl, color) {
+  if (tl.on.length < 10) return "";
+  const pos = t => `${(t / tl.end * 100).toFixed(2)}%`;
+  return `<div class="rp"><button class="rp-play" aria-label="Play the game back">▶</button><div class="rp-t">
+      <div class="rp-pips" aria-hidden="true">${tl.on.filter(s => s.kind === "goal").map(s => `<i style="left:${pos(tl.at(s))};background:${color(s.team)}"></i>`).join("")}</div>
+      <input type="range" min="0" max="${tl.end}" value="${tl.end}" step="1" aria-label="Game time">
+      <div class="rp-ps" aria-hidden="true">${tl.periods.map(p => `<span style="flex:${p.len}">${esc(p.name)}</span>`).join("")}</div>
+    </div></div><div class="rp-read">${tl.endText}</div>`;
+}
+// A goal clip plays in a theatre over the page. Its code and the NHL's player only load on the tap. The link is a real
+// one, so a new-tab click or a clip with no id still goes to NHL.com.
+const clipLink = (url, id) => `<a class="clipbtn" href="${esc(url)}" target="_blank" rel="noopener"${id ? ` data-clip="${esc(id)}"` : ""}><span class="clip-ico" aria-hidden="true">▶</span> Watch</a>`;
+let clipOpening = false;
+async function openClip(id) {
+  if (clipOpening || document.querySelector(".clipview")) return;
+  clipOpening = true;
+  const page = location.hash;
+  try {
+    const m = await import(`./clip.js${V}`), film = gameUi.films.some(c => c.id === id), reel = film ? gameUi.films : gameUi.reel;
+    const at = reel.findIndex(c => c.id === id);   // looked up now: a refresh may have reordered the list
+    if (at >= 0 && location.hash === page) m.open({ reel, at, nextLabel: film ? "Next" : "Next goal", mark, esc, motionOn, colour: abbr => TEAMS[abbr]?.color || "#333" });
+  } catch { toast("Couldn't load that clip. Try again.", true); }
+  clipOpening = false;
+}
+
+// Replay's code comes down once the page is up, or the moment someone reaches for the puck.
+const V = new URL(import.meta.url).search;
+let replayMod = null;
+const loadReplay = () => replayMod ||= import(`./replay.js${V}`);
+
 // NHL rink coordinates: x -100..100 (end boards), y -42.5..42.5. Home shoots right, away shoots left.
 const shotShown = (period, pick) => pick === "all" || period === pick;
-function shotMap(shots, a, h, pick = "all") {
+function shotMap(shots, a, h, pick = "all", g) {
   const color = t => TEAMS[t]?.color || "#888";
   const periods = [...new Set(shots.map(s => s.period))];
   const count = (t, k) => shots.filter(s => s.team === t && (k ? s.kind === k : s.kind !== "miss")).length;
   if (!periods.includes(pick)) pick = "all";
   const dot = s => {
-    const c = color(s.team), cx = s.x.toFixed(1), cy = (-s.y).toFixed(1), p = `data-p="${esc(s.period)}"${shotShown(s.period, pick) ? "" : ` style="display:none"`}`;
+    const c = color(s.team), cx = s.x.toFixed(1), cy = (-s.y).toFixed(1), p = `data-p="${esc(s.period)}" data-i="${shots.indexOf(s)}"${shotShown(s.period, pick) ? "" : ` style="display:none"`}`;
     const title = `<title>${esc(s.shooter)} · ${esc(s.period)} ${esc(s.time)} · ${esc(s.kind === "miss" ? "missed" : s.kind)}${s.shot_type ? ` (${esc(s.shot_type)})` : ""}</title>`;
     if (s.kind === "goal") return `<g ${p}><circle cx="${cx}" cy="${cy}" r="3.4" fill="${c}" stroke="var(--text)" stroke-width="1"/>${title}</g>`;
     if (s.kind === "miss") return `<circle ${p} cx="${cx}" cy="${cy}" r="1.6" fill="none" stroke="${c}" stroke-width=".7" opacity=".8">${title}</circle>`;
     return `<circle ${p} cx="${cx}" cy="${cy}" r="1.8" fill="${c}" opacity=".9">${title}</circle>`;
   };
   const line = "var(--border)";
-  return `<h2>Shot map</h2><div class="card pad">
+  return `<h2>Shot map</h2><div class="card pad shotcard">
     <div class="shotlegend"><span>${mark(a)} shoots ←</span><span class="muted small">● shot · ○ miss · ◉ goal</span><span>→ ${mark(h)}</span></div>
     <svg class="rink" viewBox="-101 -44 202 88" role="img" aria-label="Shot map">
       <rect x="-100" y="-42.5" width="200" height="85" rx="28" fill="none" stroke="var(--muted)" stroke-width=".8"/>
-      <line x1="0" y1="-42.5" x2="0" y2="42.5" stroke="var(--accent)" stroke-opacity=".5" stroke-width="1"/>
+      <line x1="0" y1="-42.5" x2="0" y2="42.5" stroke="var(--red)" stroke-opacity=".5" stroke-width="1"/>
       <line x1="-25" y1="-42.5" x2="-25" y2="42.5" stroke="#3b6fd8" stroke-opacity=".5" stroke-width="1"/>
       <line x1="25" y1="-42.5" x2="25" y2="42.5" stroke="#3b6fd8" stroke-opacity=".5" stroke-width="1"/>
-      <line x1="-89" y1="-37" x2="-89" y2="37" stroke="var(--accent)" stroke-opacity=".4" stroke-width=".5"/>
-      <line x1="89" y1="-37" x2="89" y2="37" stroke="var(--accent)" stroke-opacity=".4" stroke-width=".5"/>
+      <line x1="-89" y1="-37" x2="-89" y2="37" stroke="var(--red)" stroke-opacity=".4" stroke-width=".5"/>
+      <line x1="89" y1="-37" x2="89" y2="37" stroke="var(--red)" stroke-opacity=".4" stroke-width=".5"/>
       <circle cx="0" cy="0" r="15" fill="none" stroke="${line}" stroke-width=".6"/>
       ${[[-69, -22], [-69, 22], [69, -22], [69, 22]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="15" fill="none" stroke="${line}" stroke-width=".6"/>`).join("")}
       <rect x="-93" y="-3" width="4" height="6" fill="none" stroke="var(--muted)" stroke-width=".6"/>
@@ -1391,6 +1601,7 @@ function shotMap(shots, a, h, pick = "all") {
       ${shots.filter(s => s.kind === "goal").map(dot).join("")}
     </svg>
     <div class="shotlegend small"><span>${count(a)} on goal · ${count(a, "miss")} missed</span><span>${count(h)} on goal · ${count(h, "miss")} missed</span></div>
+    ${replayBar(timeline(shots, a, h, g), color)}
     ${periods.length > 1 ? `<div class="seg" style="margin:10px 0 0">${["all", ...periods].map(p => `<button data-shots="${esc(p)}" class="${p === pick ? "on" : ""}">${p === "all" ? "All" : esc(p)}</button>`).join("")}</div>` : ""}
   </div>`;
 }
@@ -1402,10 +1613,10 @@ function standingsTable(rows, opts = {}) {
   const fav = favs();
   return `<div class="card scroll"><table>
     <tr><th colspan="2">Team</th><th>GP</th><th>W</th><th>L</th><th>OT</th><th>PTS</th><th class="wide">RW</th><th>GD</th><th class="wide">L10</th><th>STRK</th></tr>
-    ${rows.map((r, i) => `<tr class="${fav.has(r.abbr) ? "fav" : ""}${opts.cutAfter === i ? " cut" : ""}">
+    ${rows.map((r, i) => `<tr data-t="${r.abbr}" class="${fav.has(r.abbr) ? "fav" : ""}${opts.cutAfter === i ? " cut" : ""}">
       <td class="rank">${opts.rank ? opts.rank(r, i) : i + 1}</td>
       <td class="team"><span class="tm">${mark(r.abbr)}<a href="#/team/${r.abbr}">${esc(r.short || r.abbr)}</a></span></td>
-      <td>${r.gp}</td><td>${r.w}</td><td>${r.l}</td><td>${r.otl}</td><td><b>${r.pts}</b></td><td class="wide">${r.rw}</td>
+      <td>${r.gp}</td><td>${r.w}</td><td>${r.l}</td><td>${r.otl}</td><td><b>${r.pts}</b>${r.more ? `<span class="wi-more">+${r.more}</span>` : ""}</td><td class="wide">${r.rw}</td>
       <td>${r.gd > 0 ? "+" : ""}${r.gd}</td><td class="wide">${esc(r.l10)}</td><td>${esc(r.streak)}</td></tr>`).join("")}
   </table></div>`;
 }
@@ -1443,26 +1654,10 @@ function yourTeamTiles(lg) {
   return mine.length ? `<div class="grid tiles-top">${mine.map(a => `<a class="tile" href="#/team/${a}">${mark(a)}${esc(teamName(a))}</a>`).join("")}</div>` : "";
 }
 
-async function standingsView(mode = "division") {
-  setNav("league");
-  showLoading(`Loading standings…`);
-  const lg = pageLeague();
-  standings(lg).catch(() => null);  // start loading the table while the spoiler check runs
-  const hid = (await hiddenToday().catch(() => [])).filter(g => g.state === "final" && leagueOf(g.home.abbr) === lg);
-  if (hid.length) {
-    view.innerHTML = leagueTabs("standings") + leaguePicker(lg) + spoilCover(hid, "These standings", "include");
-    bindLeaguePicker(() => standingsView(mode));
-    return;
-  }
-  if (lg === "pwhl" || isCollege(lg)) {
-    let rows;
-    try { rows = await standings(lg); } catch (e) { view.innerHTML = failed(e); return; }
-    view.innerHTML = leagueTabs("standings") + leaguePicker(lg) + yourTeamTiles(lg) + (lg === "pwhl" ? pwhlStandings(rows) : collegeStandings(rows, lg));
-    bindLeaguePicker(() => standingsView(mode));
-    return;
-  }
-  let rows;
-  try { rows = await standings(); } catch (e) { view.innerHTML = failed(e); return; }
+// The table for a mode, from any list of rows: the real one, or What if?'s.
+let whatIfOn = false;
+const whatIfPicks = new Map();
+function standingsBody(rows, mode) {
   const by = (key, list) => list.reduce((m, r) => ((m[r[key]] ||= []).push(r), m), {});
   let body = "";
   if (mode === "league") {
@@ -1486,8 +1681,50 @@ async function standingsView(mode = "division") {
       body += `<h2>${esc(div)}</h2>` + standingsTable(list.sort((x, y) => x.div_rank - y.div_rank));
     }
   }
-  view.innerHTML = `${leagueTabs("standings")}${leaguePicker("nhl")}${yourTeamTiles("nhl")}<div class="seg">${STANDING_MODES.map(([k, l]) => `<button data-mode="${k}" class="${k === mode ? "on" : ""}">${l}</button>`).join("")}</div>${body}`;
+  return body;
+}
+
+async function standingsView(mode = "division") {
+  setNav("league");
+  showLoading(`Loading standings…`);
+  const lg = pageLeague();
+  standings(lg).catch(() => null);  // start loading the table while the spoiler check runs
+  const hid = (await hiddenToday().catch(() => [])).filter(g => g.state === "final" && leagueOf(g.home.abbr) === lg);
+  if (hid.length) {
+    view.innerHTML = leagueTabs("standings") + leaguePicker(lg) + spoilCover(hid, "These standings", "include");
+    bindLeaguePicker(() => standingsView(mode));
+    return;
+  }
+  if (lg === "pwhl" || isCollege(lg)) {
+    let rows;
+    try { rows = await standings(lg); } catch (e) { view.innerHTML = failed(e); return; }
+    view.innerHTML = leagueTabs("standings") + leaguePicker(lg) + yourTeamTiles(lg) + (lg === "pwhl" ? pwhlStandings(rows) : collegeStandings(rows, lg));
+    bindLeaguePicker(() => standingsView(mode));
+    return;
+  }
+  let rows;
+  try { rows = await standings(); } catch (e) { view.innerHTML = failed(e); return; }
+  view.innerHTML = `${leagueTabs("standings")}${leaguePicker("nhl")}${yourTeamTiles("nhl")}<div class="seg">${STANDING_MODES.map(([k, l]) => `<button data-mode="${k}" class="${k === mode ? "on" : ""}">${l}</button>`).join("")}</div>
+    <div class="wi-open"><button class="btn small" id="whatif">🔮 What if?</button></div><div id="wi-slot"></div><div id="table">${standingsBody(rows, mode)}</div>`;
   bindLeaguePicker(() => standingsView(mode));
+  const opener = view.querySelector(".wi-open");
+  const whatIf = async () => {
+    opener.hidden = true;
+    let games, m;
+    try {
+      m = await import(`./whatif.js${V}`);
+      let day = await api("/api/games?league=nhl");
+      const left = d => d.games.filter(g => g.state === "pre" || g.state === "live");
+      if (!left(day).length && day.next) day = await api(`/api/games?league=nhl&date=${day.next}`);
+      games = left(day);
+    } catch (e) { opener.hidden = false; toast(e.detail || "Couldn't load tonight's games.", true); return; }
+    m.open({ slot: document.getElementById("wi-slot"), table: document.getElementById("table"), rows, games, picks: whatIfPicks,
+      render: next => standingsBody(next, mode), mark, esc, code: abbr => TEAMS[abbr]?.code || abbr, favs, motionOn,
+      colour: abbr => TEAMS[abbr]?.color || "#666", light: abbr => TEAMS[abbr]?.light, onClose: () => { opener.hidden = false; whatIfOn = false; } });
+    whatIfOn = true;
+  };
+  document.getElementById("whatif").addEventListener("click", whatIf);
+  if (whatIfOn) whatIf();  // the mode switch redraws the page: stay in What if?
   view.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", () => {
     try { localStorage.setItem("standingsMode", b.dataset.mode); } catch { /* fine */ }
     standingsView(b.dataset.mode);
@@ -1608,15 +1845,18 @@ async function teamView(abbr) {
     videos: () => collegeVideos(C.highlights, d.schedule, abbr),
   };
   const pollMove = p => !p ? "" : !p.previous ? " (new)" : p.previous > p.rank ? ` (▲${p.previous - p.rank})` : p.previous < p.rank ? ` (▼${p.rank - p.previous})` : "";
-  view.innerHTML = `${backLink("#/league", "League")}<div class="card pad team-head">
+  // The number that matters most, big: points, or a college team's place in the poll.
+  const big = isCollege(lg) ? (C.poll ? [`${C.poll.rank}`, "in the poll"] : null) : st ? [`${st.pts}`, "points"] : null;
+  view.innerHTML = `${backLink("#/league", "League")}<div class="card banner team-head" style="--c:${esc(TEAMS[abbr]?.color || "#444")}">
       ${mark(abbr, true)}
-      <div style="flex:1;min-width:0"><h1 style="margin:0">${esc(fullName(abbr))}</h1>
+      <div class="bn-text"><h1>${esc(fullName(abbr))}</h1>
       ${isCollege(lg) ? `<div class="muted small">${[C.season?.record || (st ? `${st.w}-${st.l}-${st.t}` : ""),
           C.poll ? `No. ${C.poll.rank} in the poll${pollMove(C.poll)}` : "", leagueLabel(abbr)].filter(Boolean).map(nw).join(" · ")}</div>
         ${C.venue ? `<div class="muted small">${[C.venue.name, C.venue.town].filter(Boolean).map(nw).join(" · ")}</div>` : ""}`
         : st && lg === "pwhl" ? `<div class="muted small">${st.w}-${st.otw}-${st.otl}-${st.l} · ${st.pts} pts · ${esc(ordinal(st.league_rank))} in the PWHL${st.season ? ` (${esc(st.season)})` : ""}</div>`
-        : st ? `<div class="muted small">${st.w}-${st.l}-${st.otl} · ${st.pts} pts · ${esc(ordinal(st.div_rank))} in the ${esc(st.div)}${st.streak ? ` · ${esc(st.streak)}` : ""}</div>` : ""}</div>
-      <button class="btn small" id="fav">${isFav ? "★ Favorite" : "☆ Favorite"}</button>
+        : st ? `<div class="muted small">${st.w}-${st.l}-${st.otl} · ${st.pts} pts · ${esc(ordinal(st.div_rank))} in the ${esc(st.div)}${st.streak ? ` · ${esc(st.streak)}` : ""}</div>` : ""}
+      <button class="btn small" id="fav">${isFav ? "★ Favorite" : "☆ Favorite"}</button></div>
+      ${big ? `<div class="bn-big"><b>${esc(big[0])}</b><span>${esc(big[1])}</span></div>` : ""}
     </div>
     ${isCollege(lg) ? collegeSeason(C.season) : ""}
     ${next ? `<h2>${next.state === "live" ? "On now" : "Next game"}</h2><div class="card">${gameCard(next, fav)}</div>` : ""}
@@ -1748,13 +1988,14 @@ async function playerView(id, league = "nhl") {
   const tabs = [["games", "Games"], ["career", "Career"], ...(hasAdv ? [["advanced", "Advanced"]] : [])];
   const body = { games: () => formChart(d.log, d.goalie) + gameLogTable(d.log, d.goalie, league), career: () => careerBlock(d), advanced: () => advancedBlock(d) };
   view.innerHTML = `${backLink("#/league", "League")}
-    <div class="card pad phero">
+    <div class="card banner phero" style="--c:${esc(TEAMS[d.team]?.color || "#444")}">
       ${photosOn() ? `<div class="phero-ph">${photo(league, d.team || "", d.id, 96)}</div>` : ""}
-      <div class="phero-main">
+      <div class="phero-main bn-text">
         <h1>${esc(d.name)}</h1>
-        <div class="muted small">${d.number != null ? `#${d.number} · ` : ""}${esc(POS_NAME[d.pos] || d.pos || "")}</div>
+        <div class="muted small">${esc(POS_NAME[d.pos] || d.pos || "")}</div>
         ${d.team ? `<a class="tm phero-team" href="#/team/${d.team}">${mark(d.team)}<span>${esc(fullName(d.team))}</span></a>` : `<div class="muted small">${d.active ? "" : "Not active"}</div>`}
       </div>
+      ${d.number != null ? `<div class="bn-big bn-num" aria-label="Number ${esc(d.number)}"><b>${esc(d.number)}</b></div>` : ""}
     </div>
     ${chips.length ? `<div class="chipsrow">${chips.map(c => `<span class="chip">${esc(c)}</span>`).join("")}</div>` : ""}
     ${f.birthplace || d.draft ? `<p class="help">${f.birthplace ? `Born in ${esc(f.birthplace)}${f.born ? `, ${esc(new Date(f.born + "T12:00").toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }))}` : ""}.` : ""}
@@ -1907,8 +2148,14 @@ function ordinal(n) {
 // ---- Settings -------------------------------------------------------------------------------
 // Every tap saves straight away (no Save button). Saves queue up so they land in order; a toast says how it went.
 let settingsQueue = Promise.resolve();
+// First-run setup, one question a screen (web/welcome.js). New friends get it once; Settings can run it again.
+function openWelcome() {
+  import(`./welcome.js${V}`).then(m => m.open({ teams: ME.teams, leagueOf, mark, esc, name: teamName, colour: abbr => TEAMS[abbr]?.color || "#444",
+    services: ME.services, settings: ME.settings, save: saveSettings, done: route })).catch(() => {});   // the app works without it
+}
 function saveSettings(patch) {
   ME.settings = { ...ME.settings, ...patch };
+  if ("favorites" in patch || "accent" in patch) applyAccent();
   const body = JSON.stringify(ME.settings);
   settingsQueue = settingsQueue.then(() => api("/api/settings", { method: "PUT", body }))
     .then(() => toast("Saved ✓"), () => toast("Couldn't save. Check your connection and try again.", true));
@@ -1981,6 +2228,7 @@ function settingsView() {
     <div class="section-head"><h2>Your teams</h2>${fav.length ? `<button class="btn small" id="editteams">${open ? "Done" : "Edit"}</button>` : ""}</div>
     <div class="card">${open ? (fav.length ? "" : `<div class="pad small">Tap your teams. They're pinned to the top of Tonight, highlighted everywhere, and the ones you get alerts for.</div>`) + picker : mine}</div>
     ${open && fav.length ? `<p class="help">Tap a team again to remove it.</p>` : ""}
+    <p class="help"><button class="linkish" id="rewelcome">Set up again, one question at a time</button></p>
 
     <h2>Your name</h2>
     <div class="card"><label class="row-field"><span><b>Name friends see</b><span class="muted small">On Pick'em and on games you're watching. Empty = "${esc(ME.email.split("@")[0])}". Your email is never shown.</span></span>
@@ -2018,6 +2266,8 @@ function settingsView() {
 
     <div class="group-title">More</div>
     <h2>Display</h2>
+    ${fav.length ? `<div class="card"><label class="row-field"><span><b>Team colours</b><span class="muted small">The app wears your team's colours. Left on the first choice, it follows the NHL | PWHL | NCAA switch.</span></span>
+      <select class="field" id="accent"><option value="">My first team in each league</option>${fav.filter(a => TEAMS[a]).map(a => `<option value="${esc(a)}"${s.accent === a ? " selected" : ""}>Always ${esc(teamName(a))}</option>`).join("")}<option value="none"${s.accent === "none" ? " selected" : ""}>Off</option></select></label></div>` : ""}
     <div class="card checks"><label><input type="checkbox" id="animations" ${s.animations !== false ? "checked" : ""}>Animations between pages</label></div>
     <div class="seg" role="group" aria-label="Page motion">${[["rise", "Rise"], ["slapshot", "Slapshot"]].map(([k, l]) =>
       `<button data-motion="${k}" class="${motionStyle() === k ? "on" : ""}">${l}</button>`).join("")}</div>
@@ -2057,6 +2307,8 @@ function settingsView() {
       .then(showCalendar);
     if (!had !== !now.size) settingsView();  // first pick / last removal: the Done button and the home-market hint change
   }));
+  document.getElementById("accent")?.addEventListener("change", e => saveSettings({ accent: e.target.value }));
+  document.getElementById("rewelcome").addEventListener("click", openWelcome);
   document.getElementById("country").addEventListener("change", e => { saveSettings({ country: e.target.value }); settingsView(); });
   document.getElementById("local").addEventListener("change", e => {
     saveSettings({ local: e.target.value ? [e.target.value] : [] });
@@ -2426,6 +2678,7 @@ function route() {
   pendingFade = changed && inPage && motionOn();
   keepScroll = changed && inPage;
   if (!keepScroll) view.style.minHeight = "";
+  if (changed) { unwatchBug(); gameUi.replaying = false; }
   inPage = false;
   if (changed) cameFromApp = true; else if (lastHash === null) cameFromApp = false;
   lastHash = location.hash; lastPage = page;
@@ -2538,6 +2791,8 @@ function renderRoute() {
 }
 
 async function start() {
+  // Asked side by side with /api/me: one after the other, every cold open waited a whole extra round trip.
+  const changes = api("/api/changes").catch(() => []);
   try {
     ME = await api("/api/me");
     applyHand(ME.settings?.hand);
@@ -2547,7 +2802,7 @@ async function start() {
     return;
   }
   TEAMS = Object.fromEntries(ME.teams.map(t => [t.abbr, t]));
-  if (ME.status === "approved") CHANGES = await api("/api/changes").catch(() => []);
+  if (ME.status === "approved") CHANGES = await changes;
   updateNewDot();
   const asked = new URLSearchParams(location.search).get("league");  // a shared link can pick the league
   if (["nhl", "pwhl", "ncaa", "both"].includes(asked)) { LEAGUE = asked; try { localStorage.setItem("league", asked); } catch { /* fine */ } }
@@ -2569,6 +2824,7 @@ async function start() {
     if (hiddenAt && Date.now() - hiddenAt > 5 * 60000) { countView(); route(); }   // coming back = a fresh open
   });
   route();
+  if (ME.status === "approved" && !ME.settings.favorites?.length && !ME.settings.welcomed) openWelcome();  // a new friend
   setTimeout(() => { prefetch(); loadMorph(); }, 2500);  // the other tabs, quietly, once the first page is up
   setInterval(sendViews, 60000);
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});

@@ -19,6 +19,12 @@
   <link rel="icon" href="icons/icon.svg?v=3" type="image/svg+xml">
   <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=4">
   <link rel="stylesheet" href="style.css">
+  <!-- Your team's colours, from last time, in place before the first paint (web/app.js applyAccent). -->
+  <style id="team-accent"></style>
+  <script>try { document.getElementById("team-accent").textContent = localStorage.getItem("accentCss") || ""; } catch { /* fine */ }</script>
+  <!-- Asked for as soon as this page lands, so they're here by the time app.js has downloaded. -->
+  <link rel="preload" href="/api/me" as="fetch" crossorigin="anonymous">
+  <link rel="preload" href="/api/changes" as="fetch" crossorigin="anonymous">
 </head>
 <body>
   <header class="top">

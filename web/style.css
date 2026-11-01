@@ -1,10 +1,15 @@
+/* Scoreboard digits: Big Shoulders Display ExtraBold, digits and a few marks only, inlined so they cost no request and
+   never swap in late. Anything else in a run of text falls through to the system font (web/fonts/BigShoulders-OFL.txt). */
+@font-face { font-family: Score; font-weight: 400 900; font-display: block; unicode-range: U+25, U+2D, U+2E, U+30-3A, U+2013;
+  src: url(data:font/woff2;base64,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) format("woff2"); }
 :root {
   --bg: #f5f6f8;
   --surface: #ffffff;
   --border: #e2e5ea;
   --text: #14171c;
   --muted: #5d6470;
-  --accent: #d7263d;        /* goal light */
+  --accent: #d7263d;        /* the app's colour: yours if you have a team (web/app.js applyAccent) */
+  --red: #d7263d;           /* goal light: live, losses and the rink's lines stay red for every team */
   --have-bg: #e3f5e8; --have-fg: #13692f;
   --need-bg: #fdf0dc; --need-fg: #8a5300;
   --info-bg: #e6edf8; --info-fg: #1d4f9c;
@@ -111,8 +116,8 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .hero-m .mark { box-shadow: 0 0 0 1.5px var(--ring); }
 .hero-opp { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .hero-r { margin-left: auto; display: grid; justify-items: end; line-height: 1.15; flex: none; }
-.hero-r span { font-size: 12px; opacity: .85; }
-.hero-sc { font-size: 19px; font-variant-numeric: tabular-nums; }
+.hero-r > span { font-size: 12px; opacity: .85; }
+.hero-sc { font: 800 28px/1 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
 .hero-chips { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; }
 .hero .chip { font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 7px; background: var(--wash); }
 .hero .chip.strong { background: var(--ink); color: var(--c); text-decoration: none; }
@@ -194,6 +199,13 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .pick-dice { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 14px; }
 @media (pointer: coarse) { :root[data-hand="right"] .pick-dice { flex-direction: row-reverse; justify-content: flex-start; } }
 .pick-dice[hidden] { display: none; }
+.pick-clock { min-height: 22px; margin: 0 0 8px; font-size: 13.5px; color: var(--muted); font-weight: 600; }
+.pick-clock b { font: 800 20px/1 Score, system-ui, sans-serif; color: var(--text); font-variant-numeric: tabular-nums; }
+.pick-clock.soon b { color: var(--red); }
+.pick-clock.done { color: var(--have-fg); }
+.streak { font-size: 12px; font-weight: 750; white-space: nowrap; }
+.recs { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 18px; font-size: 12.5px; color: var(--muted); }
+.rec b { font: 800 20px/1 Score, system-ui, sans-serif; color: var(--text); }
 .lf-count { font-weight: 600; letter-spacing: 0; color: var(--muted); font-size: 12.5px; }
 .rk { font-size: 11px; font-weight: 700; color: var(--muted); margin-right: 4px; font-variant-numeric: tabular-nums; }
 
@@ -212,7 +224,7 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
   text-decoration: none; padding: 7px 12px; border-radius: 9px; border: 1px solid var(--border);
   background: var(--surface); color: var(--text); font-weight: 600; font-size: 13px; cursor: pointer;
 }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn.small { padding: 4px 10px; font-size: 12px; }
 .btn:disabled { opacity: .5; cursor: default; }
 
@@ -223,12 +235,12 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .game .body { text-decoration: none; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; }
 .team-line { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .team-line .nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.team-line .sc { margin-left: auto; font-weight: 750; font-size: 18px; font-variant-numeric: tabular-nums; min-width: 22px; text-align: right; }
+.team-line .sc { margin-left: auto; font: 800 25px/1 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; min-width: 22px; text-align: right; }
 .team-line.lost .nm, .team-line.lost .sc { color: var(--muted); font-weight: 500; }
 .status { grid-row: span 2; text-align: right; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 74px; }
-.status .t { font-weight: 650; color: var(--text); font-size: 14px; }
-.live { color: var(--accent); font-weight: 750; font-size: 12px; letter-spacing: .03em; }
-.live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 5px; animation: pulse 1.4s infinite; vertical-align: 1px; }
+.status .t { font: 800 19px/1.15 Score, system-ui, sans-serif; color: var(--text); }
+.live { color: var(--red); font-weight: 750; font-size: 12px; letter-spacing: .03em; }
+.live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--red); margin-right: 5px; animation: pulse 1.4s infinite; vertical-align: 1px; }
 @keyframes pulse { 50% { opacity: .3; } }
 
 /* where to watch */
@@ -242,12 +254,27 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .pill.info { background: var(--info-bg); color: var(--info-fg); }
 
 /* game page */
-.scorebug { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 18px 14px; text-align: center; }
-.scorebug .side { display: grid; justify-items: center; gap: 6px; text-decoration: none; }
-.scorebug .side .nm { font-weight: 650; font-size: 14px; }
-.scorebug .side .small { font-size: 11.5px; }
-.scorebug .score { font-size: 38px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
-.scorebug .state { font-size: 13px; color: var(--muted); }
+/* The jumbotron: both teams' colours meeting on a faceoff slant, always dark like an arena at night. --a, --h = colours. */
+.scorebug {
+  position: relative; overflow: hidden; color: #fff; text-align: center;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 4px; padding: 20px 10px 16px;
+  background:
+    radial-gradient(ellipse 46% 120% at 50% 50%, rgba(8, 10, 14, .78) 30%, transparent 100%),
+    linear-gradient(101deg, color-mix(in srgb, var(--a) 68%, #0a0d12) 50%, color-mix(in srgb, var(--h) 68%, #0a0d12) 50%);
+}
+.scorebug .side { display: grid; justify-items: center; gap: 6px; text-decoration: none; min-width: 0; }
+.scorebug .side .nm { font-weight: 700; font-size: 14px; }
+.scorebug .side .small { font-size: 11.5px; color: rgba(255, 255, 255, .72); }
+.scorebug .mark.big { width: 64px; height: 44px; }
+/* The dash is the pivot: it stays dead centre on the colour split whatever the digits' widths ("0" is far wider than "1"). */
+.scorebug .score { font: 800 76px/1 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; display: grid; grid-template-columns: 1fr auto 1fr; align-items: baseline; gap: 12px; padding: 0 2px;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, .5); }
+.scorebug .score.tbd { display: block; font-size: 44px; opacity: .9; }
+.scorebug .score i { font-style: normal; font-size: .62em; opacity: .55; }
+.scorebug .score b { display: block; font-weight: inherit; justify-self: end; }
+.scorebug .score b:last-child { justify-self: start; }
+.scorebug .state { font-size: 12.5px; font-weight: 600; color: rgba(255, 255, 255, .8); margin-top: 2px; }
+.scorebug .live { color: #ff6b7a; } .scorebug .live::before { background: #ff6b7a; }
 .links { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 14px 14px; justify-content: center; }
 
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
@@ -260,7 +287,7 @@ td.team { text-align: left; }
 td.team .tm { display: inline-flex; align-items: center; gap: 8px; vertical-align: middle; }
 td.team a { text-decoration: none; font-weight: 600; }
 tr.fav td:first-child { box-shadow: inset 3px 0 0 var(--fav); }
-tr.cut td { border-top: 2px dashed var(--accent); }
+tr.cut td { border-top: 2px dashed var(--red); }
 .scroll { overflow-x: auto; }
 .rank { color: var(--muted); width: 1%; }
 
@@ -300,7 +327,7 @@ tr.cut td { border-top: 2px dashed var(--accent); }
 .done { color: var(--have-fg); font-weight: 650; margin: 0; }
 
 /* live extras */
-.sit { font-size: 11px; font-weight: 750; color: var(--accent); margin-top: 2px; }
+.sit { font-size: 11px; font-weight: 750; color: var(--red); margin-top: 2px; }
 .recap { margin: 12px 2px 0; line-height: 1.55; }
 .linkish { background: none; border: 0; color: var(--muted); font-size: 12.5px; text-decoration: underline; cursor: pointer; padding: 2px; }
 .rink { width: 100%; height: auto; display: block; margin: 6px 0; }
@@ -348,7 +375,7 @@ tr.cut td { border-top: 2px dashed var(--accent); }
 /* Springs out from the middle like an island (OpenUI's trip planner demo), shrinks away on the way out. */
 .toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); transition: opacity .15s, transform .45s cubic-bezier(.3, 1.35, .5, 1); }
 @media (prefers-reduced-motion: reduce) { .toast, .toast.show { transition: opacity .2s; } }
-.toast.bad { background: var(--accent); color: #fff; }
+.toast.bad { background: var(--red); color: #fff; }
 
 /* admin */
 .person { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); flex-wrap: wrap; }
@@ -367,7 +394,10 @@ tr.cut td { border-top: 2px dashed var(--accent); }
   th, td { padding: 7px 6px; }
 }
 @media (min-width: 700px) {
-  .scorebug .score { font-size: 46px; }
+  .scorebug { padding: 26px 14px 20px; }
+  .scorebug .score { font-size: 104px; gap: 18px; }
+  .scorebug .score.tbd { font-size: 56px; }
+  .scorebug .mark.big { width: 78px; height: 54px; }
 }
 
 /* league switch */
@@ -387,9 +417,9 @@ body.league-pwhl .league button.on { background: var(--accent); color: var(--on-
 
 /* PWHL mode: Boston Fleet colours (from the Fleet logo) */
 :root { --on-accent: #fff; }
-body.league-pwhl { --accent: #163F36; --fav: #163F36; --on-accent: #fff; }
+body.league-pwhl { --accent: #163F36; --red: #163F36; --fav: #163F36; --on-accent: #fff; }
 @media (prefers-color-scheme: dark) {
-  body.league-pwhl { --accent: #B3DFD7; --fav: #B3DFD7; --on-accent: #081D2B; }
+  body.league-pwhl { --accent: #B3DFD7; --red: #B3DFD7; --fav: #B3DFD7; --on-accent: #081D2B; }
 }
 .btn.primary { color: var(--on-accent); }
 
@@ -498,7 +528,7 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 .dots { display: flex; gap: 4px; }
 .dots i, .pre-note i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .res-W { background: var(--have-fg); }
-.res-L { background: var(--accent); }
+.res-L { background: var(--red); }
 .res-OT { background: var(--muted); }
 .pre-note { padding: 8px 14px 10px; font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--border); }
 .pre-note i { width: 8px; height: 8px; margin: 0 2px 0 6px; vertical-align: 0; }
@@ -564,6 +594,7 @@ table.seasons td:nth-child(2) { white-space: normal; min-width: 7em; }
 .prow-val { font-weight: 750; font-size: 16px; font-variant-numeric: tabular-nums; }
 .search-box { width: 100%; font-size: 16px; padding: 11px 12px; margin: 4px 0 6px; }
 .team-head { display: flex; align-items: center; gap: 14px; }
+.films { justify-content: center; padding-top: 12px; }
 .nw { white-space: nowrap; }
 /* college team page: this season */
 .sgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px 16px; }
@@ -606,3 +637,69 @@ body.league-pwhl .league.has-pill > button.on { background: transparent; box-sha
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 200ms; }
 ::view-transition-group(matchup) { animation-duration: 340ms; animation-timing-function: cubic-bezier(.2, .9, .3, 1); }
 ::view-transition-old(matchup), ::view-transition-new(matchup) { animation-duration: 340ms; height: 100%; object-fit: contain; }
+
+/* The score strip that stands in for the jumbotron once it's scrolled away, laid out the same way: the score dead centre
+   on the colour split, a logo either side, the clock under it. It sits below the top bar, or in its place. */
+.ministrip { position: fixed; top: env(safe-area-inset-top, 0px); left: 0; right: 0; z-index: 4; overflow: hidden;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; padding: 4px 16px; color: #fff; pointer-events: none;
+  background:
+    radial-gradient(ellipse 120px 120% at 50% 50%, rgba(8, 10, 14, .78) 30%, transparent 100%),
+    linear-gradient(101deg, color-mix(in srgb, var(--a) 68%, #0a0d12) 50%, color-mix(in srgb, var(--h) 68%, #0a0d12) 50%);
+  box-shadow: 0 1px 8px rgba(0, 0, 0, .3); transform: translateY(-130%); transition: transform 200ms ease; }
+.ministrip > .mark:first-child { justify-self: end; }
+.ms-mid { display: grid; justify-items: center; min-width: 0; }
+.ms-sc { font: 800 23px/1 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; display: grid; grid-template-columns: 1fr auto 1fr; gap: 2px; }
+.ms-sc span:first-child { justify-self: end; }
+.ms-sc i { font-style: normal; }
+.ms-st { font-size: 10.5px; line-height: 1.2; font-weight: 600; color: rgba(255, 255, 255, .8); white-space: nowrap; }
+body.bug-gone .ministrip { transform: translateY(calc(var(--top-h, 0px) - env(safe-area-inset-top, 0px))); }
+body.bug-gone .top.tucked ~ #view .ministrip { transform: none; }
+
+/* Goal lamp: a red beacon sweeping the thing that scored (web/app.js lamp()); it removes itself. */
+.lamp { position: absolute; inset: 0; overflow: hidden; pointer-events: none; opacity: 0; z-index: 1; border-radius: inherit; }
+.lamp::before { content: ""; position: absolute; left: 50%; top: 50%; width: 200vmax; height: 200vmax; margin: -100vmax 0 0 -100vmax;
+  background: conic-gradient(rgba(255, 36, 60, 0) 0 8%, rgba(255, 36, 60, .85) 20%, rgba(255, 170, 170, .95) 22%, rgba(255, 36, 60, .85) 24%, rgba(255, 36, 60, 0) 40% 58%, rgba(255, 36, 60, .85) 70%, rgba(255, 170, 170, .95) 72%, rgba(255, 36, 60, .85) 74%, rgba(255, 36, 60, 0) 90%); }
+.game, .hero, .shotcard { position: relative; }
+.hero-sc [data-sc] { display: inline-block; }
+/* A goal's actions, side by side: watch it, then react to it. */
+.ev-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.ev-acts .rxs { margin-top: 0; }
+.clipbtn { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 11px; border: 1px solid var(--border); border-radius: 15px; background: var(--bg); color: var(--text); font: inherit; font-size: 12.5px; font-weight: 650; text-decoration: none; cursor: pointer; }
+.clip-ico { color: var(--accent); }
+.wi-open { margin: 10px 0 0; display: flex; justify-content: flex-end; }
+.wi-open[hidden] { display: none; }
+
+/* Replay: the timeline under the rink. The puck is the range input's thumb; --p = how far along it is. */
+.rp { display: flex; align-items: flex-start; gap: 10px; margin-top: 12px; }
+.rp-play { flex: none; width: 36px; height: 36px; margin-top: 8px; border-radius: 50%; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; line-height: 1; padding: 0; cursor: pointer; }
+.rp-t { position: relative; flex: 1; min-width: 0; }
+.rp-pips { position: relative; height: 10px; margin: 0 12px; }
+.rp-pips i { position: absolute; top: 0; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; box-shadow: 0 0 0 1px var(--text); }
+.rp input { display: block; width: 100%; height: 28px; margin: 0; background: none; appearance: none; -webkit-appearance: none; cursor: grab; touch-action: pan-y; }
+.rp input::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--accent) var(--p, 100%), var(--border) var(--p, 100%)); }
+.rp input::-moz-range-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--accent) var(--p, 100%), var(--border) var(--p, 100%)); }
+.rp input::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 18px; margin-top: -7px; border: 0; border-radius: 50%; background: radial-gradient(ellipse at 50% 34%, #4a4f58 0 38%, #14161b 72%); box-shadow: 0 2px 3px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .22); }
+.rp input::-moz-range-thumb { width: 26px; height: 18px; border: 0; border-radius: 50%; background: radial-gradient(ellipse at 50% 34%, #4a4f58 0 38%, #14161b 72%); box-shadow: 0 2px 3px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .22); }
+.rp-ps { display: flex; margin: 0 12px; font-size: 10.5px; font-weight: 650; color: var(--muted); }
+.rp-ps span { min-width: 0; text-align: center; border-left: 1px solid var(--border); }
+.rp-ps span:first-child { border-left: 0; }
+.rp-read { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 2px 10px; min-height: 26px; margin-top: 8px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.rp-read b { font: 800 24px/1.15 Score, system-ui, sans-serif; color: var(--text); }
+.rp-read small { font: 700 13px system-ui, sans-serif; color: var(--muted); }
+.rp-line { display: contents; }
+.rp-goal-by { flex-basis: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 32px; color: var(--text); font-weight: 650; }
+
+/* Team and player pages: the jumbotron's cousin, one team's colour with the same slant and one big number. Always dark. */
+.card.banner { position: relative; display: flex; align-items: center; gap: 14px; padding: 18px 16px; border: 0; color: #fff;
+  background: linear-gradient(101deg, color-mix(in srgb, var(--c) 64%, #0a0d12) 66%, color-mix(in srgb, var(--c) 40%, #0a0d12) 66%); }
+.banner .mark.big { width: 64px; height: 46px; flex: none; }
+.bn-text { flex: 1; min-width: 0; }
+.bn-text h1 { margin: 0 0 2px; font-size: 21px; line-height: 1.15; }
+.banner .muted { color: rgba(255, 255, 255, .78); }
+.bn-text .btn { margin-top: 8px; color: #fff; background: rgba(255, 255, 255, .14); border-color: rgba(255, 255, 255, .3); }
+.bn-big { flex: none; display: grid; justify-items: center; line-height: 1; text-shadow: 0 2px 14px rgba(0, 0, 0, .4); }
+.bn-big b { font: 800 66px/.95 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.bn-big span { margin-top: 3px; font-size: 11px; font-weight: 650; letter-spacing: .04em; color: rgba(255, 255, 255, .8); }
+.bn-num b { font-size: 92px; opacity: .92; }
+.banner .phero-team { color: #fff; }
+@media (min-width: 700px) { .bn-big b { font-size: 84px; } .bn-num b { font-size: 112px; } .card.banner { padding: 22px 24px; } .bn-text h1 { font-size: 26px; } }

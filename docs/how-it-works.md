@@ -41,6 +41,8 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   pages, favourite PWHL teams, then every NHL team's schedule/roster/stats, favourites first. Live games: favourites'
   and viewed games every DETAIL_POLL (20 s), the rest every WARM_LIVE_POLL (90 s). /api/game takes score/clock/state
   from the 10-second scoreboard (_freshen), so a 2-minute-old game copy (GAME_STALE_OK) still shows the live score.
+- Cold start: index.html preloads /api/me and /api/changes, so they're there when app.js has downloaded, and start()
+  never waits for one before the other. Together that took a first visit from ~1450 to ~1090 ms in tools/perfcheck.py.
 - Phone side: api() keeps GET_CACHE; fast(path, rerender, quiet) waits up to FRESH_WAIT (150 ms) for fresh data and
   draws once; only a slower answer draws the phone's copy (< 30 min) and re-renders once after any running animation
   if the data differs. A write drops only the copies it changes (WRITE_DROPS; settings per changed field,
@@ -88,6 +90,13 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   "🎲 Pick N for me" (POST /api/pickem/random, picks.fill_random): the page sends the unpicked, unstarted games in its
   open sections (a folded college league is left out); the server keeps those on that date's slate and picks each one
   this person hasn't, weighted by odds.attach's win % (coin flip without odds). Never touches a pick or a lock.
+  Countdown: showClock() on the page, one 1-second timer that stops when its element is gone, redrawing as a game locks.
+  Streaks: picks.runs() from settled picks in game order, per pool and season: current run, best run, perfect nights
+  (PERFECT_MIN 3 picks, all right); board() returns `me` plus `streak` on each table row. They sit inside `tables()`,
+  so a spoiler-free game hiding the table hides them too.
+- First-run setup (web/welcome.js): approved people with no favourites who haven't `welcomed` get teams, home market
+  and services, one screen each. Order matters: the first team in a league is the main one, a tray chip moves a team to the
+  front. College teams stay in Settings (hundreds of schools). Saves once at the end; Settings > Your teams runs it again.
 - Odds, for fun (sog/odds.py; Settings > Display > Show odds, on by default): the DraftKings moneyline comes free in the
   NHL score feed (oddsPartners, matched by name; nhl.parse_score -> g.odds) but vanishes at puck drop, so the
   scoreboard loop saves each pre-game line to game_odds (write on change; all rows kept in memory, pages never
@@ -106,6 +115,44 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   (watching, reactions per event key g:<period>-<time>-<scorer> / p:...-<player>, mine, rivals). Rival = a friend
   whose first favourite in that league is the other team; the final alert appends "Tell X." / "X will enjoy this one."
   Watching rows go a day after the game, reactions at the July 1 season rollover (cleanup hourly from /api/games).
+- The arena (form as well as function, all from data the page already has):
+  - Scoreboard digits: Big Shoulders Display ExtraBold, subset to digits and a few marks (1.8 KB) and inlined in
+    style.css as the `Score` font: no request, no late swap. unicode-range lets letters in the same run fall through to
+    the system font. Licence: web/fonts/BigShoulders-OFL.txt. To rebuild: `pyftsubset <font> --text="0123456789:–-.%"
+    --flavor=woff2 --layout-features='tnum,lnum' --no-hinting --desubroutinize`, then base64 it into the @font-face.
+  - Jumbotron: `.scorebug` is always dark, with --a/--h (team colours, apart() keeps them different) meeting on a
+    slant. `.ministrip` stands in once it's scrolled off: watchBug() puts `bug-gone` on <body> (which a morph doesn't
+    touch) from an IntersectionObserver; route() clears it.
+  - Goal lamp: paint() compares every `[data-sc]` before and after a quiet morph; one that went up gets lamp() (roll
+    plus a temporary `.lamp` that removes itself). Only quiet morphs, so opening a page never fires it, and spoiler-hidden
+    scores have no `[data-sc]` at all. Tapping a number on the jumbotron lights it too.
+  - Code that isn't needed for a first paint loads on demand, as ES modules with the page's `?v=` (V in app.js): web/replay.js on
+    idle after a game page with 10+ shots, web/flick.js and web/whatif.js on tap. Each brings its own CSS, except
+    Replay's, which the page needs to draw.
+  - Goal clips: ▶ Watch opens web/clip.js, a theatre on <body> with the NHL's own Brightcove player in an iframe; the id
+    is the end of the goal's highlightClipSharingUrl (no server change). gameUi.reel lists the game's clips for Next
+    goal and for Replay's button. It's the league's player, ads included: never play the stream directly. Terms:
+    embedding is for non-commercial use only and the NHL can turn it off at any time, so the theatre always links to the page on NHL.com too.
+  - Recaps: nhl.parse_detail keeps right-rail `gameVideo` as d.video (recap, condensed) and gameUi.films lists them for
+    finals, in the same theatre. They arrive after the horn; final copies re-fetch for 8 hours (_game_ttl), so they appear on their own.
+  - Team and player pages: `.card.banner` (--c = the team's colour, same slant as the jumbotron, always dark), with one
+    big number: points, poll place, or the jersey number.
+  - Team colours: settings.accent = "" (your first favourite in the leagues on show), a team (always that one) or "none".
+    applyAccent() runs on every league switch and favourites change, and writes CSS into <style id="team-accent">;
+    the same CSS is kept in localStorage `accentCss`, and an inline script in index.html puts it back before the first paint.
+    readableOn() shifts a colour's lightness until it has 3.2:1 on the page background, keeping the hue. --accent is the
+    app's colour; --red is the goal light (live, losses, the rink's lines) and doesn't follow your team.
+  - Replay: timeline() in app.js turns shots into one game clock (regulation 20 min, overtime 5 or longer in the
+    playoffs, ending at an overtime goal or at the last shot while live); replayBar() draws it; the puck is the thumb of a
+    plain range input, so touch and keyboard work for nothing. Dots carry `data-i` (index in d.shotmap); a move only
+    touches the dots between the old and new spot. While gameUi.replaying, quiet redraws skip and the page catches up
+    when the replay ends.
+  - Flick your picks: an overlay on <body> (so refreshes can't touch it) over the same unpicked() list as 🎲. Saves go
+    out in order through POST /api/pickem; closing waits for them before redrawing.
+  - What if?: NHL only. project() in web/whatif.js applies the picked results to a copy of the standings rows and
+    re-ranks them (division, conference, league, wild card); standingsBody() draws any list of rows, so the real table
+    and the pretend one share a renderer. Ties go points, fewer games, regulation wins, wins, goal difference: close to
+    the NHL's order, not exact. Nothing is saved; picks stay in memory across mode switches until Close.
 - Layout (2026-10-13 tidy-up): tabs Tonight / Pick'em / Wire / League (#/league = standings + your-team tiles;
   #/standings and #/teams route there). Admin is a link in Settings. Tonight: team cards replace the "Your teams"
   list; one banner slot (get-app/alerts first, else What's new). Cards use cardWatch() (app + have it); the full

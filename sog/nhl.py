@@ -240,8 +240,10 @@ def parse_detail(landing: dict, rail: dict | None, box: dict | None) -> dict:
                    for p in t.get("goalies") or [] if p.get("toi") not in (None, "00:00")]
         players[side] = {"skaters": skaters, "goalies": goalies}
 
+    films = (rail or {}).get("gameVideo") or {}   # ids in the NHL's video player; they appear a while after the horn
     return {"game": game, "scoring": scoring, "penalties": penalties, "stars": stars, "linescore": linescore,
             "shots": shots, "team_stats": team_stats, "players": players,
+            "video": {"recap": films.get("threeMinRecap"), "condensed": films.get("condensedGame")},
             "preview": parse_preview(landing, rail) if game["state"] == "pre" else None}
 
 
