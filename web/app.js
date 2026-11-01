@@ -1145,7 +1145,8 @@ async function gameView(id, quiet = false, league = "nhl") {
   }
   const ac = TEAMS[a]?.color || "#888", hc = TEAMS[h]?.color || "#888";
   let state = "";
-  if (g.state === "live") state = `<span class="live">LIVE</span> ${esc(g.intermission ? `${g.period} intermission` : `${g.period} · ${g.clock || ""}`)}`;
+  const clock = esc(g.intermission ? `${g.period} intermission` : `${g.period} · ${g.clock || ""}`);
+  if (g.state === "live") state = `<span class="live">LIVE</span> ${clock}`;
   else if (g.state === "final") state = g.outcome === "T" ? `Final · Tie` : `Final${g.outcome && g.outcome !== "REG" ? ` (${esc(g.outcome)})` : ""}`;
   else if (g.state === "postponed") state = "Postponed";
   else state = g.start ? `${esc(shortDate(g.date))} · ${esc(time(g.start))}` : "Time TBD";
@@ -1254,7 +1255,7 @@ async function gameView(id, quiet = false, league = "nhl") {
   if (more) html += `<details class="more-stats" ${moreStatsOpen ? "open" : ""}><summary>More stats: team, penalties, players</summary>${more}</details>`;
 
   if (g.venue) html += `<p class="help" style="text-align:center;margin-top:18px">${esc(g.venue)}</p>`;
-  html += `<div class="ministrip" style="${paints}" aria-hidden="true">${mark(a)}<b class="ms-sc">${showScore ? `${g.away.score ?? 0}–${g.home.score ?? 0}` : ""}</b>${mark(h)}<span class="ms-st">${state}</span></div>`;
+  html += `<div class="ministrip" style="${paints}" aria-hidden="true">${mark(a)}<div class="ms-mid"><b class="ms-sc">${showScore ? `${g.away.score ?? 0}–${g.home.score ?? 0}` : "vs"}</b><span class="ms-st">${g.state === "live" ? clock : state}</span></div>${mark(h)}</div>`;
   paint(html, quiet);
   watchBug();
   const shotCard = view.querySelector(".shotcard");

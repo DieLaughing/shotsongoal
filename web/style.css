@@ -627,13 +627,18 @@ body.league-pwhl .league.has-pill > button.on { background: transparent; box-sha
 ::view-transition-group(matchup) { animation-duration: 340ms; animation-timing-function: cubic-bezier(.2, .9, .3, 1); }
 ::view-transition-old(matchup), ::view-transition-new(matchup) { animation-duration: 340ms; height: 100%; object-fit: contain; }
 
-/* The score strip that stands in for the jumbotron once it's scrolled away. It sits below the top bar, or in its place. */
+/* The score strip that stands in for the jumbotron once it's scrolled away, laid out the same way: the score dead centre
+   on the colour split, a logo either side, the clock under it. It sits below the top bar, or in its place. */
 .ministrip { position: fixed; top: env(safe-area-inset-top, 0px); left: 0; right: 0; z-index: 4; overflow: hidden;
-  display: flex; align-items: center; justify-content: center; gap: 10px; padding: 6px 16px; color: #fff; pointer-events: none;
-  background: linear-gradient(101deg, color-mix(in srgb, var(--a) 68%, #0a0d12) 50%, color-mix(in srgb, var(--h) 68%, #0a0d12) 50%);
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; padding: 4px 16px; color: #fff; pointer-events: none;
+  background:
+    radial-gradient(ellipse 120px 120% at 50% 50%, rgba(8, 10, 14, .78) 30%, transparent 100%),
+    linear-gradient(101deg, color-mix(in srgb, var(--a) 68%, #0a0d12) 50%, color-mix(in srgb, var(--h) 68%, #0a0d12) 50%);
   box-shadow: 0 1px 8px rgba(0, 0, 0, .3); transform: translateY(-130%); transition: transform 200ms ease; }
-.ministrip .ms-sc { font: 800 25px/1 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
-.ministrip .ms-st { font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, .8); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ministrip > .mark:first-child { justify-self: end; }
+.ms-mid { display: grid; justify-items: center; min-width: 0; }
+.ms-sc { font: 800 23px/1 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.ms-st { font-size: 10.5px; line-height: 1.2; font-weight: 600; color: rgba(255, 255, 255, .8); white-space: nowrap; }
 body.bug-gone .ministrip { transform: translateY(calc(var(--top-h, 0px) - env(safe-area-inset-top, 0px))); }
 body.bug-gone .top.tucked ~ #view .ministrip { transform: none; }
 
