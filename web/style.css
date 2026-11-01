@@ -652,6 +652,11 @@ body.bug-gone .top.tucked ~ #view .ministrip { transform: none; }
   background: conic-gradient(rgba(255, 36, 60, 0) 0 8%, rgba(255, 36, 60, .85) 20%, rgba(255, 170, 170, .95) 22%, rgba(255, 36, 60, .85) 24%, rgba(255, 36, 60, 0) 40% 58%, rgba(255, 36, 60, .85) 70%, rgba(255, 170, 170, .95) 72%, rgba(255, 36, 60, .85) 74%, rgba(255, 36, 60, 0) 90%); }
 .game, .hero, .shotcard { position: relative; }
 .hero-sc [data-sc] { display: inline-block; }
+/* A goal's actions, side by side: watch it, then react to it. */
+.ev-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.ev-acts .rxs { margin-top: 0; }
+.clipbtn { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 11px; border: 1px solid var(--border); border-radius: 15px; background: var(--bg); color: var(--text); font: inherit; font-size: 12.5px; font-weight: 650; text-decoration: none; cursor: pointer; }
+.clip-ico { color: var(--accent); }
 .wi-open { margin: 10px 0 0; display: flex; justify-content: flex-end; }
 .wi-open[hidden] { display: none; }
 
@@ -672,4 +677,5 @@ body.bug-gone .top.tucked ~ #view .ministrip { transform: none; }
 .rp-read { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 2px 10px; min-height: 26px; margin-top: 8px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .rp-read b { font: 800 24px/1.15 Score, system-ui, sans-serif; color: var(--text); }
 .rp-read small { font: 700 13px system-ui, sans-serif; color: var(--muted); }
-.rp-goal-by { flex-basis: 100%; text-align: center; color: var(--text); font-weight: 650; }
+.rp-line { display: contents; }
+.rp-goal-by { flex-basis: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 32px; color: var(--text); font-weight: 650; }

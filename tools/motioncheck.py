@@ -106,7 +106,19 @@ def flick_check(page) -> tuple[str, bool]:
     return f"{len(saved)} pick saved", len(saved) == 1 and not page.query_selector(".flick") and page.evaluate("document.documentElement.style.overflow") == ""
 
 
-PLAY = [(REPLAY_GAME, "replay", replay_check), ("#/league", "what if", what_if_check), ("#/picks", "flick", flick_check)]
+def clip_check(page) -> tuple[str, bool]:
+    """A goal's Watch button opens the league's player for that goal over the page; Escape takes it all away again."""
+    page.route("**/players.brightcove.net/**", lambda route: route.fulfill(content_type="text/html", body="<!doctype html>player"))
+    y = page.evaluate("scrollY")
+    page.evaluate("document.querySelector('[data-clip]').click()")
+    page.wait_for_selector(".clipview iframe", state="attached", timeout=3000)
+    src = page.get_attribute(".clipview iframe", "src")
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(100)
+    return "opened and closed", "videoId=" in src and not page.query_selector(".clipview") and page.evaluate("scrollY") == y and page.evaluate("document.documentElement.style.overflow") == ""
+
+
+PLAY = [(REPLAY_GAME, "replay", replay_check), (REPLAY_GAME, "clip", clip_check), ("#/league", "what if", what_if_check), ("#/picks", "flick", flick_check)]
 
 # ---- the checks (the same in both apps) ---------------------------------------------------------------------------
 OPEN_MS, SETTLE_MS, STILL_MS, STILL_PX, PILL_PX = 8000, 3200, 800, 1, 2

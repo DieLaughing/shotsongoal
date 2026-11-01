@@ -122,6 +122,10 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   - Code that isn't needed for a first paint loads on demand, as ES modules with the page's `?v=` (V in app.js): web/replay.js on
     idle after a game page with 10+ shots, web/flick.js and web/whatif.js on tap. Each brings its own CSS, except
     Replay's, which the page needs to draw.
+  - Goal clips: ▶ Watch opens web/clip.js, a theatre on <body> with the NHL's own Brightcove player in an iframe; the id
+    is the end of the goal's highlightClipSharingUrl (no server change). gameUi.reel lists the game's clips for Next
+    goal and for Replay's button. It's the league's player, ads included: never play the stream directly. Terms:
+    embedding is for non-commercial use only and the NHL can turn it off at any time, so the theatre always links to the page on NHL.com too.
   - Replay: timeline() in app.js turns shots into one game clock (regulation 20 min, overtime 5 or longer in the
     playoffs, ending at an overtime goal or at the last shot while live); replayBar() draws it; the puck is the thumb of a
     plain range input, so touch and keyboard work for nothing. Dots carry `data-i` (index in d.shotmap); a move only

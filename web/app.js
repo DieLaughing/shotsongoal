@@ -1196,6 +1196,10 @@ async function gameView(id, quiet = false, league = "nhl") {
   if (g.state === "pre" && d.preview) html += previewBlock(d.preview, a, h, ac, hc);
 
   const goals = d.scoring.filter(p => p.goals.length);
+  // Every goal with a clip, in order: what the theatre steps through. The id is the end of the NHL's share link; one
+  // that doesn't fit stays a plain link.
+  gameUi.reel = goals.flatMap(p => p.goals.flatMap(x => { const id = /-(\d{10,})$/.exec(x.clip || "")?.[1];
+    return id ? [{ id, url: x.clip, period: p.period, time: x.time, who: x.scorer, when: `${p.period} ${x.time}`, score: `${x.away}–${x.home}`, team: x.team }] : []; }));
   if (goals.length) {
     html += `<h2>Scoring</h2><div class="card">${goals.map(p => `<div class="subhead">${esc(p.period)}</div>${p.goals.map(x => {
       const tags = [x.strength !== "EV" ? x.strength : "", x.modifier === "empty-net" ? "EN" : ""].filter(Boolean)
@@ -1203,7 +1207,7 @@ async function gameView(id, quiet = false, league = "nhl") {
       const assists = x.assists.length ? x.assists.map(y => `${plink(y.name, y.pid, league)}${y.total ? ` (${y.total})` : ""}`).join(", ") : "Unassisted";
       return `<div class="event"><span class="when">${esc(x.time)}</span>${mark(x.team)}
         <div><span class="run">${x.away}–${x.home}</span><div class="who">${plink(x.scorer, x.pid, league)}${x.total ? ` (${x.total})` : ""}${tags}</div>
-        <div class="detail">${assists}${x.clip ? ` · <a href="${esc(x.clip)}" target="_blank" rel="noopener">clip</a>` : ""}</div>${rx(`g:${p.period}-${x.time}-${x.scorer}`)}</div></div>`;
+        <div class="detail">${assists}</div><div class="ev-acts">${x.clip ? clipLink(x.clip, gameUi.reel.find(c => c.url === x.clip)?.id) : ""}${rx(`g:${p.period}-${x.time}-${x.scorer}`)}</div></div></div>`;
     }).join("")}`).join("")}</div>`;
   }
 
@@ -1270,7 +1274,9 @@ async function gameView(id, quiet = false, league = "nhl") {
     if (on && gameUi.shots !== "all") showShots("all");  // a replay is the whole game
     if (was && !on && shotCard.isConnected) gameView(id, true, league);  // catch up on what it held back
   };
-  const wireReplay = () => loadReplay().then(m => { if (shotCard.isConnected) m.attach(shotCard, timeline(d.shotmap, a, h, g), { lamp, motionOn, esc, engaged }); }).catch(() => {});
+  const wireReplay = () => loadReplay().then(m => { if (shotCard.isConnected) m.attach(shotCard, timeline(d.shotmap, a, h, g), { lamp, motionOn, esc, engaged, clipFor: shot => {
+    const c = gameUi.reel?.find(x => x.period === shot.period && x.time === shot.time && x.team === shot.team);
+    return c ? clipLink(c.url, c.id) : ""; } }); }).catch(() => {});
   if (shotCard?.querySelector(".rp") && !gameUi.replaying) (window.requestIdleCallback || setTimeout)(wireReplay);
   const on = listen();
   // toggle doesn't bubble: listen while it travels down to the <details>.
@@ -1288,8 +1294,9 @@ async function gameView(id, quiet = false, league = "nhl") {
     gameView(id, true, league);
   };
   view.addEventListener("click", e => {
-    const t = e.target, open = t.closest("[data-rxopen]"), react = t.closest("[data-rx]"), shots = t.closest("[data-shots]");
-    if (t.closest("#report")) sendReport(e);
+    const t = e.target, open = t.closest("[data-rxopen]"), react = t.closest("[data-rx]"), shots = t.closest("[data-shots]"), clip = t.closest("[data-clip]");
+    if (clip) { if (!e.metaKey && !e.ctrlKey && !e.shiftKey) { e.preventDefault(); openClip(clip.dataset.clip); } }  // a new-tab click still gets a tab
+    else if (t.closest("#report")) sendReport(e);
     else if (motionOn() && t.closest("[data-sc]")) lamp(t.closest("[data-sc]"));  // the scoreboard is a toy: tap a number, light the lamp
     else if (t.closest("#watching")) post("/api/watching", { on: !S.me_watching });
     else if (open) { gameUi.rx = open.dataset.rxopen; open.parentElement.innerHTML = rxPicker(gameUi.rx); }
@@ -1464,6 +1471,21 @@ function replayBar(tl, color) {
       <div class="rp-ps" aria-hidden="true">${tl.periods.map(p => `<span style="flex:${p.len}">${esc(p.name)}</span>`).join("")}</div>
     </div></div><div class="rp-read">${tl.endText}</div>`;
 }
+// A goal clip plays in a theatre over the page. Its code and the NHL's player only load on the tap. The link is a real
+// one, so a new-tab click or a clip with no id still goes to NHL.com.
+const clipLink = (url, id) => `<a class="clipbtn" href="${esc(url)}" target="_blank" rel="noopener"${id ? ` data-clip="${esc(id)}"` : ""}><span class="clip-ico" aria-hidden="true">▶</span> Watch</a>`;
+let clipOpening = false;
+async function openClip(id) {
+  if (clipOpening || document.querySelector(".clipview")) return;
+  clipOpening = true;
+  const page = location.hash;
+  try {
+    const m = await import(`./clip.js${V}`), reel = gameUi.reel, at = reel.findIndex(c => c.id === id);   // a refresh may have reordered it
+    if (at >= 0 && location.hash === page) m.open({ reel, at, mark, esc, motionOn, colour: abbr => TEAMS[abbr]?.color || "#333" });
+  } catch { toast("Couldn't load that clip. Try again.", true); }
+  clipOpening = false;
+}
+
 // Replay's code comes down once the page is up, or the moment someone reaches for the puck.
 const V = new URL(import.meta.url).search;
 let replayMod = null;

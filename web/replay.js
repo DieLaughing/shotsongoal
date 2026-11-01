@@ -16,7 +16,7 @@ export function attach(card, timeline, ctx) {
   r.load(timeline);
 }
 
-function replay(card, { lamp, motionOn, engaged, esc }) {
+function replay(card, { lamp, motionOn, engaged, esc, clipFor }) {
   const range = card.querySelector(".rp input"), play = card.querySelector(".rp button"), read = card.querySelector(".rp-read");
   const rink = card.querySelector(".rink");
   const now = document.createElementNS("http://www.w3.org/2000/svg", "circle");
@@ -30,11 +30,16 @@ function replay(card, { lamp, motionOn, engaged, esc }) {
   const stamp = t => { const p = tl.periods.findLast(x => x.from <= t), left = t - p.from;
     return `${p.name} ${String(Math.floor(left / 60)).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}`; };
 
+  // The goal line is only rewritten when it changes: rebuilt on every frame, its Watch link couldn't be tapped.
+  let goalLine = null;
   function say(t) {
-    const end = t >= tl.end;
-    if (end) { read.innerHTML = tl.endText; return; }
+    if (t >= tl.end) { read.innerHTML = tl.endText; goalLine = null; return; }
     const [a, h] = score(shown), last = order.slice(0, shown).findLast(s => s.shot.kind === "goal" && t - s.t < 75);
-    read.innerHTML = `<span>${t ? stamp(t) : "Puck drop"}</span><b><small>${esc(tl.awayCode)}</small> ${a}–${h} <small>${esc(tl.homeCode)}</small></b>${last ? `<span class="rp-goal-by">🚨 ${esc(last.shot.shooter)}</span>` : ""}`;
+    const line = `<span>${t ? stamp(t) : "Puck drop"}</span><b><small>${esc(tl.awayCode)}</small> ${a}–${h} <small>${esc(tl.homeCode)}</small></b>`;
+    const goal = last ? `<span class="rp-goal-by">🚨 ${esc(last.shot.shooter)} ${clipFor?.(last.shot) ?? ""}</span>` : "";
+    if (goal === goalLine) { read.firstElementChild.innerHTML = line; return; }
+    read.innerHTML = `<div class="rp-line">${line}</div>${goal}`;
+    goalLine = goal;
   }
   // Shots are in time order, so a move only touches the dots between the old spot and the new one.
   function seek(t, celebrate) {
@@ -89,6 +94,7 @@ function replay(card, { lamp, motionOn, engaged, esc }) {
     seek(t);
   });
   play.addEventListener("click", () => (playing ? stop() : start()));
+  read.addEventListener("click", e => { if (e.target.closest("[data-clip]")) stop(); });   // watching the goal pauses the game
   card.endReplay = () => { range.value = tl.end; seek(tl.end); stop(true); };   // the period buttons take the map back
 
   return {

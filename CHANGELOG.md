@@ -5,6 +5,7 @@ This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit th
 
 ## November 1, 2026
 
+- **New: Goal clips play right here.** Tap ▶ Watch on a goal and the clip plays over the page in the NHL's own player, so there's no second page to open and nothing to find your way back from. Next goal steps through the rest of the game's goals, and Replay offers the same button when it stops on a goal. The NHL's player runs its usual ads. Close it and you're exactly where you were.
 - **New: The arena.** Games got a lot more game. Every game page opens on a jumbotron in both teams' colours, and the score stays on screen as you scroll. When a goal goes in while you're watching, the number rolls up and the red goal lamp sweeps the board (tap a score on the jumbotron to light it yourself). Under the shot map, drag the puck through the game and watch it fill in shot by shot, or press play to see the whole game in about 20 seconds. On Pick'em, tap Flick your picks to go one game at a time and flick the puck at your team. On League, tap What if? and pick tonight's winners to watch the standings shuffle; nothing is saved, it's just for fun. Animations off in Settings › Display, or Reduce Motion on your phone, turns the moving parts off.
 - **Improved: Opens faster.** The app now asks for what it needs at the very start instead of one thing after another, so a first open on a slow phone connection is about a quarter faster.
 
