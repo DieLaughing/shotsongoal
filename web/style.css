@@ -258,11 +258,13 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: v
 .scorebug .side .nm { font-weight: 700; font-size: 14px; }
 .scorebug .side .small { font-size: 11.5px; color: rgba(255, 255, 255, .72); }
 .scorebug .mark.big { width: 64px; height: 44px; }
-.scorebug .score { font: 800 76px/1 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; display: flex; justify-content: center; align-items: baseline; gap: 12px; padding: 0 2px;
+/* The dash is the pivot: it stays dead centre on the colour split whatever the digits' widths ("0" is far wider than "1"). */
+.scorebug .score { font: 800 76px/1 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; display: grid; grid-template-columns: 1fr auto 1fr; align-items: baseline; gap: 12px; padding: 0 2px;
   text-shadow: 0 2px 18px rgba(0, 0, 0, .5); }
-.scorebug .score.tbd { font-size: 44px; opacity: .9; }
+.scorebug .score.tbd { display: block; font-size: 44px; opacity: .9; }
 .scorebug .score i { font-style: normal; font-size: .62em; opacity: .55; }
-.scorebug .score b { display: block; font-weight: inherit; }
+.scorebug .score b { display: block; font-weight: inherit; justify-self: end; }
+.scorebug .score b:last-child { justify-self: start; }
 .scorebug .state { font-size: 12.5px; font-weight: 600; color: rgba(255, 255, 255, .8); margin-top: 2px; }
 .scorebug .live { color: #ff6b7a; } .scorebug .live::before { background: #ff6b7a; }
 .links { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 14px 14px; justify-content: center; }
@@ -637,7 +639,9 @@ body.league-pwhl .league.has-pill > button.on { background: transparent; box-sha
   box-shadow: 0 1px 8px rgba(0, 0, 0, .3); transform: translateY(-130%); transition: transform 200ms ease; }
 .ministrip > .mark:first-child { justify-self: end; }
 .ms-mid { display: grid; justify-items: center; min-width: 0; }
-.ms-sc { font: 800 23px/1 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.ms-sc { font: 800 23px/1 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; display: grid; grid-template-columns: 1fr auto 1fr; gap: 2px; }
+.ms-sc span:first-child { justify-self: end; }
+.ms-sc i { font-style: normal; }
 .ms-st { font-size: 10.5px; line-height: 1.2; font-weight: 600; color: rgba(255, 255, 255, .8); white-space: nowrap; }
 body.bug-gone .ministrip { transform: translateY(calc(var(--top-h, 0px) - env(safe-area-inset-top, 0px))); }
 body.bug-gone .top.tucked ~ #view .ministrip { transform: none; }

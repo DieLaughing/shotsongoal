@@ -1255,7 +1255,7 @@ async function gameView(id, quiet = false, league = "nhl") {
   if (more) html += `<details class="more-stats" ${moreStatsOpen ? "open" : ""}><summary>More stats: team, penalties, players</summary>${more}</details>`;
 
   if (g.venue) html += `<p class="help" style="text-align:center;margin-top:18px">${esc(g.venue)}</p>`;
-  html += `<div class="ministrip" style="${paints}" aria-hidden="true">${mark(a)}<div class="ms-mid"><b class="ms-sc">${showScore ? `${g.away.score ?? 0}–${g.home.score ?? 0}` : "vs"}</b><span class="ms-st">${g.state === "live" ? clock : state}</span></div>${mark(h)}</div>`;
+  html += `<div class="ministrip" style="${paints}" aria-hidden="true">${mark(a)}<div class="ms-mid"><b class="ms-sc">${showScore ? `<span>${g.away.score ?? 0}</span><i>–</i><span>${g.home.score ?? 0}</span>` : "vs"}</b><span class="ms-st">${g.state === "live" ? clock : state}</span></div>${mark(h)}</div>`;
   paint(html, quiet);
   watchBug();
   const shotCard = view.querySelector(".shotcard");
