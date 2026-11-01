@@ -41,6 +41,8 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   pages, favourite PWHL teams, then every NHL team's schedule/roster/stats, favourites first. Live games: favourites'
   and viewed games every DETAIL_POLL (20 s), the rest every WARM_LIVE_POLL (90 s). /api/game takes score/clock/state
   from the 10-second scoreboard (_freshen), so a 2-minute-old game copy (GAME_STALE_OK) still shows the live score.
+- Cold start: index.html preloads /api/me and /api/changes, so they're there when app.js has downloaded, and start()
+  never waits for one before the other. Together that took a first visit from ~1450 to ~1090 ms in tools/perfcheck.py.
 - Phone side: api() keeps GET_CACHE; fast(path, rerender, quiet) waits up to FRESH_WAIT (150 ms) for fresh data and
   draws once; only a slower answer draws the phone's copy (< 30 min) and re-renders once after any running animation
   if the data differs. A write drops only the copies it changes (WRITE_DROPS; settings per changed field,

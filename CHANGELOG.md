@@ -3,6 +3,10 @@
 Every update to [Shots on Goal](https://github.com/DieLaughing/shotsongoal), newest first. The same list is on the app's What's new page.
 This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit that file, not this one.
 
+## November 1, 2026
+
+- **Improved: Opens faster.** The app now asks for what it needs at the very start instead of one thing after another, so a first open on a slow phone connection is about a quarter faster.
+
 ## October 28, 2026
 
 - **New: College Pick'em.** Pick'em now has college games too. Tap NCAA at the top for just college, or All for everything. College has its own table, so it never mixes with the NHL and PWHL standings (switch between the two under the games), and its own ★ lock each night, so you don't have to choose between the Bruins and a college game. College picks are 1 point each (there are no odds for college, so no underdog bonus), and a tie counts as a wrong pick. Too many to bother with? Tap 🎲 Pick for me and it fills in every game you haven't picked yet (leaning on the odds where there are any). It never changes a pick you made or your ★, and a league you've folded away is left alone.

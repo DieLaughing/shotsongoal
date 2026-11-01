@@ -2538,6 +2538,8 @@ function renderRoute() {
 }
 
 async function start() {
+  // Asked side by side with /api/me: one after the other, every cold open waited a whole extra round trip.
+  const changes = api("/api/changes").catch(() => []);
   try {
     ME = await api("/api/me");
     applyHand(ME.settings?.hand);
@@ -2547,7 +2549,7 @@ async function start() {
     return;
   }
   TEAMS = Object.fromEntries(ME.teams.map(t => [t.abbr, t]));
-  if (ME.status === "approved") CHANGES = await api("/api/changes").catch(() => []);
+  if (ME.status === "approved") CHANGES = await changes;
   updateNewDot();
   const asked = new URLSearchParams(location.search).get("league");  // a shared link can pick the league
   if (["nhl", "pwhl", "ncaa", "both"].includes(asked)) { LEAGUE = asked; try { localStorage.setItem("league", asked); } catch { /* fine */ } }
