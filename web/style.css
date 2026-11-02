@@ -673,6 +673,7 @@ body.bug-gone .top.tucked ~ #view .ministrip { transform: none; }
 .hap-foot { display: flex; align-items: center; gap: 7px; }
 .hap-foot b, .hap-sc b { font: 800 19px/1 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
 .hap-foot .clip-ico { margin-left: auto; }
+.hap-t .clip-ico { color: #fff; background: none; }
 .hap-go { display: grid; gap: 8px; color: inherit; text-decoration: none; }
 .hap-go::after { content: ""; position: absolute; inset: 0; }   /* the whole tile opens the game */
 .hap-sc { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
