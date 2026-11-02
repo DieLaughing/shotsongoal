@@ -67,11 +67,11 @@ button { font: inherit; }
   padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
   background: var(--surface); border-top: 1px solid var(--border);
 }
-.tabs a {
+.tabs > a {
   flex: 1; max-width: 160px; text-align: center; text-decoration: none; font-weight: 600; font-size: 13px;
   color: var(--muted); padding: 9px 4px; border-radius: 10px;
 }
-.tabs a.active { color: var(--text); background: var(--bg); }
+.tabs > a.active { color: var(--text); background: var(--bg); }
 
 main { max-width: 760px; margin: 0 auto; padding: 8px 16px 32px; }
 /* Headings speak the way the jumbotron does. Capitals only: it's what the 4 KB font has, and how an arena board reads. */
@@ -462,16 +462,16 @@ html, body { overflow-x: clip; }
 
 /* ---- tab pill (web/app.js movePill): stretches across to the active tab (Web Animations) ---- */
 .tabs { isolation: isolate; }
-.tabs a.active { background: transparent; }
+.tabs > a.active { background: transparent; }
 .tab-pill { position: absolute; left: 0; top: 6px; height: calc(100% - 12px - env(safe-area-inset-bottom)); border-radius: 10px;
   background: var(--bg); z-index: -1; }
 
 /* ---- buttons that look like buttons (tab bar icons, Settings button, league switch, Back) ---- */
-.tabs a { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px 5px; font-size: 11.5px;
+.tabs > a { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px 5px; font-size: 11.5px;
   transition: gap 180ms ease, padding 180ms ease, color 160ms ease; }
 .tab-ico { width: 20px; height: 20px; display: block; transition: height 180ms ease, opacity 140ms ease, color 160ms ease; }
 /* Scrolling down folds the icons away (a slim bar of labels); any scroll up brings them back (web/app.js). */
-.tabs.compact a { gap: 0; padding: 5px 4px 4px; }
+.tabs.compact > a { gap: 0; padding: 5px 4px 4px; }
 .tabs.compact .tab-ico { height: 0; opacity: 0; }
 /* The top bar slides away too (keeping the strip behind the phone's status bar), and comes back on any scroll up. */
 .top { transition: transform 200ms ease; will-change: transform; }
@@ -481,7 +481,7 @@ html, body { overflow-x: clip; }
 body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top, 0px); z-index: 6;
   background: var(--surface); pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .tabs a, .tab-ico, .top { transition: none; } }
-.tabs a.active .tab-ico { color: var(--accent); }
+.tabs > a.active .tab-ico { color: var(--accent); }
 .top-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text); background: var(--surface);
   border: 1px solid var(--border); padding: 6px 11px; border-radius: 10px; font-weight: 600; font-size: 14px; }
 .top-link .ico { width: 17px; height: 17px; }
@@ -660,6 +660,42 @@ body.league-pwhl .league.has-pill > button.on { background: transparent; box-sha
 .ms-st { font-size: 10.5px; line-height: 1.2; font-weight: 600; color: rgba(255, 255, 255, .8); white-space: nowrap; }
 body.bug-gone .ministrip { transform: translateY(calc(var(--top-h, 0px) - env(safe-area-inset-top, 0px))); }
 body.bug-gone .top.tucked ~ #view .ministrip { transform: none; }
+
+/* This just happened: a row on Tonight that runs to the screen's edges on a phone. Same always-dark slant as the jumbotron. */
+.hap { display: flex; gap: 8px; margin: 0 -16px; padding: 0 16px 4px; overflow-x: auto; scroll-snap-type: x proximity; scroll-padding: 0 16px;
+  scrollbar-width: none; overscroll-behavior-x: contain; }
+.hap::-webkit-scrollbar { display: none; }
+.hap-t { flex: 0 0 158px; min-height: 92px; position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; padding: 10px 12px;
+  scroll-snap-align: start; border-radius: 12px; overflow: hidden; color: #fff; text-decoration: none;
+  background: linear-gradient(101deg, color-mix(in srgb, var(--a) 62%, #0a0d12) 50%, color-mix(in srgb, var(--h) 62%, #0a0d12) 50%); }
+.hap-k { font-size: 11.5px; font-weight: 650; color: rgba(255, 255, 255, .8); white-space: nowrap; }
+.hap-who { font: 800 21px/1.05 Arena, Score, system-ui, sans-serif; text-transform: uppercase; letter-spacing: .012em; overflow-wrap: anywhere; }
+.hap-foot { display: flex; align-items: center; gap: 7px; }
+.hap-foot b, .hap-sc b { font: 800 19px/1 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.hap-foot .clip-ico { margin-left: auto; }
+.hap-go { display: grid; gap: 8px; color: inherit; text-decoration: none; }
+.hap-go::after { content: ""; position: absolute; inset: 0; }   /* the whole tile opens the game */
+.hap-sc { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.hap-film { position: relative; z-index: 1; align-self: flex-start; min-height: 28px; padding: 0 9px; border: 0; border-radius: 8px; background: rgba(255, 255, 255, .16); color: #fff; font-size: 12px; font-weight: 650; cursor: pointer; }
+@media (min-width: 800px) { .hap { margin: 0; padding: 0 0 4px; scroll-padding: 0; } }
+
+/* The live dock (web/dock.js): the score strip's look, on every page, riding on top of the tab bar so it folds with it.
+   Two games at once swipe sideways, with the next one showing at the edge. */
+.dock { position: absolute; left: 0; right: 0; bottom: 100%; display: flex; gap: 2px; overflow-x: auto; scroll-snap-type: x mandatory;
+  scrollbar-width: none; box-shadow: 0 -1px 8px rgba(0, 0, 0, .22); }
+.dock::-webkit-scrollbar { display: none; }
+.dock.aside { opacity: 0; transform: translateY(8px); pointer-events: none; box-shadow: none; }
+@media (prefers-reduced-motion: no-preference) { .dock { transition: opacity 160ms ease, transform 160ms ease; } }
+.dock-item { flex: 0 0 100%; position: relative; overflow: hidden; scroll-snap-align: center; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  gap: 12px; min-height: 46px; padding: 4px 16px; color: #fff; text-decoration: none;
+  background:
+    radial-gradient(ellipse 120px 120% at 50% 50%, rgba(8, 10, 14, .78) 30%, transparent 100%),
+    linear-gradient(101deg, color-mix(in srgb, var(--a) 68%, #0a0d12) 50%, color-mix(in srgb, var(--h) 68%, #0a0d12) 50%); }
+.dock.many .dock-item { flex-basis: 90%; }
+.dock-item > .mark:first-child { justify-self: end; }
+@media (min-width: 700px) { .dock { justify-content: center; } .dock-item, .dock.many .dock-item { flex: 0 1 380px; border-radius: 10px 10px 0 0; } .dock { box-shadow: none; } }
+body.has-dock { padding-bottom: calc(122px + env(safe-area-inset-bottom)); }
+body.has-dock .toast { bottom: calc(118px + env(safe-area-inset-bottom)); }
 
 /* Goal lamp: a red beacon sweeping the thing that scored (web/app.js lamp()); it removes itself. */
 .lamp { position: absolute; inset: 0; overflow: hidden; pointer-events: none; opacity: 0; z-index: 1; border-radius: inherit; }

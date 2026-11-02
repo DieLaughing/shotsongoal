@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import access, bugs, alerts, changes, home, ics, moneypuck, ncaa, nhl, odds, picks, pwhl, slow, social, spoilers, teams, usage, watch, wire
+from . import access, bugs, alerts, changes, glance, home, ics, moneypuck, ncaa, nhl, odds, picks, pwhl, slow, social, spoilers, teams, usage, watch, wire
 from .db import Store, parse_iso
 from .feed import PWHL_TEAM_IDS, Feed, eastern_today
 from . import images as images_mod
@@ -761,6 +761,38 @@ async def my_teams(request: Request):
     rows = {lg: [] if isinstance(r, Exception) else r for lg, r in rows.items()}
     cards = await asyncio.gather(*[one(a, rows[teams.league_of(a)]) for a in picks])
     return {"date": today, "teams": [c for c in cards if c]}
+
+
+@app.get("/api/live")
+async def live_now(request: Request):
+    """Your teams' games on now, for the dock. Asked for every 10 s while one is on: one request, whatever you follow."""
+    picks = [a for a in _settings(request)["favorites"] if a in teams.ALL]
+    leagues = [lg for lg in LEAGUES if any(teams.league_of(a) == lg for a in picks)]
+    today = feed.opening_day()
+    days = await asyncio.gather(*[_slate(lg, today) for lg in leagues], return_exceptions=True)
+    return {"games": glance.live({lg: d for lg, d in zip(leagues, days) if not isinstance(d, Exception)}, picks)}
+
+
+@app.get("/api/happened")
+async def just_happened(request: Request, leagues: str = "nhl"):
+    """This just happened, on Tonight: from saved copies only, for the leagues on show."""
+    shown = [lg for lg in LEAGUES if lg in leagues.split(",")]
+    today = feed.opening_day()
+
+    async def games(lg: str) -> list[dict]:
+        try:
+            day = await _slate(lg, today)
+            prev = await _slate(lg, day["prev"]) if day.get("prev") and day["prev"] >= _day_before(today) else {"games": []}
+        except Exception:
+            return []
+        return [glance.brief(g, lg) for g in prev["games"] + day["games"]]
+
+    def saved(g: dict) -> dict | None:   # NHL pages are the ones with clips and recaps
+        hit = store.get(f"game:{g['id']}") if g["league"] == "nhl" else None
+        return hit["data"] if hit else None
+
+    found = await asyncio.gather(*[games(lg) for lg in shown])
+    return {"tiles": glance.happened([g for lst in found for g in lst], _settings(request)["favorites"], saved)}
 
 
 async def _slate(league: str, date: str) -> dict:

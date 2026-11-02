@@ -534,7 +534,7 @@ function paint(html, quiet) {
 // stands in for the jumbotron once that's scrolled away.
 function lamp(el) {
   el.animate([{ transform: "translateY(26px)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 340, easing: "cubic-bezier(.3, 1.3, .5, 1)" });
-  const host = document.body.classList.contains("bug-gone") ? view.querySelector(".ministrip") : el.closest(".scorebug, .game, .hero, .shotcard");
+  const host = el.closest(".dock-item") || (document.body.classList.contains("bug-gone") ? view.querySelector(".ministrip") : el.closest(".scorebug, .game, .hero, .shotcard"));
   if (!host) return;
   const glow = host.appendChild(Object.assign(document.createElement("i"), { className: "lamp" }));
   glow.animate([{ opacity: 0 }, { opacity: .9, offset: .1 }, { opacity: .9, offset: .75 }, { opacity: 0 }], { duration: 1600, easing: "ease-out" }).finished.finally(() => glow.remove());
@@ -738,6 +738,23 @@ function heroCard(c, live) {
   </div>`;
 }
 
+// This just happened: a swipeable row of your teams' latest goals, each with its clip, then the finals since yesterday.
+function happenedRow(tiles) {
+  if (!tiles.length) return "";
+  const teamColor = abbr => esc(TEAMS[abbr]?.color || "#444");
+  const score = g => `<span class="hap-sc">${mark(g.away.abbr)}<b>${g.away.score ?? 0}–${g.home.score ?? 0}</b>${mark(g.home.abbr)}</span>`;
+  const tile = t => {
+    const g = t.game, paints = `--a:${esc(apart(TEAMS[g.away.abbr]?.color || "#444", TEAMS[g.home.abbr]?.color || "#444"))};--h:${teamColor(g.home.abbr)}`;
+    if (t.kind === "goal") return `<a class="hap-t goal" href="${esc(t.url)}" target="_blank" rel="noopener" data-hap="goal" data-clip="${esc(t.id)}" style="--a:${teamColor(t.team)};--h:${teamColor(t.team)}" aria-label="Watch ${esc(t.who)}'s goal">
+      <span class="hap-k">🚨 ${esc(t.when)}</span><b class="hap-who">${esc(t.who)}</b>
+      <span class="hap-foot">${mark(t.team)}<b>${esc(t.score)}</b><span class="clip-ico" aria-hidden="true">▶</span></span></a>`;
+    const ot = g.outcome && !["REG", "T"].includes(g.outcome) ? ` · ${esc(g.outcome)}` : "";
+    return `<div class="hap-t final" style="${paints}"><a class="hap-go" href="${gameHref(g)}"><span class="hap-k">Final${ot}</span>${score(g)}</a>
+      ${t.recap ? `<button class="hap-film" data-hap="recap" data-clip="${esc(t.recap)}"><span class="clip-ico" aria-hidden="true">▶</span> Recap</button>` : ""}</div>`;
+  };
+  return `<h2>This just happened</h2><div class="hap">${tiles.map(tile).join("")}</div>`;
+}
+
 function heroes(data, leagues, slateGames) {
   if (!data?.teams?.length) return "";
   // Playing now first, then today's games in favourites order, then everyone else by their next game.
@@ -765,14 +782,16 @@ async function tonightView(date, quiet = false) {
   setNav("tonight");
   if (!quiet) { showLoading(`Loading games…`); heroAt = 0; }
   const leagues = shownLeagues();
-  let days, mineData = null;
+  let days, mineData = null, tiles = [];
   try {
     // Several leagues: the first one's date leads, so the others' slates are for the same day.
     const mine = date ? null : loadMyTeams();
     const again = () => tonightView(date, true);
+    const lately = date ? null : fast(`/api/happened?leagues=${leagues.join(",")}`, again, quiet).catch(() => null);
     const first = await fast(`/api/games?league=${leagues[0]}${date ? `&date=${encodeURIComponent(date)}` : ""}`, again, quiet);
     days = [first, ...await Promise.all(leagues.slice(1).map(l => fast(`/api/games?league=${l}&date=${encodeURIComponent(date || first.date)}`, again, quiet)))];
     mineData = await mine;
+    tiles = (await lately)?.tiles?.filter(t => !spoilerHidden(t.game)) || [];
   } catch (e) {
     view.innerHTML = failed(e);
     return;
@@ -805,6 +824,7 @@ async function tonightView(date, quiet = false) {
     <div id="getapp">${BANNER}</div>
     ${heroes(mineData, leagues, days.flatMap(d => d.games || []))}
     ${(n => n ? `<div class="spoil-note">🙈 Spoiler-free: ${n} game${n > 1 ? "s" : ""} hidden. Open one to reveal it when you've watched.</div>` : "")(days.flatMap(d => d.games || []).filter(spoilerHidden).length)}
+    ${happenedRow(tiles)}
     <div class="daybar">
       ${day.prev ? `<a href="#/day/${day.prev}" aria-label="Previous day">←</a>` : "<span></span>"}
       <h1>${esc(day.date ? dayTitle(day.date) : "Games")}</h1>
@@ -824,6 +844,13 @@ async function tonightView(date, quiet = false) {
     view.querySelectorAll(".hero-dots span").forEach((d, j) => d.classList.toggle("on", heroAt === j));
   }, { ...on, capture: true, passive: true });
   bannerClicks(on);
+  view.addEventListener("click", e => {
+    const b = e.target.closest("[data-hap]");
+    if (!b) return;
+    e.preventDefault();
+    if (b.dataset.hap === "recap") { const t = tiles.find(x => x.recap === b.dataset.clip); if (t) openClip(t.recap, [{ id: t.recap, who: "3-minute recap", when: "Final", score: `${t.game.away.score}–${t.game.home.score}`, team: t.game.home.abbr, url: `https://www.nhl.com/gamecenter/${encodeURIComponent(t.game.id)}` }]); }
+    else openClip(b.dataset.clip, tiles.filter(t => t.kind === "goal"));
+  }, on);
   // One banner at a time: getting the app / alerts first, otherwise what's new.
   getAppBanner().then(html => {
     const next = html || newBanner(), box = document.getElementById("getapp");
@@ -1551,12 +1578,12 @@ function replayBar(tl, color) {
 // one, so a new-tab click or a clip with no id still goes to NHL.com.
 const clipLink = (url, id) => `<a class="clipbtn" href="${esc(url)}" target="_blank" rel="noopener"${id ? ` data-clip="${esc(id)}"` : ""}><span class="clip-ico" aria-hidden="true">▶</span> Watch</a>`;
 let clipOpening = false;
-async function openClip(id) {
+async function openClip(id, list) {   // `list`: the reel to step through, when it isn't this game page's
   if (clipOpening || document.querySelector(".clipview")) return;
   clipOpening = true;
   const page = location.hash;
   try {
-    const m = await import(`./clip.js${V}`), film = gameUi.films.some(c => c.id === id), reel = film ? gameUi.films : gameUi.reel;
+    const m = await import(`./clip.js${V}`), film = !list && gameUi.films.some(c => c.id === id), reel = list || (film ? gameUi.films : gameUi.reel);
     const at = reel.findIndex(c => c.id === id);   // looked up now: a refresh may have reordered the list
     if (at >= 0 && location.hash === page) m.open({ reel, at, nextLabel: film ? "Next" : "Next goal", mark, esc, motionOn, colour: abbr => TEAMS[abbr]?.color || "#333" });
   } catch { toast("Couldn't load that clip. Try again.", true); }
@@ -2279,6 +2306,8 @@ function settingsView() {
     <p class="help">Faces on player pages, leaders, rosters and the three stars. They're small and the app keeps them after the first look; turn them off for the leanest pages.</p>
     <div class="card checks"><label><input type="checkbox" id="odds" ${s.odds !== false ? "checked" : ""}>Show odds</label></div>
     <p class="help">Who's favoured to win and how many goals are expected, from DraftKings' lines. Just for fun: nothing here links to betting.</p>
+    <div class="card checks"><label><input type="checkbox" id="horn" ${hornOn() ? "checked" : ""}>Goal horn</label></div>
+    <p class="help">Sounds a horn on this device when one of your teams scores while the app is open. You'll hear it once when you turn it on.</p>
     <div class="seg" role="group" aria-label="Buttons on touch screens">${[["right", "Right-handed"], ["left", "Left-handed"]].map(([k, l]) =>
       `<button data-hand="${k}" class="${(s.hand || "right") === k ? "on" : ""}">${l}</button>`).join("")}</div>
     <p class="help">On phones, foldables and tablets, game page buttons sit on this side, under your thumb. On a computer they're centred.</p>
@@ -2324,6 +2353,10 @@ function settingsView() {
   }));
   document.getElementById("odds").addEventListener("change", e => saveSettings({ odds: e.target.checked }));
   document.getElementById("photos").addEventListener("change", e => saveSettings({ photos: e.target.checked }));
+  document.getElementById("horn").addEventListener("change", e => {   // this device only, like Rise or Slapshot
+    try { localStorage.setItem("horn", e.target.checked ? "1" : "0"); } catch { /* stays off */ }
+    if (e.target.checked) import(`./horn.js${V}`).then(m => m.play()).catch(() => {});
+  });
   view.querySelectorAll("button[data-marks]").forEach(b => b.addEventListener("click", () => {
     saveSettings({ marks: b.dataset.marks });
     applyLogos();
@@ -2710,7 +2743,7 @@ document.addEventListener("click", e => { lastTap = e.target.closest("a[href]");
 const onScreen = el => { const r = el?.getBoundingClientRect(); return !!r && r.bottom > 0 && r.top < innerHeight && r.height > 0; };
 // The card on this page that opens `hash`: the one just tapped if it does, else the first one on screen.
 const cardFor = hash => [lastTap, ...view.querySelectorAll(`a.body[href="${hash}"], a.hero-top[href="${hash}"]`)]
-  .find(a => a?.isConnected && a.getAttribute("href") === hash && view.contains(a) && onScreen(a));
+  .find(a => a?.isConnected && a.getAttribute("href") === hash && (view.contains(a) || a.classList.contains("dock-item")) && onScreen(a));
 
 function navigate() {
   const from = lastHash || "", to = location.hash;
@@ -2753,6 +2786,11 @@ new MutationObserver(() => {
   pendingShot = 0;
   if (motionStyle() === "rise") rise(); else slapshot(d);
 }).observe(view, { childList: true });
+
+// The live dock's code comes down once the first page is up (web/dock.js).
+const hornOn = () => { try { return localStorage.getItem("horn") === "1"; } catch { return false; } };
+let dock = null;
+const loadDock = () => dock ||= import(`./dock.js${V}`).then(m => { m.start({ api, esc, mark, gameHref, spoilerHidden, motionOn, lamp, teamName, apart, onScreen, hornOn, favs, V, teams: () => TEAMS }); return m; }).catch(() => { dock = null; });
 
 function renderRoute() {
   clearTimeout(refreshTimer);
@@ -2826,6 +2864,7 @@ async function start() {
   route();
   if (ME.status === "approved" && !ME.settings.favorites?.length && !ME.settings.welcomed) openWelcome();  // a new friend
   setTimeout(() => { prefetch(); loadMorph(); }, 2500);  // the other tabs, quietly, once the first page is up
+  if (ME.status === "approved") setTimeout(loadDock, 1200);
   setInterval(sendViews, 60000);
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
