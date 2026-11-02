@@ -3,6 +3,16 @@
 Every update to [Shots on Goal](https://github.com/DieLaughing/shotsongoal), newest first. The same list is on the app's What's new page.
 This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit that file, not this one.
 
+## November 2, 2026
+
+- **New: Your team's score, everywhere.** While one of your teams is playing, the score now stays on screen above the tab bar on every page, so you can read the Wire or make your picks without losing it. It lights up when anyone scores and takes you to the game when you tap it. Two of your teams on at once? Swipe between them. Spoiler-free games stay out of it.
+- **New: Game story.** Open a finished game and tap ▶ Game story to play it out one moment at a time, with the score and the rink catching up as you swipe. It's made for spoiler-free too. A game you're hiding now offers ▶ Catch up, goal by goal, and nothing shows the result until you get there, not even how many goals are left.
+- **New: This just happened.** Tonight now opens with a row of your teams' latest goals, each one ready to watch, followed by the finals from last night and today. Spoiler-free games stay out of it.
+- **New: The whole season at a glance.** Team pages now show every game of the season on one chart, wins above the line and losses below, bigger bars for bigger margins. Drag along it to see any game and the record at that point, then tap to open it.
+- **New: Compare any two.** Put two players or two teams side by side, with who's ahead on each number and how their games this season went. Tap ⇄ Compare on a team or player page, or just search "Bruins vs Leafs".
+- **New: A goal horn, if you want one.** You can now have a horn sound on your device when one of your teams scores while the app is open. It's off unless you turn it on, in Settings > Display, and it's set for each device separately.
+- **Improved: Bigger headings.** Page titles now use the same typeface as the jumbotron, so the whole app looks a bit more like a night at the rink.
+
 ## November 1, 2026
 
 - **New: Recaps, and your team's colours.** Finished games now have a 3-minute recap and the condensed game, playing right in the app (they turn up a while after the horn). Team pages wear the team's colours with their points up big, and player pages put the jersey number front and centre. The whole app now dresses in your team's colours too. If you follow several teams, your first favourite in each league leads, so the app can be Bruins gold on NHL and Fleet green on PWHL. To keep one team all the time, or turn it off, go to Settings › Display › Team colours.

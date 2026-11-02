@@ -24,7 +24,8 @@ from perfcheck import start_server
 
 # ---- this app ----------------------------------------------------------------------------------------------------
 PAGES = ["#/", "#/picks", "#/wire", "#/league", "#/leaders", "#/search", "#/settings", "#/new", "#/report", "#/app",
-         "#/admin", "#/team/TBL", "#/player/8478402", "#/game/2026020084"]
+         "#/admin", "#/team/TBL", "#/player/8478402", "#/game/2026020084", "#/compare/BOS/TOR", "#/compare/BOS",
+         "#/compare/p8478402/p8477956"]
 # (page, what to tap, anchors that must not move). Taps are plain JS clicks: a real finger can only tap what's on
 # screen, and Playwright's own click would scroll the target into view first (a jump the app didn't make).
 STILL = [
@@ -147,7 +148,73 @@ def welcome_check(page) -> tuple[str, bool]:
     return f"saved {got.get('favorites')}", got.get("favorites") == ["BOS", "LAK"] and got.get("welcomed") is True and not page.query_selector(".wl") and not page.evaluate("document.querySelector('main').inert")
 
 
-PLAY = [(REPLAY_GAME, "replay", replay_check), (REPLAY_GAME, "clip", clip_check), ("#/", "welcome", welcome_check), ("#/league", "what if", what_if_check), ("#/picks", "flick", flick_check)]
+def story_check(page) -> tuple[str, bool]:
+    """A game's story starts at 0-0, the score and rink follow the swipe both ways, one moment fills the screen, and back closes it."""
+    page.evaluate("document.getElementById('story').click()")
+    page.wait_for_selector(".st", timeout=3000)
+    page.wait_for_timeout(300)
+    score = lambda: page.inner_text(".st-sc").replace("\n", "").replace(" ", "")
+    go = "i => { const l = document.querySelector('.st-beats'); l.scrollTop = l.clientHeight * i; }"
+    last = page.evaluate("document.querySelectorAll('.st-beat').length") - 1
+    start = score()
+    page.evaluate(go, last)
+    page.wait_for_timeout(300)
+    end, final = score(), page.inner_text(".st-when")
+    page.evaluate(go, 0)
+    page.wait_for_timeout(300)
+    rewound = score()
+    one = page.evaluate("""(() => { const l = document.querySelector('.st-beats').getBoundingClientRect();
+      return [...document.querySelectorAll('.st-beat')].filter(b => { const r = b.getBoundingClientRect(); return r.top < l.bottom - 1 && r.bottom > l.top + 1; }).length; })()""")
+    page.go_back()
+    page.wait_for_timeout(200)
+    gone = not page.query_selector(".st") and page.evaluate("document.documentElement.style.overflow") == "" and not page.evaluate("document.getElementById('view').inert")
+    return f"{start} to {end}, {last + 1} moments", start == "0–0" and end != start and final.startswith("Final") and rewound == start and one == 1 and gone
+
+
+def ribbon_check(page) -> tuple[str, bool]:
+    """Dragging along the season changes what the read-out says and nothing else on the page."""
+    page.wait_for_selector(".rb input", state="attached", timeout=3000)
+    y, before = page.evaluate("scrollY"), page.inner_text("#rb-read")
+    page.evaluate("() => { const r = document.querySelector('.rb input'); r.value = 0; r.dispatchEvent(new Event('input', { bubbles: true })); }")
+    after = page.inner_text("#rb-read")
+    return "read-out follows", after != before and "Game 1 " in after and page.evaluate("scrollY") == y and page.evaluate("document.querySelectorAll('.rb-bars .on').length") == 1
+
+
+def compare_check(page) -> tuple[str, bool]:
+    """Two teams give rows of numbers; the picker on a page with one team finds the other."""
+    page.wait_for_selector(".cp-head", timeout=3000)
+    rows = page.evaluate("document.querySelectorAll('.cp-rows .cmp').length")
+    page.evaluate("location.hash = '#/compare/BOS'")
+    page.wait_for_selector("#cp-q", timeout=3000)
+    page.fill("#cp-q", "leafs")
+    page.wait_for_selector("#cp-out a", timeout=3000)
+    return f"{rows} rows", rows >= 4 and "compare/BOS/TOR" in page.get_attribute("#cp-out a", "href")
+
+
+def dock_check(page) -> tuple[str, bool]:
+    """Your team on now: the strip shows on other pages, a goal lights the lamp, and it's gone on that game's own page."""
+    game = {"id": 2026020084, "league": "nhl", "date": "2026-10-11", "state": "live", "period": "2nd", "clock": "8:14", "intermission": False,
+            "outcome": None, "start": None, "away": {"abbr": "BOS", "score": 1}, "home": {"abbr": "TOR", "score": 0}}
+    page.route("**/api/live", lambda r: r.fulfill(json={"games": [game]}))
+    settings = "s => fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s) }).then(r => r.json())"
+    me = page.evaluate("fetch('/api/me').then(r => r.json()).then(m => m.settings)")
+    page.evaluate(settings, {**me, "favorites": ["BOS"]})
+    try:
+        page.reload()
+        page.wait_for_selector(".dock-item", timeout=4000)
+        shown = page.inner_text(".dock-item .ms-sc").replace("\n", "")
+        game["away"]["score"] = 2
+        page.evaluate("import(performance.getEntriesByType('resource').find(e => e.name.includes('dock.js')).name).then(m => m.refresh())")
+        page.wait_for_selector(".dock-item .lamp", state="attached", timeout=3000)
+        page.evaluate(f"location.hash = '#/game/{game['id']}'")
+        page.wait_for_timeout(600)
+        gone = not page.query_selector(".dock-item")
+    finally:
+        page.evaluate(settings, me)
+    return f"{shown}, then the lamp", shown.startswith("1") and gone
+
+
+PLAY = [(REPLAY_GAME, "story", story_check), ("#/team/BOS", "ribbon", ribbon_check), ("#/compare/BOS/TOR", "compare", compare_check), ("#/wire", "dock", dock_check), (REPLAY_GAME, "replay", replay_check), (REPLAY_GAME, "clip", clip_check), ("#/", "welcome", welcome_check), ("#/league", "what if", what_if_check), ("#/picks", "flick", flick_check)]
 
 # ---- the checks (the same in both apps) ---------------------------------------------------------------------------
 OPEN_MS, SETTLE_MS, STILL_MS, STILL_PX, PILL_PX = 8000, 3200, 800, 1, 2
