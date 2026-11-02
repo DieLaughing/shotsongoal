@@ -752,8 +752,17 @@ function happenedRow(tiles) {
     return `<div class="hap-t final" style="${paints}"><a class="hap-go" href="${gameHref(g)}"><span class="hap-k">Final${ot}</span>${score(g)}</a>
       ${t.recap ? `<button class="hap-film" data-hap="recap" data-clip="${esc(t.recap)}"><span class="clip-ico" aria-hidden="true">▶</span> Recap</button>` : ""}</div>`;
   };
-  return `<h2>This just happened</h2><div class="hap">${tiles.map(tile).join("")}</div>`;
+  return `<h2>This just happened</h2><div class="hap-wrap"><div class="hap">${tiles.map(tile).join("")}</div>
+    <button class="hap-arrow prev" data-step="-1" aria-label="Earlier" hidden>‹</button><button class="hap-arrow next" data-step="1" aria-label="More" hidden>›</button></div>`;
 }
+// A finger swipes the row; a mouse gets arrows (CSS shows them only there), each only while there's more that way.
+function hapArrows() {
+  const strip = view.querySelector(".hap");
+  if (!strip) return;
+  view.querySelector(".hap-arrow.prev").hidden = strip.scrollLeft < 4;
+  view.querySelector(".hap-arrow.next").hidden = strip.scrollLeft > strip.scrollWidth - strip.clientWidth - 4;
+}
+addEventListener("resize", hapArrows);
 
 function heroes(data, leagues, slateGames) {
   if (!data?.teams?.length) return "";
@@ -839,12 +848,16 @@ async function tonightView(date, quiet = false) {
   // The dots under swipeable team cards follow the card in view. scroll doesn't bubble: listen on its way down.
   view.addEventListener("scroll", e => {
     const strip = e.target;
+    if (strip.matches?.(".hap")) hapArrows();
     if (!strip.matches?.(".heroes.many")) return;
     heroAt = Math.round(strip.scrollLeft / (strip.firstElementChild.offsetWidth + 10));
     view.querySelectorAll(".hero-dots span").forEach((d, j) => d.classList.toggle("on", heroAt === j));
   }, { ...on, capture: true, passive: true });
   bannerClicks(on);
+  hapArrows();
   view.addEventListener("click", e => {
+    const step = e.target.closest("[data-step]");
+    if (step) { const strip = view.querySelector(".hap"); strip.scrollBy({ left: +step.dataset.step * (strip.clientWidth - 60), behavior: motionOn() ? "smooth" : "auto" }); return; }
     const b = e.target.closest("[data-hap]");
     if (!b || e.metaKey || e.ctrlKey || e.shiftKey) return;   // a new-tab click on a goal still gets a tab
     e.preventDefault();
