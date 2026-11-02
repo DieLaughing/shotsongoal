@@ -41,19 +41,22 @@ const CSS = `
 export function open({ d, g, hidden, reel, films, seen, mark, esc, lamp, motionOn, rink, timeline, clockOf, clipLink, openClip }) {
   if (!document.getElementById("st-css")) document.head.append(Object.assign(document.createElement("style"), { id: "st-css", textContent: CSS }));
   const a = g.away.abbr, h = g.home.abbr, tl = d.shotmap?.length >= 10 ? timeline(d.shotmap, a, h, g) : null;
-  const start = t => tl?.periods.find(p => p.name === t)?.from ?? 0;
+  const stamp = (name, secs) => { const p = tl?.periods.find(x => x.name === name); return p ? p.from + secs : null; };
   const ending = g.outcome && !["REG", "T"].includes(g.outcome) ? ` (${g.outcome})` : "";
 
   // The game as a list of moments. Each knows the score and the game time once it's on screen.
-  let score = [0, 0];
-  const beats = [{ kind: "start", score, at: -1, when: "Puck drop" }];
+  // A shootout isn't on the game clock: its moments keep the rink as it was.
+  let score = [0, 0], clock = -1;
+  const beats = [{ kind: "start", score, at: clock, when: "Puck drop" }];
   for (const p of d.scoring) {
     for (const x of p.goals) {
       score = [x.away, x.home];
-      beats.push({ kind: "goal", x, period: p.period, score, at: start(p.period) + clockOf(x), when: `${p.period} ${x.time}` });
+      clock = stamp(p.period, clockOf(x)) ?? clock;
+      beats.push({ kind: "goal", x, period: p.period, score, at: clock, when: `${p.period} ${x.time}` });
     }
     const shots = d.shots?.find(s => s.period === p.period), length = tl?.periods.find(q => q.name === p.period);
-    if (p.period !== "SO") beats.push({ kind: "break", period: p.period, shots, score, at: length ? length.from + length.len - 1 : -1, when: `End of the ${p.period}` });
+    if (length) clock = length.from + length.len - 1;
+    if (p.period !== "SO") beats.push({ kind: "break", period: p.period, shots, score, at: clock, when: `End of the ${p.period}` });
   }
   beats.at(-1).kind === "break" && beats.pop();    // the last period's end is the final
   beats.push({ kind: "final", score: [g.away.score ?? 0, g.home.score ?? 0], at: Infinity, when: `Final${ending}` });

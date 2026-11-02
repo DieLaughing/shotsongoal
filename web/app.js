@@ -137,7 +137,7 @@ const WRITE_DROPS = {
 // draws; a field in neither list drops every copy.
 const WATCH_KEYS = [...GAME_KEYS, "/api/team"];      // where-to-watch lines on games and team schedules
 const SETTING_DROPS = {
-  favorites: ["/api/wire", "/api/myteams"], local: WATCH_KEYS, country: WATCH_KEYS, services: WATCH_KEYS,
+  favorites: ["/api/wire", "/api/myteams", "/api/happened", "/api/live"], local: WATCH_KEYS, country: WATCH_KEYS, services: WATCH_KEYS,
   spoilers: ["/api/hidden"], nickname: ["/api/pickem"],
   notify: [], seen_changes: [], hand: [], odds: [], animations: [], marks: [], photos: [], accent: [], welcomed: [],
 };
@@ -846,7 +846,7 @@ async function tonightView(date, quiet = false) {
   bannerClicks(on);
   view.addEventListener("click", e => {
     const b = e.target.closest("[data-hap]");
-    if (!b) return;
+    if (!b || e.metaKey || e.ctrlKey || e.shiftKey) return;   // a new-tab click on a goal still gets a tab
     e.preventDefault();
     if (b.dataset.hap === "recap") { const t = tiles.find(x => x.recap === b.dataset.clip); if (t) openClip(t.recap, [{ id: t.recap, who: "3-minute recap", when: "Final", score: `${t.game.away.score}–${t.game.home.score}`, team: t.game.home.abbr, url: `https://www.nhl.com/gamecenter/${encodeURIComponent(t.game.id)}` }]); }
     else openClip(b.dataset.clip, tiles.filter(t => t.kind === "goal"));

@@ -32,7 +32,7 @@ const TEAM = [["Points", r => r.pts], ["Wins", r => r.w], ["Points %", r => r.pc
 function rows(spec, a, b, ac, bc, esc) {
   return spec.map(([label, get, show, low]) => {
     const x = a ? get(a) : null, y = b ? get(b) : null;
-    if (x == null || y == null || Number.isNaN(x) || Number.isNaN(y)) return "";
+    if (x == null || y == null || Number.isNaN(x) || Number.isNaN(y) || (!x && !y)) return "";   // nothing either side (college has no points)
     const f = v => esc(show ? show(v) : v), lift = Math.max(0, -Math.min(x, y));   // a negative value can't be a bar length
     const nx = x + lift, ny = y + lift, total = nx + ny || 1, xBest = low ? x < y : x > y, yBest = low ? y < x : y > x;
     return `<div class="cmp"><span class="v${xBest ? " best" : ""}">${f(x)}</span>
