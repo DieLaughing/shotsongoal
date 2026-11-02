@@ -752,17 +752,36 @@ function happenedRow(tiles) {
     return `<div class="hap-t final" style="${paints}"><a class="hap-go" href="${gameHref(g)}"><span class="hap-k">Final${ot}</span>${score(g)}</a>
       ${t.recap ? `<button class="hap-film" data-hap="recap" data-clip="${esc(t.recap)}"><span class="clip-ico" aria-hidden="true">▶</span> Recap</button>` : ""}</div>`;
   };
-  return `<h2>This just happened</h2><div class="hap-wrap"><div class="hap">${tiles.map(tile).join("")}</div>
-    <button class="hap-arrow prev" data-step="-1" aria-label="Earlier" hidden>‹</button><button class="hap-arrow next" data-step="1" aria-label="More" hidden>›</button></div>`;
+  return `<h2>This just happened</h2><div class="hap">${tiles.map(tile).join("")}</div>`;
 }
-// A finger swipes the row; a mouse gets arrows (CSS shows them only there), each only while there's more that way.
-function hapArrows() {
-  const strip = view.querySelector(".hap");
-  if (!strip) return;
-  view.querySelector(".hap-arrow.prev").hidden = strip.scrollLeft < 4;
-  view.querySelector(".hap-arrow.next").hidden = strip.scrollLeft > strip.scrollWidth - strip.clientWidth - 4;
+// A finger swipes the row; over it, a mouse wheel moves it sideways. Two things keep that from trapping the page: a wheel
+// that's already scrolling the page carries on through (a row passing under the pointer doesn't catch it), and at either
+// end of the row the wheel goes back to the page.
+const PAGE_WHEEL_MS = 400;   // a wheel turn this soon after the last page scroll is still that same scroll
+let pageWheelAt = -Infinity, hapGoal = null;
+addEventListener("wheel", e => { if (!e.target.closest?.(".hap")) pageWheelAt = e.timeStamp; }, { passive: true });
+function hapGlide(strip) {
+  requestAnimationFrame(() => {
+    const left = hapGoal - strip.scrollLeft;
+    if (hapGoal === null || !strip.isConnected) { hapGoal = null; return; }
+    if (Math.abs(left) < 4) { strip.scrollLeft = hapGoal; hapGoal = null; return; }
+    strip.scrollLeft += left * .28;
+    hapGlide(strip);
+  });
 }
-addEventListener("resize", hapArrows);
+function hapWheel(e) {
+  if (e.ctrlKey || e.shiftKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;   // zooming, or already sideways: the browser's
+  if (e.timeStamp - pageWheelAt < PAGE_WHEEL_MS) { pageWheelAt = e.timeStamp; return; }
+  const strip = e.currentTarget, from = hapGoal ?? strip.scrollLeft;
+  const step = e.deltaY * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? strip.clientWidth : 1);   // Firefox counts a mouse wheel in lines
+  const to = Math.max(0, Math.min(strip.scrollWidth - strip.clientWidth, from + step));
+  if (to === from) { if (hapGoal === null) pageWheelAt = e.timeStamp; return; }   // the end of the row: back to the page
+  e.preventDefault();
+  if (!motionOn()) { strip.scrollLeft = to; return; }
+  const idle = hapGoal === null;
+  hapGoal = to;
+  if (idle) hapGlide(strip);
+}
 
 function heroes(data, leagues, slateGames) {
   if (!data?.teams?.length) return "";
@@ -848,16 +867,13 @@ async function tonightView(date, quiet = false) {
   // The dots under swipeable team cards follow the card in view. scroll doesn't bubble: listen on its way down.
   view.addEventListener("scroll", e => {
     const strip = e.target;
-    if (strip.matches?.(".hap")) hapArrows();
     if (!strip.matches?.(".heroes.many")) return;
     heroAt = Math.round(strip.scrollLeft / (strip.firstElementChild.offsetWidth + 10));
     view.querySelectorAll(".hero-dots span").forEach((d, j) => d.classList.toggle("on", heroAt === j));
   }, { ...on, capture: true, passive: true });
   bannerClicks(on);
-  hapArrows();
+  view.querySelector(".hap")?.addEventListener("wheel", hapWheel, { ...on, passive: false });
   view.addEventListener("click", e => {
-    const step = e.target.closest("[data-step]");
-    if (step) { const strip = view.querySelector(".hap"); strip.scrollBy({ left: +step.dataset.step * (strip.clientWidth - 60), behavior: motionOn() ? "smooth" : "auto" }); return; }
     const b = e.target.closest("[data-hap]");
     if (!b || e.metaKey || e.ctrlKey || e.shiftKey) return;   // a new-tab click on a goal still gets a tab
     e.preventDefault();
