@@ -534,7 +534,7 @@ function paint(html, quiet) {
 // stands in for the jumbotron once that's scrolled away.
 function lamp(el) {
   el.animate([{ transform: "translateY(26px)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 340, easing: "cubic-bezier(.3, 1.3, .5, 1)" });
-  const host = el.closest(".dock-item") || (document.body.classList.contains("bug-gone") ? view.querySelector(".ministrip") : el.closest(".scorebug, .game, .hero, .shotcard"));
+  const host = el.closest(".dock-item, .st-bug") || (document.body.classList.contains("bug-gone") ? view.querySelector(".ministrip") : el.closest(".scorebug, .game, .hero, .shotcard"));
   if (!host) return;
   const glow = host.appendChild(Object.assign(document.createElement("i"), { className: "lamp" }));
   glow.animate([{ opacity: 0 }, { opacity: .9, offset: .1 }, { opacity: .9, offset: .75 }, { opacity: 0 }], { duration: 1600, easing: "ease-out" }).finished.finally(() => glow.remove());
@@ -1219,6 +1219,24 @@ let moreStatsOpen = false;  // stays open across the live refresh
 // What the person picked on this game's page, kept across the live refresh: the shot map period, the open reaction
 // picker. A different game starts fresh.
 let gameUi = { id: null, shots: "all", rx: null };
+// Every goal with a clip, in order: what the theatre steps through. The id is the end of the NHL's share link; one
+// that doesn't fit stays a plain link.
+const goalReel = d => d.scoring.flatMap(p => p.goals.flatMap(x => { const id = /-(\d{10,})$/.exec(x.clip || "")?.[1];
+  return id ? [{ id, url: x.clip, period: p.period, time: x.time, who: x.scorer, when: `${p.period} ${x.time}`, score: `${x.away}–${x.home}`, team: x.team }] : []; }));
+const gameFilms = (d, g) => g.state !== "final" ? [] : [[d.video?.recap, "3-minute recap"], [d.video?.condensed, "Condensed game"]].filter(([id]) => id)
+  .map(([id, who]) => ({ id: String(id), who, when: "Final", score: `${g.away.score}–${g.home.score}`, team: g.away.score > g.home.score ? g.away.abbr : g.home.abbr, url: `https://www.nhl.com/gamecenter/${encodeURIComponent(g.id)}` }));
+const hasStory = (d, g) => g.state === "final" && d.scoring.some(p => p.goals.length);
+// Game story (web/story.js): a final, goal by goal.
+async function openStory(d, g, hidden) {
+  if (document.querySelector(".st")) return;
+  try {
+    const m = await import(`./story.js${V}`);
+    const ac = TEAMS[g.away.abbr]?.color || "#888", hc = TEAMS[g.home.abbr]?.color || "#888";
+    m.open({ d, g: { ...g, paints: { a: apart(ac, hc), h: hc } }, hidden, reel: goalReel(d), films: gameFilms(d, g), seen: () => spoilerAction("seen", spKey(g)),
+      mark, esc, lamp, motionOn, rink: rinkSvg, timeline, clockOf, clipLink, openClip });
+  } catch { toast("Couldn't open that. Try again.", true); }
+}
+
 async function gameView(id, quiet = false, league = "nhl") {
   setNav("tonight");
   loadMorph();
@@ -1235,9 +1253,10 @@ async function gameView(id, quiet = false, league = "nhl") {
       <div class="spoil-eye">🙈</div>
       <p><b>${esc(fullName(a))} vs ${esc(fullName(h))}</b> is hidden. Scores, goals, the shot map and the recap stay
         out of sight until you've watched it.</p>
-      <div class="links" style="justify-content:center">${spoilButton("peek", g, "Show it now")}${spoilButton("seen", g, "I've seen it", true)}</div>
+      <div class="links" style="justify-content:center">${hasStory(d, g) ? `<button class="btn small primary" id="story">▶ Catch up, goal by goal</button>` : ""}${spoilButton("peek", g, "Show it now")}${spoilButton("seen", g, "I've seen it", !hasStory(d, g))}</div>
       ${g.state === "live" ? `<div style="padding-top:6px">${watchLine(g.watch, g)}</div>` : ""}
     </div>`;
+    view.querySelector("#story")?.addEventListener("click", () => openStory(d, g, true));
     return;
   }
   const ac = TEAMS[a]?.color || "#888", hc = TEAMS[h]?.color || "#888";
@@ -1277,10 +1296,9 @@ async function gameView(id, quiet = false, league = "nhl") {
       ${friendsLine ? `<span class="gsec-note">${friendsLine}</span>` : ""}</div>` : "";
 
   // Finals: the NHL's recap and condensed game, in the same theatre as the goals.
-  const won = g.away.score > g.home.score ? a : h;
-  gameUi.films = g.state !== "final" ? [] : [[d.video?.recap, "3-minute recap"], [d.video?.condensed, "Condensed game"]].filter(([id]) => id)
-    .map(([id, who]) => ({ id: String(id), who, when: "Final", score: `${g.away.score}–${g.home.score}`, team: won, url: `https://www.nhl.com/gamecenter/${encodeURIComponent(g.id)}` }));
-  const films = gameUi.films.length ? `<div class="gsec gsec-row films">${gameUi.films.map(f => `<button class="clipbtn" data-clip="${esc(f.id)}"><span class="clip-ico" aria-hidden="true">▶</span> ${esc(f.who)}</button>`).join("")}</div>` : "";
+  gameUi.films = gameFilms(d, g);
+  const storyBtn = hasStory(d, g) ? `<button class="clipbtn" id="story"><span class="clip-ico" aria-hidden="true">▶</span> Game story</button>` : "";
+  const films = gameUi.films.length || storyBtn ? `<div class="gsec gsec-row films">${storyBtn}${gameUi.films.map(f => `<button class="clipbtn" data-clip="${esc(f.id)}"><span class="clip-ico" aria-hidden="true">▶</span> ${esc(f.who)}</button>`).join("")}</div>` : "";
   const paints = `--a:${esc(apart(ac, hc))};--h:${esc(hc)}`;
   const big = showScore ? `<b data-sc="a">${g.away.score ?? 0}</b><i>–</i><b data-sc="h">${g.home.score ?? 0}</b>` : g.start && g.state === "pre" ? esc(time(g.start)) : "vs";
   let html = `${backLink("#/")}<div class="card">
@@ -1299,10 +1317,7 @@ async function gameView(id, quiet = false, league = "nhl") {
   if (g.state === "pre" && d.preview) html += previewBlock(d.preview, a, h, ac, hc);
 
   const goals = d.scoring.filter(p => p.goals.length);
-  // Every goal with a clip, in order: what the theatre steps through. The id is the end of the NHL's share link; one
-  // that doesn't fit stays a plain link.
-  gameUi.reel = goals.flatMap(p => p.goals.flatMap(x => { const id = /-(\d{10,})$/.exec(x.clip || "")?.[1];
-    return id ? [{ id, url: x.clip, period: p.period, time: x.time, who: x.scorer, when: `${p.period} ${x.time}`, score: `${x.away}–${x.home}`, team: x.team }] : []; }));
+  gameUi.reel = goalReel(d);
   if (goals.length) {
     html += `<h2>Scoring</h2><div class="card">${goals.map(p => `<div class="subhead">${esc(p.period)}</div>${p.goals.map(x => {
       const tags = [x.strength !== "EV" ? x.strength : "", x.modifier === "empty-net" ? "EN" : ""].filter(Boolean)
@@ -1398,7 +1413,8 @@ async function gameView(id, quiet = false, league = "nhl") {
   };
   view.addEventListener("click", e => {
     const t = e.target, open = t.closest("[data-rxopen]"), react = t.closest("[data-rx]"), shots = t.closest("[data-shots]"), clip = t.closest("[data-clip]");
-    if (clip) { if (clip.tagName === "BUTTON" || !(e.metaKey || e.ctrlKey || e.shiftKey)) { e.preventDefault(); openClip(clip.dataset.clip); } }  // a new-tab click on a link still gets a tab
+    if (t.closest("#story")) openStory(d, g, false);
+    else if (clip) { if (clip.tagName === "BUTTON" || !(e.metaKey || e.ctrlKey || e.shiftKey)) { e.preventDefault(); openClip(clip.dataset.clip); } }  // a new-tab click on a link still gets a tab
     else if (t.closest("#report")) sendReport(e);
     else if (motionOn() && t.closest("[data-sc]")) lamp(t.closest("[data-sc]"));  // the scoreboard is a toy: tap a number, light the lamp
     else if (t.closest("#watching")) post("/api/watching", { on: !S.me_watching });
@@ -1578,14 +1594,14 @@ function replayBar(tl, color) {
 // one, so a new-tab click or a clip with no id still goes to NHL.com.
 const clipLink = (url, id) => `<a class="clipbtn" href="${esc(url)}" target="_blank" rel="noopener"${id ? ` data-clip="${esc(id)}"` : ""}><span class="clip-ico" aria-hidden="true">▶</span> Watch</a>`;
 let clipOpening = false;
-async function openClip(id, list) {   // `list`: the reel to step through, when it isn't this game page's
+async function openClip(id, list, label = "Next goal") {   // `list`: the reel to step through, when it isn't this game page's
   if (clipOpening || document.querySelector(".clipview")) return;
   clipOpening = true;
   const page = location.hash;
   try {
     const m = await import(`./clip.js${V}`), film = !list && gameUi.films.some(c => c.id === id), reel = list || (film ? gameUi.films : gameUi.reel);
     const at = reel.findIndex(c => c.id === id);   // looked up now: a refresh may have reordered the list
-    if (at >= 0 && location.hash === page) m.open({ reel, at, nextLabel: film ? "Next" : "Next goal", mark, esc, motionOn, colour: abbr => TEAMS[abbr]?.color || "#333" });
+    if (at >= 0 && location.hash === page) m.open({ reel, at, nextLabel: film ? "Next" : label, mark, esc, motionOn, colour: abbr => TEAMS[abbr]?.color || "#333" });
   } catch { toast("Couldn't load that clip. Try again.", true); }
   clipOpening = false;
 }
@@ -1597,11 +1613,8 @@ const loadReplay = () => replayMod ||= import(`./replay.js${V}`);
 
 // NHL rink coordinates: x -100..100 (end boards), y -42.5..42.5. Home shoots right, away shoots left.
 const shotShown = (period, pick) => pick === "all" || period === pick;
-function shotMap(shots, a, h, pick = "all", g) {
+function rinkSvg(shots, pick = "all") {
   const color = t => TEAMS[t]?.color || "#888";
-  const periods = [...new Set(shots.map(s => s.period))];
-  const count = (t, k) => shots.filter(s => s.team === t && (k ? s.kind === k : s.kind !== "miss")).length;
-  if (!periods.includes(pick)) pick = "all";
   const dot = s => {
     const c = color(s.team), cx = s.x.toFixed(1), cy = (-s.y).toFixed(1), p = `data-p="${esc(s.period)}" data-i="${shots.indexOf(s)}"${shotShown(s.period, pick) ? "" : ` style="display:none"`}`;
     const title = `<title>${esc(s.shooter)} · ${esc(s.period)} ${esc(s.time)} · ${esc(s.kind === "miss" ? "missed" : s.kind)}${s.shot_type ? ` (${esc(s.shot_type)})` : ""}</title>`;
@@ -1610,9 +1623,7 @@ function shotMap(shots, a, h, pick = "all", g) {
     return `<circle ${p} cx="${cx}" cy="${cy}" r="1.8" fill="${c}" opacity=".9">${title}</circle>`;
   };
   const line = "var(--border)";
-  return `<h2>Shot map</h2><div class="card pad shotcard">
-    <div class="shotlegend"><span>${mark(a)} shoots ←</span><span class="muted small">● shot · ○ miss · ◉ goal</span><span>→ ${mark(h)}</span></div>
-    <svg class="rink" viewBox="-101 -44 202 88" role="img" aria-label="Shot map">
+  return `<svg class="rink" viewBox="-101 -44 202 88" role="img" aria-label="Shot map">
       <rect x="-100" y="-42.5" width="200" height="85" rx="28" fill="none" stroke="var(--muted)" stroke-width=".8"/>
       <line x1="0" y1="-42.5" x2="0" y2="42.5" stroke="var(--red)" stroke-opacity=".5" stroke-width="1"/>
       <line x1="-25" y1="-42.5" x2="-25" y2="42.5" stroke="#3b6fd8" stroke-opacity=".5" stroke-width="1"/>
@@ -1626,7 +1637,16 @@ function shotMap(shots, a, h, pick = "all", g) {
       ${shots.filter(s => s.kind === "miss").map(dot).join("")}
       ${shots.filter(s => s.kind === "shot").map(dot).join("")}
       ${shots.filter(s => s.kind === "goal").map(dot).join("")}
-    </svg>
+    </svg>`;
+}
+function shotMap(shots, a, h, pick = "all", g) {
+  const color = t => TEAMS[t]?.color || "#888";
+  const periods = [...new Set(shots.map(s => s.period))];
+  const count = (t, k) => shots.filter(s => s.team === t && (k ? s.kind === k : s.kind !== "miss")).length;
+  if (!periods.includes(pick)) pick = "all";
+  return `<h2>Shot map</h2><div class="card pad shotcard">
+    <div class="shotlegend"><span>${mark(a)} shoots ←</span><span class="muted small">● shot · ○ miss · ◉ goal</span><span>→ ${mark(h)}</span></div>
+    ${rinkSvg(shots, pick)}
     <div class="shotlegend small"><span>${count(a)} on goal · ${count(a, "miss")} missed</span><span>${count(h)} on goal · ${count(h, "miss")} missed</span></div>
     ${replayBar(timeline(shots, a, h, g), color)}
     ${periods.length > 1 ? `<div class="seg" style="margin:10px 0 0">${["all", ...periods].map(p => `<button data-shots="${esc(p)}" class="${p === pick ? "on" : ""}">${p === "all" ? "All" : esc(p)}</button>`).join("")}</div>` : ""}
