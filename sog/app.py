@@ -601,11 +601,13 @@ async def team(abbr: str, request: Request):
         raise HTTPException(404)
     data, items = await asyncio.gather(feed.any_team(abbr), feed.wire())
     sched = [dict(g) for g in data["schedule"] if g.get("type") in (2, 3)] or [dict(g) for g in data["schedule"]]
-    # The page shows recent results and what's coming up: send those, not the whole season (or two, for the PWHL).
+    # The page shows recent results and what's coming up: send those, not the whole season (or two, for the PWHL), which
+    # the chart gets in a few bytes a game.
+    ribbon = home.ribbon(abbr, sched, teams.league_of(abbr))
     done = [g for g in sched if g.get("state") == "final"]
     sched = done[-10:] + [g for g in sched if g.get("state") != "final"][:10]
     career = feed.careers(abbr) if teams.league_of(abbr) == "nhl" else None
-    return {**data, "schedule": _with_watch(sched, _settings(request)),
+    return {**data, "schedule": _with_watch(sched, _settings(request)), "ribbon": ribbon,
             "wire": [i for i in items if abbr in i["teams"]][:20],
             "milestones": home.near_milestones(career["players"]) if career else []}
 

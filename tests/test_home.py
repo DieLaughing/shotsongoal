@@ -45,3 +45,15 @@ def test_only_the_latest_season_counts():
     off = home.team_summary("PW-BOS", sched[:2], rows, "2026-10-13", "pwhl")
     assert off["offseason"] and off["streak"] is None and off["week"] is None
     assert off["record"] == "2-0-0" and off["standing"]["place"] == "Last season 2nd in the PWHL"
+
+
+def test_the_ribbon_is_this_season_only_with_results_and_games_to_come():
+    def g(gid, date, state, us=None, them=None, outcome="REG", gtype=2):
+        return {"id": gid, "date": date, "start": f"{date}T23:00:00Z", "state": state, "type": gtype, "outcome": outcome,
+                "away": {"abbr": "BOS", "score": us}, "home": {"abbr": "TOR", "score": them}}
+    games = [g(1, "2026-04-10", "final", 5, 1), g(2, "2026-10-10", "final", 3, 1), g(3, "2026-10-12", "final", 2, 3, "OT"),
+             g(4, "2026-10-14", "postponed"), g(5, "2026-10-16", "pre")]
+    r = home.ribbon("BOS", games)
+    assert [x["id"] for x in r] == [2, 3, 5]                            # last season and the postponed game stay out
+    assert (r[0]["r"], r[0]["u"], r[0]["t"], r[0]["o"], r[0]["h"]) == ("W", 3, 1, "TOR", False)
+    assert r[1]["r"] == "OT" and r[1]["x"] == "OT" and "r" not in r[2]

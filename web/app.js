@@ -1837,6 +1837,53 @@ function collegeVideos(list, schedule, abbr) {
   }).join("")}</div>`;
 }
 
+// The season, game by game: wins above the line, losses below, taller for a bigger margin. The chart is plain boxes and
+// its puck is a range input (like Replay's), so dragging, arrow keys and a screen reader all work for nothing.
+const RIBBON_MAX = 5;     // goals: anything bigger is drawn the same height
+const RIBBON_STEP = 7;    // px per goal
+const ribbonPlayed = list => list.filter(g => g.r);
+function ribbonBlock(list) {
+  const played = ribbonPlayed(list);
+  if (played.length < 2) return "";
+  const bar = (g, i) => {
+    if (!g.r) return `<i class="rb-next" data-i="${i}"></i>`;
+    const m = Math.min(Math.abs(g.u - g.t), RIBBON_MAX) * RIBBON_STEP || RIBBON_STEP / 2;   // a tie still gets a mark
+    return `<i class="rb-${g.r === "W" ? "w" : g.r === "T" ? "t" : g.r === "OT" ? "o" : "l"}" data-i="${i}" style="--m:${m}px"></i>`;
+  };
+  return `<h2>This season</h2><div class="card rb">
+      <div class="rb-read" id="rb-read"></div>
+      <div class="rb-chart"><div class="rb-bars" aria-hidden="true">${list.map(bar).join("")}</div>
+        <input type="range" min="0" max="${played.length - 1}" value="${played.length - 1}" step="1" aria-label="Game of the season"></div>
+      <p class="rb-key">Above the line: wins. Below: losses. Taller means a bigger margin.</p></div>`;
+}
+function ribbonRecord(list, upto) {
+  const n = k => list.slice(0, upto + 1).filter(g => g.r === k).length, extra = n("OT") + n("T");
+  return `${n("W")}-${n("L")}${extra ? `-${extra}` : ""}`;
+}
+function bindRibbon(list, abbr) {
+  const box = view.querySelector(".rb");
+  if (!box) return;
+  const played = ribbonPlayed(list), range = box.querySelector("input"), read = box.querySelector("#rb-read"), lg = leagueOf(abbr);
+  const bars = new Map([...box.querySelectorAll(".rb-bars i")].map(el => [+el.dataset.i, el]));
+  let on = null;
+  const show = i => {
+    const g = played[i], el = bars.get(list.indexOf(g));
+    on?.classList.remove("on"); (on = el).classList.add("on");
+    const word = { W: "Won", L: "Lost", OT: "Lost", T: "Tied" }[g.r], extra = g.x && !["REG", "T"].includes(g.x) ? ` (${esc(g.x)})` : "";
+    read.innerHTML = `<span class="rb-k">Game ${list.indexOf(g) + 1} · ${esc(shortDate(g.d))} · ${esc(ribbonRecord(list, list.indexOf(g)))}</span>
+      <a class="rb-g" href="${gameHref({ id: g.id, league: lg })}"><b>${word} ${g.u}–${g.t}</b> ${g.h ? "vs" : "at"} ${esc(teamName(g.o))}${extra}<span aria-hidden="true"> ›</span></a>`;
+  };
+  range.addEventListener("input", () => show(+range.value));
+  // With a mouse the read-out follows the pointer; a finger drags the puck.
+  range.addEventListener("pointermove", e => {
+    if (e.pointerType !== "mouse") return;
+    const r = range.getBoundingClientRect(), i = Math.round((e.clientX - r.left) / r.width * (list.length - 1));
+    const at = played.findLastIndex(g => list.indexOf(g) <= i);
+    if (at >= 0 && at !== +range.value) { range.value = at; show(at); }
+  });
+  show(played.length - 1);
+}
+
 async function teamView(abbr) {
   setNav("league");
   showLoading(`Loading ${esc(fullName(abbr))}…`);
@@ -1882,13 +1929,15 @@ async function teamView(abbr) {
         ${C.venue ? `<div class="muted small">${[C.venue.name, C.venue.town].filter(Boolean).map(nw).join(" · ")}</div>` : ""}`
         : st && lg === "pwhl" ? `<div class="muted small">${st.w}-${st.otw}-${st.otl}-${st.l} · ${st.pts} pts · ${esc(ordinal(st.league_rank))} in the PWHL${st.season ? ` (${esc(st.season)})` : ""}</div>`
         : st ? `<div class="muted small">${st.w}-${st.l}-${st.otl} · ${st.pts} pts · ${esc(ordinal(st.div_rank))} in the ${esc(st.div)}${st.streak ? ` · ${esc(st.streak)}` : ""}</div>` : ""}
-      <button class="btn small" id="fav">${isFav ? "★ Favorite" : "☆ Favorite"}</button></div>
+      <div class="bn-acts"><button class="btn small" id="fav">${isFav ? "★ Favorite" : "☆ Favorite"}</button><a class="btn small" href="#/compare/${encodeURIComponent(abbr)}">⇄ Compare</a></div></div>
       ${big ? `<div class="bn-big"><b>${esc(big[0])}</b><span>${esc(big[1])}</span></div>` : ""}
     </div>
     ${isCollege(lg) ? collegeSeason(C.season) : ""}
     ${next ? `<h2>${next.state === "live" ? "On now" : "Next game"}</h2><div class="card">${gameCard(next, fav)}</div>` : ""}
+    ${ribbonBlock(d.ribbon || [])}
     ${tabs.length > 1 ? `<div class="seg" role="tablist">${tabs.map(([k, l]) => `<button data-ttab="${k}" class="${k === tab ? "on" : ""}">${l}</button>`).join("")}</div>` : ""}
     <div id="ttab">${body[tab]()}</div>`;
+  bindRibbon(d.ribbon || [], abbr);
   view.querySelectorAll("[data-ttab]").forEach(b => b.addEventListener("click", () => {
     tab = b.dataset.ttab;
     try { localStorage.setItem("teamTab", tab); } catch { /* fine */ }
@@ -2021,6 +2070,7 @@ async function playerView(id, league = "nhl") {
         <h1>${esc(d.name)}</h1>
         <div class="muted small">${esc(POS_NAME[d.pos] || d.pos || "")}</div>
         ${d.team ? `<a class="tm phero-team" href="#/team/${d.team}">${mark(d.team)}<span>${esc(fullName(d.team))}</span></a>` : `<div class="muted small">${d.active ? "" : "Not active"}</div>`}
+        <div class="bn-acts"><a class="btn small" href="#/compare/${league === "pwhl" ? "q" : "p"}${esc(d.id)}">⇄ Compare</a></div>
       </div>
       ${d.number != null ? `<div class="bn-big bn-num" aria-label="Number ${esc(d.number)}"><b>${esc(d.number)}</b></div>` : ""}
     </div>
@@ -2112,6 +2162,19 @@ function near(a, b, max) {
   return prev[b.length] <= max;
 }
 
+// "pastrnak vs kaprizov", "bruins v leafs": the top match on each side, as a Compare link.
+const VS = /\s+(?:vs?\.?|versus|against)\s+/i;
+const playerSide = ([pid, , team]) => `${leagueOf(team) === "pwhl" ? "q" : "p"}${pid}`;
+function versusLink(text, players) {
+  const parts = text.split(VS);
+  if (parts.length !== 2 || parts.some(p => p.trim().length < 2)) return "";
+  const [x, y] = parts.map(p => searchResults(p, players));
+  const row = (href, left, right) => `<h2>Compare</h2><div class="card"><a class="prow" href="${href}"><span class="prow-main"><b>${esc(left)} vs ${esc(right)}</b><span class="muted small">Side by side</span></span><span aria-hidden="true">⇄</span></a></div>`;
+  if (x.teams[0] && y.teams[0] && x.teams[0] !== y.teams[0]) return row(`#/compare/${x.teams[0]}/${y.teams[0]}`, fullName(x.teams[0]), fullName(y.teams[0]));
+  if (x.players[0] && y.players[0] && x.players[0][0] !== y.players[0][0]) return row(`#/compare/${playerSide(x.players[0])}/${playerSide(y.players[0])}`, x.players[0][1], y.players[0][1]);
+  return "";
+}
+
 function searchResults(q, players) {
   const plain = s => fold(s).replace(/['’.]/g, "");   // "B's", "St. Louis", "O'Reilly" typed either way
   const f = plain(q.trim());
@@ -2143,7 +2206,9 @@ async function searchView() {
     searchText = box.value;
     if (!players) { out.innerHTML = searchText.trim().length >= 2 ? `<div class="empty">Loading players…</div>` : ""; return; }
     const r = searchResults(searchText, players);
-    if (searchText.trim().length < 2) { out.innerHTML = `<p class="help">Type a name: Pastrnak, Keller, Bruins, Fleet…</p>`; return; }
+    if (searchText.trim().length < 2) { out.innerHTML = `<p class="help">Type a name: Pastrnak, Keller, Bruins, Fleet… or two with "vs" between them to compare.</p>`; return; }
+    const versus = versusLink(searchText, players);
+    if (versus) { out.innerHTML = versus; return; }
     if (!r.teams.length && !r.players.length) { out.innerHTML = `<div class="card pad muted small">Nothing matches “${esc(searchText.trim())}”.</div>`; return; }
     out.innerHTML = `${r.teams.length ? `<h2>Teams</h2><div class="card">${r.teams.map(a => `<a class="prow" href="#/team/${a}">${mark(a, true)}<span class="prow-main"><b>${esc(fullName(a))}</b><span class="muted small">${esc(leagueLabel(a))}</span></span></a>`).join("")}</div>
       <div id="teamgames"></div>` : ""}
@@ -2645,7 +2710,7 @@ async function adminView() {
 // the new page's content is on screen, never for live refreshes or the same page re-shown; off with Settings >
 // Display or the phone's Reduce Motion.
 const NAV_ORDER = { "": 0, day: 0, picks: 1, wire: 2, league: 3, standings: 3, teams: 3, settings: 4, new: 5, app: 5, report: 5, admin: 5 };
-const DETAIL = new Set(["game", "pgame", "team"]);
+const DETAIL = new Set(["game", "pgame", "team", "compare"]);
 let lastHash = null, lastPage = null, pendingShot = 0, cameFromApp = false;   // pendingShot: +1 from the right, -1 from the left
 // Switches between sibling addresses (League's Standings | Leaders, marked data-swaps) feel like one page: the tap
 // keeps the scroll and the page height, and the content cross-fades instead of the page animation (which read as a
@@ -2677,11 +2742,11 @@ const VIEW_PAGE = { standings: "league", teams: "league" };
 const TEAM_KEY = /^((PW-)?[A-Z]{2,3}|C[MW]-\d{1,7})$/;
 const VIEW_ARG = { day: ["date", /^\d{4}-\d{2}-\d{2}$/], picks: ["date", /^\d{4}-\d{2}-\d{2}$/], game: ["id", /^\d+$/],
   pgame: ["id", /^\d+$/], cgame: ["league", /^ncaa[mw]$/], team: ["team", TEAM_KEY], player: ["id", /^\d+$/], pplayer: ["id", /^\d+$/] };
-const VIEW_PLAIN = new Set(["picks", "wire", "league", "settings", "app", "new", "report", "leaders", "search"]);   // fine without an argument
+const VIEW_PLAIN = new Set(["picks", "wire", "league", "settings", "app", "new", "report", "leaders", "search", "compare"]);   // fine without an argument
 const VIEW_NAME = { tonight: "Tonight", "day/:date": "Another day", "game/:id": "NHL game", "pgame/:id": "PWHL game", "cgame/:league": "College game",
   picks: "Pick'em", "picks/:date": "Pick'em, another day", wire: "Wire", league: "League", "team/:team": "Team page",
   settings: "Settings", app: "Get the app", new: "What's new", report: "Report a problem",
-  "player/:id": "NHL player", "pplayer/:id": "PWHL player", leaders: "Leaders", search: "Search" };
+  "player/:id": "NHL player", "pplayer/:id": "PWHL player", leaders: "Leaders", search: "Search", compare: "Compare" };
 
 function countView() {
   if (ME?.status !== "approved" || ME.admin) return;
@@ -2787,6 +2852,18 @@ new MutationObserver(() => {
   if (motionStyle() === "rise") rise(); else slapshot(d);
 }).observe(view, { childList: true });
 
+// Compare: two players or two teams side by side (web/compare.js, on demand).
+async function compareView(a, b) {
+  setNav("league");
+  showLoading("Loading…");
+  const page = location.hash;
+  try {
+    const m = await import(`./compare.js${V}`);
+    if (location.hash !== page) return;
+    await m.show({ view, api, fast, esc, mark, photo, apart, teamName, fullName, leagueOf, shortDate, gameHref, backLink, failed, standings, spoilCover, hiddenToday, searchResults, playerSide, TEAM_KEY, teams: () => TEAMS, page: () => location.hash, playerHref }, a && decodeURIComponent(a), b && decodeURIComponent(b));
+  } catch (e) { view.innerHTML = failed(e); }
+}
+
 // The live dock's code comes down once the first page is up (web/dock.js).
 const hornOn = () => { try { return localStorage.getItem("horn") === "1"; } catch { return false; } };
 let dock = null;
@@ -2820,6 +2897,7 @@ function renderRoute() {
   if (page === "pplayer" && /^\d+$/.test(arg || "")) return playerView(arg, "pwhl");
   if (page === "leaders") return leadersView();
   if (page === "search") return searchView();
+  if (page === "compare") return compareView(arg, arg2);
   if (page === "settings") return settingsView();
   if (page === "app") return appView();
   if (page === "new") return whatsNewView();

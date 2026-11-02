@@ -125,6 +125,22 @@ def team_summary(abbr: str, schedule: list[dict], rows: list[dict], today: str, 
     }
 
 
+def ribbon(abbr: str, schedule: list[dict], league: str = "nhl") -> list[dict]:
+    """This season game by game, the team page's chart: every game since the last summer-sized gap in the schedule, in a
+    few bytes each. `r` is W, L, OT or T; no `r` means it hasn't been played."""
+    games = sorted((g for g in schedule if g.get("state") != "postponed"), key=lambda g: g.get("start") or g.get("date") or "")
+    for i in range(len(games) - 1, 0, -1):
+        if _days(games[i - 1].get("date"), games[i].get("date")) > BREAK:
+            games = games[i:]
+            break
+
+    def entry(g: dict) -> dict:
+        res, (_, them, home) = result(g, abbr), _sides(g, abbr)
+        row = {"id": g["id"], "d": g.get("date"), "o": them["abbr"], "h": home}
+        return {**row, "r": res["code"], "u": res["us"], "t": res["them"], "x": res["outcome"]} if res else row
+    return [entry(g) for g in games]
+
+
 # ---- milestone watch -------------------------------------------------------------------------------
 # stat -> (round number step, how close counts, smallest target worth mentioning, who it applies to)
 MILESTONES = {
