@@ -153,6 +153,7 @@ How the app moves (what animates, what must hold still, timings, rules for new U
     re-ranks them (division, conference, league, wild card); standingsBody() draws any list of rows, so the real table
     and the pretend one share a renderer. Ties go points, fewer games, regulation wins, wins, goal difference: close to
     the NHL's order, not exact. Nothing is saved; picks stay in memory across mode switches until Close.
+- Headings: `Arena` is the same Big Shoulders as the digits, capitals and accented capitals only (4 KB, inlined next to `Score` in style.css), so h1, h2, `.group-title` and `.league-head` are uppercased by CSS and digits in them come from `Score`. To rebuild: `fonttools varLib.instancer "BigShouldersDisplay[wght].ttf" wght=800`, then `pyftsubset` the capitals as for `Score`, with `--layout-features=kern`, and keep the @font-face unicode-range matching the glyph list. A name in another script falls through to the system font.
 - Layout (2026-10-13 tidy-up): tabs Tonight / Pick'em / Wire / League (#/league = standings + your-team tiles;
   #/standings and #/teams route there). Admin is a link in Settings. Tonight: team cards replace the "Your teams"
   list; one banner slot (get-app/alerts first, else What's new). Cards use cardWatch() (app + have it); the full
