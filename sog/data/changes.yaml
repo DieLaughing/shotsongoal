@@ -5,9 +5,9 @@
 
 - date: 2026-11-02
   kind: new
-  title: Your team's score, everywhere
-  text: While one of your teams is playing, the score now stays on screen above the tab bar on every page, so you can read the Wire or make your picks without losing it. It lights up when anyone scores and takes you to the game when you tap it. Two of your teams on at once? Swipe between them. Spoiler-free games stay out of it.
-  link: "#/"
+  title: "The live dock: your team's score, everywhere"
+  text: While one of your teams is playing, the score now stays on screen above the tab bar on every page, so you can read the Wire or make your picks without losing it. It lights up when anyone scores and takes you to the game when you tap it. Two of your teams on at once? Swipe between them. Spoiler-free games stay out of it. Rather not have it? Turn off Show the live dock in Settings > Display and it's hidden on all your devices.
+  link: "#/settings"
 
 - date: 2026-11-02
   kind: new

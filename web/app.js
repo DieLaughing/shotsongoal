@@ -139,7 +139,7 @@ const WATCH_KEYS = [...GAME_KEYS, "/api/team"];      // where-to-watch lines on 
 const SETTING_DROPS = {
   favorites: ["/api/wire", "/api/myteams", "/api/happened", "/api/live"], local: WATCH_KEYS, country: WATCH_KEYS, services: WATCH_KEYS,
   spoilers: ["/api/hidden"], nickname: ["/api/pickem"],
-  notify: [], seen_changes: [], hand: [], odds: [], animations: [], marks: [], photos: [], accent: [], welcomed: [],
+  notify: [], seen_changes: [], hand: [], odds: [], dock: [], animations: [], marks: [], photos: [], accent: [], welcomed: [],
 };
 let settingsOnServer = null;   // the settings the copies were built with (from /api/me, then each save)
 
@@ -880,7 +880,7 @@ async function tonightView(date, quiet = false) {
     const b = e.target.closest("[data-hap]");
     if (!b || e.metaKey || e.ctrlKey || e.shiftKey) return;   // a new-tab click on a goal still gets a tab
     e.preventDefault();
-    if (b.dataset.hap === "recap") { const t = tiles.find(x => x.recap === b.dataset.clip); if (t) openClip(t.recap, [{ id: t.recap, who: "3-minute recap", when: "Final", score: `${t.game.away.score}–${t.game.home.score}`, team: t.game.home.abbr, url: `https://www.nhl.com/gamecenter/${encodeURIComponent(t.game.id)}` }]); }
+    if (b.dataset.hap === "recap") { const t = tiles.find(x => x.recap === b.dataset.clip); if (t) openClip(t.recap, gameFilms({ video: { recap: t.recap } }, t.game)); }
     else openClip(b.dataset.clip, tiles.filter(t => t.kind === "goal"));
   }, on);
   // One banner at a time: getting the app / alerts first, otherwise what's new.
@@ -2303,6 +2303,7 @@ function saveSettings(patch) {
   const body = JSON.stringify(ME.settings);
   settingsQueue = settingsQueue.then(() => api("/api/settings", { method: "PUT", body }))
     .then(() => toast("Saved ✓"), () => toast("Couldn't save. Check your connection and try again.", true));
+  if ("favorites" in patch || "dock" in patch) settingsQueue.then(syncDock);   // after the save: /api/live answers from it
   return settingsQueue;
 }
 
@@ -2423,6 +2424,8 @@ function settingsView() {
     <p class="help">Faces on player pages, leaders, rosters and the three stars. They're small and the app keeps them after the first look; turn them off for the leanest pages.</p>
     <div class="card checks"><label><input type="checkbox" id="odds" ${s.odds !== false ? "checked" : ""}>Show odds</label></div>
     <p class="help">Who's favoured to win and how many goals are expected, from DraftKings' lines. Just for fun: nothing here links to betting.</p>
+    <div class="card checks"><label><input type="checkbox" id="dock" ${s.dock !== false ? "checked" : ""}>Show the live dock</label></div>
+    <p class="help">The strip above the tab bar that keeps your teams' scores on screen while they play. Turn it off to hide it on all your devices. The goal horn still works.</p>
     <div class="card checks"><label><input type="checkbox" id="horn" ${hornOn() ? "checked" : ""}>Goal horn</label></div>
     <p class="help">Sounds a horn on this device when one of your teams scores while the app is open. You'll hear it once when you turn it on.</p>
     <div class="seg" role="group" aria-label="Buttons on touch screens">${[["right", "Right-handed"], ["left", "Left-handed"]].map(([k, l]) =>
@@ -2469,10 +2472,12 @@ function settingsView() {
     if (motionOn()) b.dataset.motion === "rise" ? rise() : slapshot(1);   // a taste of it
   }));
   document.getElementById("odds").addEventListener("change", e => saveSettings({ odds: e.target.checked }));
+  document.getElementById("dock").addEventListener("change", e => saveSettings({ dock: e.target.checked }));
   document.getElementById("photos").addEventListener("change", e => saveSettings({ photos: e.target.checked }));
   document.getElementById("horn").addEventListener("change", e => {   // this device only, like Rise or Slapshot
     try { localStorage.setItem("horn", e.target.checked ? "1" : "0"); } catch { /* stays off */ }
-    if (e.target.checked) import(`./horn.js${V}`).then(m => m.play()).catch(() => {});
+    syncDock();
+    if (e.target.checked) import(`./horn.js${V}`).then(m => { m.arm(); return m.play(); }).catch(() => {});
   });
   view.querySelectorAll("button[data-marks]").forEach(b => b.addEventListener("click", () => {
     saveSettings({ marks: b.dataset.marks });
@@ -2912,14 +2917,20 @@ async function compareView(a, b) {
   try {
     const m = await import(`./compare.js${V}`);
     if (location.hash !== page) return;
-    await m.show({ view, api, fast, esc, mark, photo, apart, teamName, fullName, leagueOf, shortDate, gameHref, backLink, failed, standings, spoilCover, hiddenToday, searchResults, playerSide, TEAM_KEY, teams: () => TEAMS, page: () => location.hash, playerHref }, a && decodeURIComponent(a), b && decodeURIComponent(b));
+    await m.show({ view, fast, esc, mark, photo, apart, teamName, fullName, leagueOf, shortDate, gameHref, backLink, standings, spoilCover, hiddenToday, searchResults, playerSide, TEAM_KEY, teams: () => TEAMS, page: () => location.hash, playerHref }, a && decodeURIComponent(a), b && decodeURIComponent(b));
   } catch (e) { view.innerHTML = failed(e); }
 }
 
 // The live dock's code comes down once the first page is up (web/dock.js).
 const hornOn = () => { try { return localStorage.getItem("horn") === "1"; } catch { return false; } };
+const dockOn = () => ME?.settings?.dock !== false;
 let dock = null;
-const loadDock = () => dock ||= import(`./dock.js${V}`).then(m => { m.start({ api, esc, mark, gameHref, spoilerHidden, motionOn, lamp, teamName, apart, onScreen, hornOn, favs, V, teams: () => TEAMS }); return m; }).catch(() => { dock = null; });
+const loadDock = () => dock ||= import(`./dock.js${V}`).then(m => { m.start({ api, esc, mark, gameHref, spoilerHidden, motionOn, lamp, teamName, apart, onScreen, hornOn, dockOn, favs, V, teams: () => TEAMS }); return m; }).catch(() => { dock = null; });
+// Hidden in Settings with no horn on this device, it isn't even downloaded.
+function syncDock() {
+  if (dock) dock.then(m => m?.refresh());
+  else if (dockOn() || hornOn()) loadDock();
+}
 
 function renderRoute() {
   clearTimeout(refreshTimer);
@@ -2994,7 +3005,7 @@ async function start() {
   route();
   if (ME.status === "approved" && !ME.settings.favorites?.length && !ME.settings.welcomed) openWelcome();  // a new friend
   setTimeout(() => { prefetch(); loadMorph(); }, 2500);  // the other tabs, quietly, once the first page is up
-  if (ME.status === "approved") setTimeout(loadDock, 1200);
+  if (ME.status === "approved") setTimeout(syncDock, 1200);
   setInterval(sendViews, 60000);
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 }

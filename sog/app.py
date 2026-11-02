@@ -242,6 +242,7 @@ async def save_settings(request: Request):
         "nickname": clean_name(body.get("nickname")),  # what friends see in Pick'em; empty = the email's first part
         "hand": "left" if body.get("hand") == "left" else "right",  # which side game buttons sit on touch screens
         "odds": body.get("odds") is not False,  # favourites and expected goals on games (Settings > Display); on by default
+        "dock": body.get("dock") is not False,  # the live dock (Settings > Display); on unless turned off
         "animations": body.get("animations") is not False,  # page transitions (Settings > Display); on unless turned off
         "marks": "badges" if body.get("marks") == "badges" else "logos",  # team marks: logos (default) or coloured badges
         "photos": body.get("photos") is not False,  # player photos (Settings > Display); on unless turned off

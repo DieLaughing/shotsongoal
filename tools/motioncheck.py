@@ -192,7 +192,8 @@ def compare_check(page) -> tuple[str, bool]:
 
 
 def dock_check(page) -> tuple[str, bool]:
-    """Your team on now: the strip shows on other pages, a goal lights the lamp, and it's gone on that game's own page."""
+    """Your team on now: the strip shows on other pages, a goal lights the lamp, it's gone on that game's own page, and
+    Settings hides it."""
     game = {"id": 2026020084, "league": "nhl", "date": "2026-10-11", "state": "live", "period": "2nd", "clock": "8:14", "intermission": False,
             "outcome": None, "start": None, "away": {"abbr": "BOS", "score": 1}, "home": {"abbr": "TOR", "score": 0}}
     page.route("**/api/live", lambda r: r.fulfill(json={"games": [game]}))
@@ -209,9 +210,18 @@ def dock_check(page) -> tuple[str, bool]:
         page.evaluate(f"location.hash = '#/game/{game['id']}'")
         page.wait_for_timeout(600)
         gone = not page.query_selector(".dock-item")
+        page.evaluate("location.hash = '#/wire'")
+        page.wait_for_selector(".dock-item", timeout=4000)
+        page.evaluate("location.hash = '#/settings'")
+        page.wait_for_selector("#dock")
+        page.uncheck("#dock")
+        page.wait_for_selector(".dock", state="hidden", timeout=3000)
+        hidden = page.evaluate("getComputedStyle(document.querySelector('.dock')).display") == "none" and not page.query_selector("body.has-dock")
+        page.check("#dock")
+        page.wait_for_selector(".dock-item", timeout=4000)
     finally:
         page.evaluate(settings, me)
-    return f"{shown}, then the lamp", shown.startswith("1") and gone
+    return f"{shown}, then the lamp, then hidden", shown.startswith("1") and gone and hidden
 
 
 PLAY = [(REPLAY_GAME, "story", story_check), ("#/team/BOS", "ribbon", ribbon_check), ("#/compare/BOS/TOR", "compare", compare_check), ("#/wire", "dock", dock_check), (REPLAY_GAME, "replay", replay_check), (REPLAY_GAME, "clip", clip_check), ("#/", "welcome", welcome_check), ("#/league", "what if", what_if_check), ("#/picks", "flick", flick_check)]

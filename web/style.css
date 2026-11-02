@@ -711,6 +711,7 @@ body.row-wheel .hap { scroll-snap-type: none; }   /* set by the first wheel turn
    Two games at once swipe sideways, with the next one showing at the edge. */
 .dock { position: absolute; left: 0; right: 0; bottom: 100%; display: flex; gap: 2px; overflow-x: auto; scroll-snap-type: x mandatory;
   scrollbar-width: none; box-shadow: 0 -1px 8px rgba(0, 0, 0, .22); }
+.dock[hidden] { display: none; }
 .dock::-webkit-scrollbar { display: none; }
 .dock.aside { opacity: 0; transform: translateY(8px); pointer-events: none; box-shadow: none; }
 @media (prefers-reduced-motion: no-preference) { .dock { transition: opacity 160ms ease, transform 160ms ease; } }

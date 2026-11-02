@@ -18,6 +18,7 @@ function item(g) {
 }
 // What's in the strip right now: not a game whose own page is open (the jumbotron has it), not one spoiler-free is hiding.
 function current() {
+  if (!ctx.dockOn()) return [];
   const now = Date.now();
   return games.filter(g => !ctx.spoilerHidden(g) && ctx.gameHref(g) !== location.hash
     && (g.state === "live" || now - (endedAt.get(g.id) ?? -Infinity) < KEEP_FINAL));
@@ -69,7 +70,7 @@ async function tick() {
   clearTimeout(timer);
   if (document.hidden) return;   // visibilitychange starts it again
   let live = false;
-  if (ctx.favs().size) {
+  if (ctx.favs().size && (ctx.dockOn() || ctx.hornOn())) {   // hidden, it still listens for the horn
     try {
       games = (await ctx.api("/api/live")).games;
       live = games.some(g => g.state === "live");
@@ -80,8 +81,13 @@ async function tick() {
       draw();
       games.forEach(celebrate);
     } catch { /* the next one will do */ }
-  } else if (shown) { games = []; draw(); }
+  } else {
+    goals.clear();
+    games = [];
+    if (shown) draw();
+  }
   const again = endedAt.size && [...endedAt.values()].some(t => Date.now() - t < KEEP_FINAL);
+  clearTimeout(timer);   // a refresh may have landed while this one waited
   timer = setTimeout(tick, (live || again ? LIVE_S : IDLE_S) * 1000);
 }
 
@@ -94,7 +100,8 @@ export function start(context) {
   addEventListener("scroll", onScroll, { passive: true });
   // After the page change, not during it: a tapped strip grows into the game's jumbotron, and has to still be there for that.
   addEventListener("hashchange", () => setTimeout(() => { if (games.length) draw(); }, 360));
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
+  // Coming back counts as a first look too: the horn isn't for a goal scored while the phone was in a pocket.
+  document.addEventListener("visibilitychange", () => { if (document.hidden) goals.clear(); else tick(); });
   if (ctx.hornOn()) import(`./horn.js${ctx.V}`).then(m => m.arm()).catch(() => {});
   tick();
 }
