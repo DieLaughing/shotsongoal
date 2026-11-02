@@ -705,7 +705,7 @@ body.bug-gone .top.tucked ~ #view .ministrip { transform: none; }
 .hap-sc { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .hap-film { position: relative; z-index: 1; align-self: flex-start; min-height: 28px; padding: 0 9px; border: 0; border-radius: 8px; background: rgba(255, 255, 255, .16); color: #fff; font-size: 12px; font-weight: 650; cursor: pointer; }
 @media (min-width: 800px) { .hap { margin: 0; padding: 0 0 4px; scroll-padding: 0; } }
-@media (hover: hover) and (pointer: fine) { .hap { scroll-snap-type: none; } }   /* snapping would pull small wheel steps back */
+body.row-wheel .hap { scroll-snap-type: none; }   /* set by the first wheel turn: snapping is for fingers */
 
 /* The live dock (web/dock.js): the score strip's look, on every page, riding on top of the tab bar so it folds with it.
    Two games at once swipe sideways, with the next one showing at the edge. */

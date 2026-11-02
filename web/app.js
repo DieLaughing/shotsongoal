@@ -758,29 +758,32 @@ function happenedRow(tiles) {
 // that's already scrolling the page carries on through (a row passing under the pointer doesn't catch it), and at either
 // end of the row the wheel goes back to the page.
 const PAGE_WHEEL_MS = 400;   // a wheel turn this soon after the last page scroll is still that same scroll
-let pageWheelAt = -Infinity, hapGoal = null;
+const WHEEL_GAIN = 3;        // a wheel notch is only ~50 px: this makes it about one tile
+const GLIDE_MS = 70;         // how quickly the row catches up with the wheel
+let pageWheelAt = -Infinity, hapGoal = null, hapPos = 0;
 addEventListener("wheel", e => { if (!e.target.closest?.(".hap")) pageWheelAt = e.timeStamp; }, { passive: true });
-function hapGlide(strip) {
-  requestAnimationFrame(() => {
-    const left = hapGoal - strip.scrollLeft;
+// Timed, not per frame, so it runs the same at any refresh rate; hapPos keeps the fractions a read of scrollLeft would round off.
+function hapGlide(strip, then) {
+  requestAnimationFrame(now => {
     if (hapGoal === null || !strip.isConnected) { hapGoal = null; return; }
-    if (Math.abs(left) < 4) { strip.scrollLeft = hapGoal; hapGoal = null; return; }
-    strip.scrollLeft += left * .28;
-    hapGlide(strip);
+    hapPos += (hapGoal - hapPos) * (1 - Math.exp(-Math.min(now - then, 50) / GLIDE_MS));
+    if (Math.abs(hapGoal - hapPos) < .5) { strip.scrollLeft = hapGoal; hapGoal = null; return; }
+    strip.scrollLeft = hapPos;
+    hapGlide(strip, now);
   });
 }
 function hapWheel(e) {
   if (e.ctrlKey || e.shiftKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;   // zooming, or already sideways: the browser's
   if (e.timeStamp - pageWheelAt < PAGE_WHEEL_MS) { pageWheelAt = e.timeStamp; return; }
   const strip = e.currentTarget, from = hapGoal ?? strip.scrollLeft;
-  const step = e.deltaY * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? strip.clientWidth : 1);   // Firefox counts a mouse wheel in lines
+  const step = e.deltaY * (e.deltaMode === 1 ? 18 : e.deltaMode === 2 ? strip.clientWidth / WHEEL_GAIN : 1) * WHEEL_GAIN;   // deltaMode 1: lines
   const to = Math.max(0, Math.min(strip.scrollWidth - strip.clientWidth, from + step));
   if (to === from) { if (hapGoal === null) pageWheelAt = e.timeStamp; return; }   // the end of the row: back to the page
   e.preventDefault();
+  document.body.classList.add("row-wheel");   // snapping would pull every step back (on <body>: a refresh can't undo it)
   if (!motionOn()) { strip.scrollLeft = to; return; }
-  const idle = hapGoal === null;
+  if (hapGoal === null) { hapPos = strip.scrollLeft; hapGlide(strip, e.timeStamp); }
   hapGoal = to;
-  if (idle) hapGlide(strip);
 }
 
 function heroes(data, leagues, slateGames) {
