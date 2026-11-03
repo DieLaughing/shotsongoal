@@ -339,12 +339,18 @@ function gameCard(g, fav) {
   const lost = side => done && a.score != null && h.score != null && side.score < (side === a ? h.score : a.score) ? " lost" : "";
   const sc = t => g.state === "pre" || g.state === "postponed" || hide ? "" : `<span class="sc" data-sc="${g.id}${t === a ? "a" : "h"}">${t.score ?? ""}</span>`;
   const isFav = fav.has(a.abbr) || fav.has(h.abbr);
+  // A one-word name of 12+ letters ("Massachusetts") gets a smaller size on a tile, where two share a phone's width.
+  const nm = t => { const n = t.name || teamName(t.abbr); return `<span class="nm${/\S{12,}/.test(n) ? " long" : ""}">${rankTag(t)}${esc(n)}</span>`; };
+  // On Tonight's tiles (.slate) the card is painted in your team's colour, or the home team's, with its code big and
+  // faint behind. The list look ignores both.
+  const own = fav.has(a.abbr) && !fav.has(h.abbr) ? a.abbr : h.abbr, t = TEAMS[own] || {};
   // The watch line sits outside the game link so its own link (ESPN+, NESN 360...) can be tapped.
-  return `<div class="game${isFav ? " fav" : ""}">
+  return `<div class="game${isFav ? " fav" : ""}${t.light ? " light" : ""}" style="--c:${esc(t.color || "#3a3f47")}">
+    <span class="ghost" aria-hidden="true">${esc((t.code || own).slice(0, 4))}</span>
     <a class="body" href="${gameHref(g)}">
-      <div class="team-line${lost(a)}">${mark(a.abbr)}<span class="nm">${rankTag(a)}${esc(a.name || teamName(a.abbr))}</span>${sc(a)}</div>
+      <div class="team-line${lost(a)}">${mark(a.abbr)}${nm(a)}${sc(a)}</div>
       ${hide ? `<div class="status"><div class="t">🙈 Hidden</div></div>` : statusCell(g)}
-      <div class="team-line${lost(h)}">${mark(h.abbr)}<span class="nm">${rankTag(h)}${esc(h.name || teamName(h.abbr))}</span>${sc(h)}</div>
+      <div class="team-line${lost(h)}">${mark(h.abbr)}${nm(h)}${sc(h)}</div>
     </a>
     ${cardWatch(g.watch, g)}${oddsLine(g)}${watchersLine(g)}
   </div>`;
@@ -462,6 +468,9 @@ function housePicker() {
       `<button type="button" role="radio" aria-checked="${k === L}" data-house="${k}"><i aria-hidden="true"></i>${l}</button>`).join("")}</div></div>`;
 }
 
+// How Tonight draws its games, per device: "tiles" (team-colour cards, default) or "list" (the compact rows). Pure CSS
+// on html[data-cards], set before the first paint by index.html, so switching redraws nothing.
+const cardsAs = () => { try { return localStorage.getItem("cards") === "list" ? "list" : "tiles"; } catch { return "tiles"; } };
 const navAt = () => { try { return localStorage.getItem("navAt") === "bottom" ? "bottom" : "top"; } catch { return "top"; } };
 function applyNavAt() {
   document.documentElement.dataset.nav = navAt();
@@ -801,24 +810,19 @@ function heroCard(c, live) {
   const g = live || c.next;
   const t = TEAMS[c.abbr] || {};
   const side = g && (g.home.abbr === c.abbr ? { us: g.home, them: g.away, at: "vs" } : { us: g.away, them: g.home, at: "at" });
-  let kicker = "No games scheduled", right = "", acts = "";
+  let kicker = "No games scheduled", acts = "";
   const hide = spoilerHidden(g);
   if (g) {
     const today = g.date === myTeams.data?.date;
     if (hide) {
       kicker = "Spoiler-free";
-      right = `<b class="hero-sc">🙈</b><span>Score hidden</span>`;
       acts = spoilButton("peek", g, "Show score") + spoilButton("seen", g, "I've seen it");
     } else if (g.state === "live") {
       kicker = "Live now";
-      right = `<b class="hero-sc"><span data-sc="${g.id}u">${side.us.score ?? 0}</span>–<span data-sc="${g.id}t">${side.them.score ?? 0}</span></b><span>${esc(g.intermission ? `${g.period} INT` : `${g.period} ${g.clock || ""}`)}</span>`;
     } else if (g.state === "final") {
-      const won = side.us.score > side.them.score, extra = g.outcome && !["REG", "T"].includes(g.outcome);
       kicker = "Final tonight";
-      right = `<b class="hero-sc">${side.us.score === side.them.score ? "T" : won ? "W" : extra && !isCollege(g.league) ? "OTL" : "L"} ${side.us.score}–${side.them.score}</b>${extra ? `<span>${esc(g.outcome)}</span>` : ""}`;
     } else {
       kicker = today ? "Tonight" : `Next game · ${shortDate(g.date)}`;
-      right = `<b class="hero-sc">${g.start ? esc(time(g.start)) : "TBD"}</b>`;
     }
     if (!hide && today && g.state !== "final" && g.state !== "postponed") {
       acts = spoilerMarked(g) ? `<span class="chip">🙈 Spoiler-free on</span>` : spoilButton("later", g, "🙈 Watching later");
@@ -842,16 +846,44 @@ function heroCard(c, live) {
     c.milestones?.length ? c.milestones.map(m => `<div>🎯 ${esc(m.text)}</div>`).join("") : "",
     c.after?.length ? `<div><b>Then</b> ${c.after.map(a => `${a.home ? "vs" : "at"} ${esc(TEAMS[a.opp]?.code || a.opp)} ${esc(shortDate(a.date).split(",")[0])}`).join(" · ")}</div>` : "",
   ].join("");
-  return `<div class="hero${t.light ? " light" : ""}" style="--c:${esc(t.color || "#333")}">
+  return `<div class="hero${t.light ? " light" : ""}" style="--c:${esc(t.color || "#333")};--pop:${esc(t.light ? t.color : "#fff")}">
+    <span class="ghost" aria-hidden="true">${esc((t.code || c.abbr).slice(0, 4))}</span>
     <a class="hero-top" href="${g ? gameHref(g) : `#/team/${encodeURIComponent(c.abbr)}`}">
-      <div class="hero-k">${esc(teamName(c.abbr))} · ${esc(kicker)}</div>
-      <div class="hero-m">${mark(c.abbr)}${side ? `<span>${side.at}</span>${mark(side.them.abbr)}<span class="hero-opp">${esc(teamName(side.them.abbr))}</span>` : ""}
-        <span class="hero-r">${right}</span></div>
+      <div class="hero-k">${esc(kicker)}</div>
+      <div class="hero-t">${esc(heroTitle(c.abbr, g, side, hide))}</div>
+      ${side ? heroBoard(g, side, hide) : ""}
     </a>
     ${chips ? `<div class="hero-chips">${chips}</div>` : ""}
     ${lines ? `<div class="hero-lines">${lines}</div>` : ""}
     ${acts ? `<div class="hero-acts">${acts}</div>` : ""}
   </div>`;
+}
+
+// The team card's headline, in words: "Bruins lead Golden Knights", "Bruins fall to Kings in OT".
+function heroTitle(abbr, g, side, hide) {
+  const us = teamName(abbr);
+  if (!side) return us;
+  const them = teamName(side.them.abbr), a = side.us.score ?? 0, b = side.them.score ?? 0;
+  if (hide || !["live", "final"].includes(g.state)) return `${us} ${side.at} ${them}`;
+  if (g.state === "live") return a > b ? `${us} lead ${them}` : a < b ? `${us} trail ${them}` : `${us} and ${them} tied`;
+  const extra = { OT: " in OT", SO: " in a shootout" }[g.outcome] || (g.outcome && !["REG", "T"].includes(g.outcome) ? ` in ${g.outcome}` : "");
+  return a > b ? `${us} beat ${them}${extra}` : a < b ? `${us} fall to ${them}${extra}` : `${us} tie ${them}`;
+}
+// The scoreboard panel inside the team card: your team on the left, always dark, like the jumbotron. While a game is
+// on and the league gives shots, a bar under it splits them.
+function heroBoard(g, side, hide) {
+  const code = abbr => esc(TEAMS[abbr]?.code || abbr);
+  const played = !hide && ["live", "final"].includes(g.state);
+  const team = (s, k) => `<div class="hb-side">${played ? `<b class="hb-sc${k === "u" ? " us" : ""}" data-sc="${g.id}${k}">${s.score ?? 0}</b>` : mark(s.abbr, true)}<span>${code(s.abbr)}</span></div>`;
+  const mid = hide ? `<span class="hb-k">🙈</span><span>Score hidden</span>`
+    : g.state === "live" ? `<span class="live">LIVE</span><span>${esc(g.intermission ? `${g.period} INT` : `${g.period} ${g.clock || ""}`)}</span>`
+    : g.state === "final" ? `<span class="hb-k">Final</span>${g.outcome && !["REG", "T"].includes(g.outcome) ? `<span>${esc(g.outcome)}</span>` : ""}`
+    : g.state === "postponed" ? `<span class="hb-k">Postponed</span>` : `<b class="hb-time">${g.start ? esc(time(g.start)) : "TBD"}</b>`;
+  const su = side.us.sog, st = side.them.sog;
+  const shots = !hide && g.state === "live" && su != null && st != null && su + st > 0
+    ? `<div class="hb-shots" role="img" aria-label="Shots ${su} to ${st}"><div><span>${su}</span><span>Shots</span><span>${st}</span></div>
+        <div class="hb-bar"><i style="flex:${su}"></i><i style="flex:${st}"></i></div></div>` : "";
+  return `<div class="hero-board"><div class="hb-row">${team(side.us, "u")}<div class="hb-mid">${mid}</div>${team(side.them, "t")}</div>${shots}</div>`;
 }
 
 // This just happened: a swipeable row of your teams' latest goals, each with its clip, then the finals since yesterday.
@@ -925,6 +957,32 @@ function foldIsOpen(league, page = "") {
   return LEAGUE !== "both";
 }
 
+// Tonight's heading: the day in a word ("Tonight", "Tomorrow", "Saturday") in big Arena capitals, the date over it,
+// a line on what's on under it, and the arrows to step a day.
+function dayHead(day, games) {
+  let word = "Games", kick = "", sum = "";
+  if (day.date) {
+    const [y, m, d] = day.date.split("-").map(Number), date = new Date(y, m - 1, d);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const diff = Math.round((date - today) / 86400000);
+    const full = date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }).replace(", ", " · ");
+    word = { 0: "Tonight", 1: "Tomorrow", [-1]: "Yesterday" }[diff] || date.toLocaleDateString(undefined, { weekday: "long" });
+    kick = diff >= -1 && diff <= 1 ? full : date.toLocaleDateString(undefined, { month: "long", day: "numeric", year: date.getFullYear() === today.getFullYear() ? undefined : "numeric" });
+  }
+  if (games.length) {
+    const n = st => games.filter(g => g.state === st).length, live = n("live"), done = n("final");
+    const first = games.filter(g => g.state === "pre" && g.start).map(g => g.start).sort()[0];
+    sum = [`${games.length} game${games.length > 1 ? "s" : ""}`,
+      live ? `<span class="live">${live} live</span>` : "",
+      done === games.length ? "All final" : done ? `${done} final` : "",
+      !live && !done && first ? `First at ${esc(time(first))}` : ""].filter(Boolean).join(`<span aria-hidden="true">·</span>`);
+  }
+  const arrow = (to, label, glyph) => to ? `<a href="#/day/${to}" aria-label="${label}">${glyph}</a>` : `<span></span>`;
+  return `<div class="dayhead"><div class="dh-top"><div class="dh-k">${esc(kick)}</div>
+      <div class="dh-arrows">${arrow(day.prev, "Previous day", "←")}${arrow(day.next, "Next day", "→")}</div></div>
+    <h1>${esc(word)}${day.date ? "." : ""}</h1>${sum ? `<div class="dh-sum">${sum}</div>` : ""}</div>`;
+}
+
 async function tonightView(date, quiet = false) {
   setNav("tonight");
   if (!quiet) { showLoading(`Loading games…`); heroAt = 0; }
@@ -945,7 +1003,7 @@ async function tonightView(date, quiet = false) {
   }
   const fav = favs();
   const order = g => ({ live: 0, pre: 1, postponed: 2, final: 3 }[g.state] ?? 1);
-  const section = (title, list) => list.length ? `<h2>${title}</h2><div class="card">${list.map(g => gameCard(g, fav)).join("")}</div>` : "";
+  const section = (title, list) => list.length ? `<h2>${title}</h2><div class="card slate">${list.map(g => gameCard(g, fav)).join("")}</div>` : "";
   // Games of teams with a card up top aren't listed again below it.
   const carded = new Set(date ? [] : (mineData?.teams || []).filter(c => leagues.includes(c.league)).map(c => c.abbr));
   const slate = (day, league) => {
@@ -969,14 +1027,10 @@ async function tonightView(date, quiet = false) {
     prev: days.map(d => d.prev).filter(Boolean).sort().pop(), next: days.map(d => d.next).filter(Boolean).sort()[0] };
   paint(`
     <div id="getapp">${BANNER}</div>
+    ${dayHead(day, days.flatMap(d => d.games || []))}
     ${heroes(mineData, leagues, days.flatMap(d => d.games || []))}
     ${(n => n ? `<div class="spoil-note">🙈 Spoiler-free: ${n} game${n > 1 ? "s" : ""} hidden. Open one to reveal it when you've watched.</div>` : "")(days.flatMap(d => d.games || []).filter(spoilerHidden).length)}
     ${happenedRow(tiles)}
-    <div class="daybar">
-      ${day.prev ? `<a href="#/day/${day.prev}" aria-label="Previous day">←</a>` : "<span></span>"}
-      <h1>${esc(day.date ? dayTitle(day.date) : "Games")}</h1>
-      ${day.next ? `<a href="#/day/${day.next}" aria-label="Next day">→</a>` : "<span></span>"}
-    </div>
     ${days.map((d, i) => slate(d, leagues[i])).join("")}`, quiet);
   const on = listen();
   view.addEventListener("toggle", e => {
@@ -2554,6 +2608,9 @@ function settingsView() {
     <div class="seg" role="group" aria-label="Menu bar">${[["top", "Menu bar on top"], ["bottom", "At the bottom"]].map(([k, l]) =>
       `<button data-navat="${k}" class="${navAt() === k ? "on" : ""}">${l}</button>`).join("")}</div>
     <p class="help">Where the menu bar sits on a phone, on this device. At the bottom it's under your thumb, and the menu reads up from it on your hand's side. Wide screens always have it on top.</p>
+    <div class="seg" role="group" aria-label="Games on Tonight">${[["tiles", "Team-colour cards"], ["list", "Compact list"]].map(([k, l]) =>
+      `<button data-cards="${k}" class="${cardsAs() === k ? "on" : ""}">${l}</button>`).join("")}</div>
+    <p class="help">How Tonight shows the games, on this device. Cards are painted in your team's colour, or the home team's; the list fits more on a screen.</p>
     <div class="card pad">${housePicker()}</div>
     <p class="help">How bright the app is, on this device. Auto follows your phone's light or dark setting; Lights out is true black. Also in the menu.</p>
 
@@ -2604,6 +2661,11 @@ function settingsView() {
     try { localStorage.setItem("navAt", b.dataset.navat); } catch { /* fine */ }
     document.querySelectorAll("[data-navat]").forEach(x => x.classList.toggle("on", x === b));
     applyNavAt();
+  }));
+  document.querySelectorAll("button[data-cards]").forEach(b => b.addEventListener("click", () => {
+    try { localStorage.setItem("cards", b.dataset.cards); } catch { /* fine */ }
+    document.querySelectorAll("button[data-cards]").forEach(x => x.classList.toggle("on", x === b));
+    document.documentElement.dataset.cards = b.dataset.cards;
   }));
   view.querySelectorAll("button[data-marks]").forEach(b => b.addEventListener("click", () => {
     saveSettings({ marks: b.dataset.marks });

@@ -19,14 +19,15 @@
   <link rel="manifest" href="manifest.webmanifest?v=4">
   <link rel="icon" href="icons/icon.svg?v=3" type="image/svg+xml">
   <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=4">
-  <!-- Before the first paint: House lights (light or dark, and which shade) and where the menu bar sits, both per device
-       (web/app.js applyLights, applyNavAt), so the app never flashes the wrong look. -->
+  <!-- Before the first paint: House lights (light or dark, and which shade), where the menu bar sits and how Tonight's
+       games are drawn, all per device (web/app.js applyLights, applyNavAt, cardsAs), so the app never flashes the wrong look. -->
   <script>try { var d = document.documentElement, L = localStorage.getItem("lights") || "auto";
     var c = { day: "#f5f6f8", dusk: "#d5dae1", night: "#0e1116", out: "#000000" }[L];
     if (!c) L = "auto";
     var dark = L === "night" || L === "out" || (L === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
     d.dataset.scheme = dark ? "dark" : "light"; d.dataset.lights = L;
     d.dataset.nav = localStorage.getItem("navAt") === "bottom" ? "bottom" : "top";
+    d.dataset.cards = localStorage.getItem("cards") === "list" ? "list" : "tiles";
     if (c) document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) { m.content = c; });
   } catch (e) { document.documentElement.dataset.scheme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"; }</script>
   <link rel="stylesheet" href="style.css">

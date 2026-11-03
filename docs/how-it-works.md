@@ -73,6 +73,17 @@ How the app moves (what animates, what must hold still, timings, rules for new U
 - "Your team" cards (top of Tonight, default slate only): /api/myteams -> sog/home.py team_summary per favourite from
   the cached team schedule + standings (latest season only: a 60-day gap splits seasons; off-season = last season's
   place, no streak/week). Cards tinted with the team colour; live/final state comes from the slate. Kept 5 min client-side.
+  Each card (heroCard) has the team's code huge and faint behind it (.ghost), a headline in words (heroTitle: lead /
+  trail / tied, beat / fall to, "at"/"vs" before puck drop) and an always-dark scoreboard (heroBoard: your team left, its
+  score in its colour when that's bright (--pop), a shots bar while live when the league gives shots, no scores at all
+  for a spoiler-free game).
+- Tonight's heading (dayHead): the day in a word ("Tonight.", "Tomorrow.", a weekday) in Arena, the date over it, a
+  line of counts under it (games, live, final, or the first puck drop) and the day arrows.
+- Game tiles (Tonight's slates, `.card.slate`): gameCard() draws the same markup for both looks; html[data-cards]
+  (per device, localStorage `cards`, set before the first paint by index.html, Settings > Display) picks the CSS.
+  Tiles (default): two to a row on a phone, auto-fill from 700 px, each painted in your team's colour or the home
+  team's (--c, .light = dark ink) with its code behind. A one-word name of 12+ letters gets `.long` (smaller). List =
+  the compact rows. Team pages keep the rows either way.
 - Spoiler-free: settings.spoilers {teams, games, seen} (game keys <league>:<id>: nhl, pwhl, ncaam, ncaaw), rules in sog/spoilers.py,
   mirrored by spoilerHidden() in web/app.js; /api/hidden lists them for pages. Started games from today/yesterday
   only. Hidden = no score on cards/hero, game page cover, Standings/team page covered when a hidden game is final, Wire items about it after puck drop

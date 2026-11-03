@@ -29,6 +29,7 @@ How the two apps move. This file is identical in both repos: change it in both i
 | Menu (Shots on Goal) | Opening: the menu fades in and its pages rise 14 px into place, 30 ms apart; the button's two lines turn into a cross. Closing: fades out. The page under it holds still and can't scroll | Fade in 200 ms, rise 300 ms `cubic-bezier(.2, .9, .3, 1)`, fade out 160 ms, lines 200 ms |
 | Menu bar (Shots on Goal) | Scrolling down slides it off its edge (up, or down when it's at the bottom); any scroll up brings it back | 200 ms |
 | House lights (Shots on Goal) | The page changes colour at once; only the puck on the ruler cross-fades | 160 ms |
+| Game cards / list (Shots on Goal) | Settings > Display swaps Tonight between team-colour cards and the compact list at once, no motion | none |
 | Live dock (Shots on Goal) | It appears and leaves with no slide. It fades aside while the game's own card is on screen. The lamp sweeps it on a goal | 160 ms, opacity and 8 px |
 | What if? (Shots on Goal) | Table rows glide to their new places, whole pixels, even between tables | 340 ms `cubic-bezier(.3, 1.2, .5, 1)` |
 | Flick your picks (Shots on Goal) | The puck follows the finger, then flies to the picked logo; too small a flick springs back; the next game fades in | Fly 260 ms, spring back 260 ms `cubic-bezier(.3, 1.4, .5, 1)`, fade 200 ms |

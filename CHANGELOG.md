@@ -5,6 +5,7 @@ This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit th
 
 ## November 3, 2026
 
+- **New: Tonight, in team colours.** Tonight opens with the day in big letters and what's on (how many games, how many live). Your team's card now says what's happening in words, like "Bruins lead Golden Knights", over a scoreboard with the shots while they play. Every other game is its own card in your team's colour or the home team's, two to a row on a phone. Rather have the compact list? Settings > Display > Compact list, on this device.
 - **New: A new menu bar, and House lights.** The tab bar and top bar are now one menu bar floating at the top. It shows your team's score while they play (or the league and day), the goal horn switch, and a menu button that opens every page in big jumbotron letters, with the league switch and House lights. House lights picks how bright the app is on this device: Auto (follows your phone), Day game, Dusk, Night or Lights out (true black). Rather have the bar under your thumb? Settings > Display > At the bottom. On a computer the main pages sit right in the bar.
 
 ## November 2, 2026

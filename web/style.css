@@ -193,9 +193,10 @@ h2 { font-size: 17px; line-height: 1.15; letter-spacing: .03em; color: var(--mut
 .heroes { display: flex; gap: 10px; margin: 12px 0 2px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
 .heroes::-webkit-scrollbar { display: none; }
 .hero {
-  flex: 0 0 100%; scroll-snap-align: start; border-radius: 16px; padding: 14px 14px 12px; display: grid; gap: 10px;
+  position: relative; overflow: hidden; isolation: isolate; flex: 0 0 100%; scroll-snap-align: start; border-radius: 30px;
+  padding: 20px 18px 16px; display: grid; gap: 12px; align-content: start;
   --ink: #fff; --wash: rgba(255, 255, 255, .14); --ring: rgba(255, 255, 255, .6);
-  color: var(--ink); background: linear-gradient(135deg, var(--c) 0%, color-mix(in srgb, var(--c) 62%, #000) 100%);
+  color: var(--ink); background: linear-gradient(160deg, var(--c) 0%, color-mix(in srgb, var(--c) 72%, #000) 100%);
 }
 .heroes.many .hero { flex-basis: 90%; }
 /* Phones: dots under the swipeable cards, so a second card is never a secret. */
@@ -209,15 +210,33 @@ h2 { font-size: 17px; line-height: 1.15; letter-spacing: .03em; color: var(--mut
   .hero-dots { display: none; }
 }
 .hero.light { --ink: #111; --wash: rgba(0, 0, 0, .1); --ring: rgba(0, 0, 0, .4);
-  background: linear-gradient(135deg, var(--c) 0%, color-mix(in srgb, var(--c) 82%, #000) 100%); }
-.hero-top { text-decoration: none; color: inherit; display: grid; gap: 8px; }
-.hero-k { font-size: 11px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; opacity: .85; }
-.hero-m { display: flex; align-items: center; gap: 8px; font-weight: 700; min-width: 0; }
-.hero-m .mark { box-shadow: 0 0 0 1.5px var(--ring); }
-.hero-opp { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.hero-r { margin-left: auto; display: grid; justify-items: end; line-height: 1.15; flex: none; }
-.hero-r > span { font-size: 12px; opacity: .85; }
-.hero-sc { font: 800 28px/1 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  background: linear-gradient(160deg, var(--c) 0%, color-mix(in srgb, var(--c) 85%, #000) 100%); }
+/* A team's code, huge and faint, behind its card (hero cards, and game tiles on Tonight). */
+.ghost { position: absolute; z-index: -1; left: -.04em; bottom: -.27em; font: 900 136px/1 Arena, Score, system-ui, sans-serif;
+  color: currentColor; opacity: .12; pointer-events: none; user-select: none; white-space: nowrap; }
+.game .ghost { display: none; }
+.hero-top { text-decoration: none; color: inherit; display: grid; gap: 6px; }
+.hero-k { font-size: 11px; font-weight: 750; letter-spacing: .16em; text-transform: uppercase; opacity: .85; }
+.hero-t { font: 800 32px/1.02 Arena, Score, system-ui, sans-serif; text-transform: uppercase; letter-spacing: .01em; padding-bottom: 2px;
+  text-wrap: balance; overflow-wrap: anywhere; }
+/* The scoreboard panel inside the card: always dark, your team on the left, its score in its colour when that's bright. */
+.hero-board { margin-top: 8px; background: #111317; color: #fff; border-radius: 20px; padding: 14px 16px; display: grid; gap: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .25); }
+.hb-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
+.hb-side { display: grid; justify-items: center; gap: 5px; }
+.hb-side > span { font-size: 12px; font-weight: 700; letter-spacing: .16em; }
+.hb-side .mark { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .5); }
+.hb-sc { font: 900 60px/.9 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.hb-sc.us { color: var(--pop); }
+.hb-mid { display: grid; justify-items: center; gap: 4px; font-size: 13px; color: #b9c0ca; text-align: center; font-variant-numeric: tabular-nums; }
+.hb-mid .live { color: #ff6b7a; letter-spacing: .14em; }
+.hb-k { font-size: 11px; font-weight: 750; letter-spacing: .18em; text-transform: uppercase; color: #fff; }
+.hb-time { font: 800 26px/1 Score, system-ui, sans-serif; color: #fff; white-space: nowrap; }
+.hb-shots > div:first-child { display: flex; justify-content: space-between; font-size: 12px; color: #b9c0ca; font-variant-numeric: tabular-nums; }
+.hb-shots > div:first-child span:nth-child(2) { letter-spacing: .18em; text-transform: uppercase; }
+.hb-bar { display: flex; gap: 4px; height: 6px; margin-top: 6px; }
+.hb-bar i { border-radius: 3px; background: #6b7480; min-width: 4px; }
+.hb-bar i:first-child { background: var(--pop); }
 .hero-chips { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; }
 .hero .chip { font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 7px; background: var(--wash); }
 .hero .chip.strong { background: var(--ink); color: var(--c); text-decoration: none; }
@@ -342,6 +361,54 @@ h2 { font-size: 17px; line-height: 1.15; letter-spacing: .03em; color: var(--mut
 .live { color: var(--red); font-weight: 750; font-size: 12px; letter-spacing: .03em; }
 .live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--red); margin-right: 5px; animation: pulse 1.4s infinite; vertical-align: 1px; }
 @keyframes pulse { 50% { opacity: .3; } }
+
+/* Tonight's heading: the day in a word, big, the date over it and what's on under it. */
+.dayhead { margin: 14px 2px 8px; }
+.dh-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+.dh-k { font-size: 12px; font-weight: 650; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+.dh-arrows { display: flex; gap: 8px; flex: none; }
+.dh-arrows > * { width: 44px; height: 44px; }
+.dh-arrows a { display: grid; place-items: center; border-radius: 22px; background: var(--surface); border: 1px solid var(--border);
+  text-decoration: none; color: var(--text); font-weight: 700; font-size: 18px; }
+.dayhead h1 { font-size: clamp(48px, 17vw, 88px); line-height: .95; margin: 2px 0 6px; padding-bottom: 2px; letter-spacing: -.005em; }
+.dh-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 14.5px; color: var(--muted); }
+.dh-sum .live { font-size: inherit; letter-spacing: 0; }
+
+/* Game tiles (Tonight, Settings > Display > Team-colour cards, html[data-cards]): each game a rounded card in your team's
+   colour or the home team's (--c), its code faint behind; .light = dark ink on a bright colour. The list look is the
+   plain rows above. */
+:root:not([data-cards="list"]) .slate { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
+  background: none; border: 0; border-radius: 0; overflow: visible; }
+@media (max-width: 340px) { :root:not([data-cards="list"]) .slate { grid-template-columns: minmax(0, 1fr); } }
+@media (min-width: 700px) { :root:not([data-cards="list"]) .slate { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; } }
+:root:not([data-cards="list"]) .slate .game { position: relative; overflow: hidden; isolation: isolate; border: 0; border-radius: 24px;
+  padding: 14px 14px 12px; min-height: 150px; display: flex; flex-direction: column; box-shadow: none;
+  --ink: #fff; --ring: rgba(255, 255, 255, .55); color: var(--ink);
+  background: linear-gradient(160deg, var(--c), color-mix(in srgb, var(--c) 70%, #000)); }
+:root:not([data-cards="list"]) .slate .game.light { --ink: #111; --ring: rgba(0, 0, 0, .35);
+  background: linear-gradient(160deg, var(--c), color-mix(in srgb, var(--c) 85%, #000)); }
+:root[data-scheme="dark"]:not([data-cards="list"]) .slate .game { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+:root:not([data-cards="list"]) .slate .ghost { display: block; font-size: 96px; }
+:root:not([data-cards="list"]) .slate .body { display: flex; flex-direction: column; align-items: stretch; gap: 6px; flex: 1; color: inherit; }
+:root:not([data-cards="list"]) .slate .status { order: -1; grid-row: auto; min-width: 0; text-align: left; color: inherit;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 11px; margin-bottom: 2px; }
+:root:not([data-cards="list"]) .slate .status .t { font: 800 16px/1.1 Score, system-ui, sans-serif; color: inherit; }
+:root:not([data-cards="list"]) .slate .status .live { background: var(--ink); color: var(--c); padding: 2px 8px 2px 7px; border-radius: 999px;
+  font-size: 10.5px; letter-spacing: .08em; }
+:root:not([data-cards="list"]) .slate .sit { color: inherit; opacity: .85; margin: 0; }
+:root:not([data-cards="list"]) .slate .team-line { gap: 8px; }
+:root:not([data-cards="list"]) .slate .mark { width: 28px; height: 20px; font-size: 10px; box-shadow: 0 0 0 1.5px var(--ring); }
+:root:not([data-cards="list"]) .slate .team-line .nm { font: 800 19px/1 Arena, Score, system-ui, sans-serif; text-transform: uppercase;
+  letter-spacing: .01em; white-space: normal; text-overflow: clip; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  padding-bottom: 1px; color: inherit; }
+:root:not([data-cards="list"]) .slate .team-line .nm.long { font-size: 15px; overflow-wrap: anywhere; }
+:root:not([data-cards="list"]) .slate .team-line .sc { font-size: 26px; color: inherit; min-width: 0; }
+:root:not([data-cards="list"]) .slate .team-line.lost .nm, :root:not([data-cards="list"]) .slate .team-line.lost .sc { color: inherit; opacity: .55; font-weight: 800; }
+:root:not([data-cards="list"]) .slate .rk { color: inherit; opacity: .75; }
+:root:not([data-cards="list"]) .slate :is(.watch, .odds, .watchers) { color: inherit; opacity: .9; font-size: 11.5px; margin-top: 6px; gap: 2px 6px; }
+:root:not([data-cards="list"]) .slate .watch :is(.app, a.app, .ok, .no) { color: inherit; }
+:root:not([data-cards="list"]) .slate .watch .no { opacity: .75; }
+:root:not([data-cards="list"]) .slate .upset { color: inherit; }
 
 /* where to watch */
 .watch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
@@ -766,7 +833,7 @@ body.bug-gone .top.tucked ~ #view .ministrip { transform: none; }
   scrollbar-width: none; overscroll-behavior-x: contain; }
 .hap::-webkit-scrollbar { display: none; }
 .hap-t { flex: 0 0 158px; min-height: 92px; position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; padding: 10px 12px;
-  scroll-snap-align: start; border-radius: 12px; overflow: hidden; color: #fff; text-decoration: none;
+  scroll-snap-align: start; border-radius: 20px; overflow: hidden; color: #fff; text-decoration: none;
   background: linear-gradient(101deg, color-mix(in srgb, var(--a) 62%, #0a0d12) 50%, color-mix(in srgb, var(--h) 62%, #0a0d12) 50%); }
 .hap-k { font-size: 11.5px; font-weight: 650; color: rgba(255, 255, 255, .8); white-space: nowrap; }
 .hap-who { font: 800 21px/1.05 Arena, Score, system-ui, sans-serif; text-transform: uppercase; letter-spacing: .012em; overflow-wrap: anywhere; }
@@ -806,7 +873,6 @@ body.row-wheel .hap { scroll-snap-type: none; }   /* set by the first wheel turn
 .lamp::before { content: ""; position: absolute; left: 50%; top: 50%; width: 200vmax; height: 200vmax; margin: -100vmax 0 0 -100vmax;
   background: conic-gradient(rgba(255, 36, 60, 0) 0 8%, rgba(255, 36, 60, .85) 20%, rgba(255, 170, 170, .95) 22%, rgba(255, 36, 60, .85) 24%, rgba(255, 36, 60, 0) 40% 58%, rgba(255, 36, 60, .85) 70%, rgba(255, 170, 170, .95) 72%, rgba(255, 36, 60, .85) 74%, rgba(255, 36, 60, 0) 90%); }
 .game, .hero, .shotcard { position: relative; }
-.hero-sc [data-sc] { display: inline-block; }
 /* A goal's actions, side by side: watch it, then react to it. */
 .ev-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
 .ev-acts .rxs { margin-top: 0; }
