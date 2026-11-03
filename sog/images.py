@@ -132,10 +132,24 @@ class Images:
         return await self._cached(folder / f"{name}-{LOGO_SIZE}.webp", LOGO_TTL, make)
 
 
+# Dark-background logos apply under html[data-scheme="dark"] (House lights, set by the app before the first paint), not
+# the phone's own setting: someone can pick Night on a light phone. The file names changed with that, so a copy built
+# the old way (an @media rule) is never served again.
+LOGOS_FILE, COLLEGE_LOGOS_FILE = "logos-v2.css", "college-logos-v2.css"
+
+
+def _dark(sel: str, body: str) -> str:
+    return ",".join(f':root[data-scheme="dark"] {x}' for x in sel.split(",")) + "{" + body + "}"
+
+
+def _sheet(light: list[str], dark: list[str]) -> bytes:
+    return ("\n".join(light) + "\n" + "\n".join(dark) + "\n").encode()
+
+
 async def college_logos_css(imgs: Images, keys: list[str]) -> Path | None:
     """college-logos.css, like logos.css for college teams (CM-<id>, CW-<id>): kept apart because only people who
     follow college hockey need ~110 more logos. A school's men's and women's teams share one picture."""
-    path = imgs.root / "college-logos.css"
+    path = imgs.root / COLLEGE_LOGOS_FILE
     if Images._fresh(path, LOGO_TTL):
         return path
     async with imgs.locks.setdefault(str(path), asyncio.Lock()):
@@ -150,10 +164,11 @@ async def college_logos_css(imgs: Images, keys: list[str]) -> Path | None:
             if isinstance(lp, Path):
                 light.append(f'{sel}{{background:url("{_data_url(lp)}") center/contain no-repeat;color:transparent}}')
                 if isinstance(dp, Path) and dp.read_bytes() != lp.read_bytes():
-                    dark.append(f'{sel}{{background-image:url("{_data_url(dp)}")}}')
+                    dark.append(_dark(sel, f'background-image:url("{_data_url(dp)}")'))
         if not light:
             return path if path.exists() else None
-        _write(path, ("\n".join(light) + "\n@media (prefers-color-scheme: dark) {\n" + "\n".join(dark) + "\n}\n").encode())
+        _write(path, _sheet(light, dark))
+        (imgs.root / "college-logos.css").unlink(missing_ok=True)   # the old @media version
         return path
 
 
@@ -182,7 +197,7 @@ def _shrink(raw: bytes, folder: Path, name: str, sizes=SIZES, webp=None) -> None
 async def logos_css(imgs: Images, nhl: list[str], pwhl: dict[str, int]) -> Path | None:
     """Build (or reuse) logos.css: `.mark.lg-BOS` rules with the logo as the background. A team whose logo can't be
     had gets no rule, so it keeps its badge."""
-    path = imgs.root / "logos.css"
+    path = imgs.root / LOGOS_FILE
     if Images._fresh(path, LOGO_TTL):
         return path
     async with imgs.locks.setdefault(str(path), asyncio.Lock()):
@@ -197,15 +212,15 @@ async def logos_css(imgs: Images, nhl: list[str], pwhl: dict[str, int]) -> Path 
             if isinstance(lp, Path):
                 light.append(rule.format(k=abbr, u=_data_url(lp)))
                 if isinstance(dp, Path) and dp.read_bytes() != lp.read_bytes():
-                    dark.append(f'.mark.lg-{abbr}{{background-image:url("{_data_url(dp)}")}}')
+                    dark.append(_dark(f".mark.lg-{abbr}", f'background-image:url("{_data_url(dp)}")'))
         for j, key in enumerate(pwhl):
             pp = got[2 * len(nhl) + j]
             if isinstance(pp, Path):
                 light.append(rule.format(k=key, u=_data_url(pp)))
         if not light:
             return path if path.exists() else None
-        css = "\n".join(light) + "\n@media (prefers-color-scheme: dark) {\n" + "\n".join(dark) + "\n}\n"
-        _write(path, css.encode())
+        _write(path, _sheet(light, dark))
+        (imgs.root / "logos.css").unlink(missing_ok=True)   # the old @media version
         return path
 
 

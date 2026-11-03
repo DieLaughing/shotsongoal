@@ -3,6 +3,10 @@
 Every update to [Shots on Goal](https://github.com/DieLaughing/shotsongoal), newest first. The same list is on the app's What's new page.
 This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit that file, not this one.
 
+## November 3, 2026
+
+- **New: A new menu bar, and House lights.** The tab bar and top bar are now one menu bar floating at the top. It shows your team's score while they play (or the league and day), the goal horn switch, and a menu button that opens every page in big jumbotron letters, with the league switch and House lights. House lights picks how bright the app is on this device: Auto (follows your phone), Day game, Dusk, Night or Lights out (true black). Rather have the bar under your thumb? Settings > Display > At the bottom. On a computer the main pages sit right in the bar.
+
 ## November 2, 2026
 
 - **New: The live dock: your team's score, everywhere.** While one of your teams is playing, the score now stays on screen above the tab bar on every page, so you can read the Wire or make your picks without losing it. It lights up when anyone scores and takes you to the game when you tap it. Two of your teams on at once? Swipe between them. Spoiler-free games stay out of it. Rather not have it? Turn off Show the live dock in Settings > Display and it's hidden on all your devices.

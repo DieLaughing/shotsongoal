@@ -1,5 +1,5 @@
-// The live dock: your teams' games on now, in a strip above the tab bar on every page, so the score doesn't go away when
-// you open the Wire. It lives in the tab bar, outside #view, so nothing a page draws touches it and it folds with the bar.
+// The live dock: your teams' games on now, in a strip at the bottom of every page, so the score doesn't go away when
+// you open the Wire. It lives outside #view, so nothing a page draws touches it.
 // Loaded on demand once the first page is up (web/app.js); it costs a page nothing.
 const LIVE_S = 10, IDLE_S = 90;
 const KEEP_FINAL = 5 * 60000;   // a game you saw end stays this long: the last thing that happened shouldn't just vanish
@@ -74,6 +74,7 @@ async function tick() {
     try {
       games = (await ctx.api("/api/live")).games;
       live = games.some(g => g.state === "live");
+      ctx.onLive(games.filter(g => g.state === "live" && !ctx.spoilerHidden(g)));   // the line under the app's name
       for (const g of games) {
         if (g.state === "live") sawLive.add(g.id);
         else if (sawLive.has(g.id) && !endedAt.has(g.id)) endedAt.set(g.id, Date.now());
@@ -84,6 +85,7 @@ async function tick() {
   } else {
     goals.clear();
     games = [];
+    ctx.onLive([]);
     if (shown) draw();
   }
   const again = endedAt.size && [...endedAt.values()].some(t => Date.now() - t < KEEP_FINAL);
@@ -96,7 +98,8 @@ export function start(context) {
   box = Object.assign(document.createElement("div"), { className: "dock", hidden: true });
   box.setAttribute("aria-label", "Your teams' games on now");
   box.setAttribute("role", "region");
-  document.getElementById("tabs").append(box);
+  document.body.append(box);
+  box.inert = ctx.menuIsOpen();   // arrived while the menu was open: it stays out of reach until that closes
   addEventListener("scroll", onScroll, { passive: true });
   // After the page change, not during it: a tapped strip grows into the game's jumbotron, and has to still be there for that.
   addEventListener("hashchange", () => setTimeout(() => { if (games.length) draw(); }, 360));

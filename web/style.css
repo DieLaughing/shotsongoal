@@ -20,18 +20,39 @@
   --fav: #d7263d;
   color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0e1116;
-    --surface: #171a20;
-    --border: #282d36;
-    --text: #eceff3;
-    --muted: #98a0ac;
-    --have-bg: #12301c; --have-fg: #7fdc9b;
-    --need-bg: #33240d; --need-fg: #f2c27a;
-    --info-bg: #15243b; --info-fg: #8fb6f2;
-    color-scheme: dark;
-  }
+/* House lights (the menu, per device): Auto follows the phone. html[data-scheme] is light or dark and is always set,
+   before the first paint, by the script in index.html; html[data-lights] picks the shade within it. */
+:root[data-scheme="dark"] {
+  --bg: #0e1116;
+  --surface: #171a20;
+  --border: #282d36;
+  --text: #eceff3;
+  --muted: #98a0ac;
+  --have-bg: #12301c; --have-fg: #7fdc9b;
+  --need-bg: #33240d; --need-fg: #f2c27a;
+  --info-bg: #15243b; --info-fg: #8fb6f2;
+  color-scheme: dark;
+}
+/* Dusk: the light look with the lights down a notch. */
+:root[data-lights="dusk"] {
+  --bg: #d5dae1;
+  --surface: #e6e9ee;
+  --border: #bcc3cd;
+  --muted: #444b56;
+  --have-bg: #cfe5d5; --have-fg: #0f5a27;
+  --need-bg: #eadcc4; --need-fg: #6e4300;
+  --info-bg: #cdd8e8; --info-fg: #163f7d;
+}
+/* Lights out: true black, for OLED screens and dark rooms. */
+:root[data-lights="out"] {
+  --bg: #000000;
+  --surface: #0b0d10;
+  --border: #1d2127;
+  --text: #f2f4f7;
+  --muted: #8f98a4;
+  --have-bg: #0c2214; --have-fg: #7fdc9b;
+  --need-bg: #261a08; --need-fg: #f2c27a;
+  --info-bg: #0e1a2c; --info-fg: #8fb6f2;
 }
 
 * { box-sizing: border-box; }
@@ -41,37 +62,110 @@ body {
   background: var(--bg);
   color: var(--text);
   font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  /* Room for the menu bar at the top, and for the live dock (and the menu bar, when it's at the bottom) below. */
+  padding-top: calc(var(--bar-top) + env(safe-area-inset-top));
+  padding-bottom: calc(var(--bar-bottom) + var(--dock-h) + env(safe-area-inset-bottom));
   /* At least as tall as the screen: in an installed iPhone app a page shorter than the screen (Tonight with two games)
-     got a shorter frame, and the tab bar pinned to its bottom sat above the bottom of the display. */
+     got a shorter frame, and anything pinned to its bottom sat above the bottom of the display. */
   min-height: 100vh;
   min-height: 100lvh;
 }
 a { color: inherit; }
 button { font: inherit; }
 
-.top {
-  position: sticky; top: 0; z-index: 5;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
-  background: var(--surface); border-bottom: 1px solid var(--border);
+/* ---- the menu bar (web/app.js: openMenu, applyNavAt, applyLights, brandLine) ----
+   One floating pill, centred: the goal horn, the name with what's on right now, the menu. A wide screen also gets the
+   main pages either side of the name. Phones can move it to the bottom, under the thumb (Settings > Display). */
+:root { --bar-top: 78px; --bar-bottom: 24px; --dock-h: 0px; --dock-at: 10px; }
+:root[data-nav="bottom"] { --bar-top: 8px; --bar-bottom: 92px; --dock-at: 84px; }
+body.has-dock { --dock-h: 60px; }
+.top { position: fixed; top: 0; left: 0; right: 0; z-index: 8; display: flex; justify-content: center; pointer-events: none;
+  padding: calc(10px + env(safe-area-inset-top)) 10px 0; }
+:root[data-nav="bottom"] .top { top: auto; bottom: 0; padding: 0 10px calc(12px + env(safe-area-inset-bottom)); }
+.navpill { pointer-events: auto; display: flex; align-items: center; gap: 2px; min-width: 0; height: 58px; padding: 0 6px; border-radius: 29px;
+  background: color-mix(in srgb, var(--surface) 86%, transparent); border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2); box-shadow: 0 6px 22px rgba(0, 0, 0, .08); }
+.pill-btn { flex: none; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; position: relative;
+  border: 0; border-radius: 22px; background: transparent; color: var(--text); cursor: pointer; }
+.pill-btn .ico { width: 21px; height: 21px; vertical-align: 0; color: currentColor; }
+.pill-btn:hover { background: color-mix(in srgb, var(--text) 7%, transparent); }
+#horn-btn .horn-on, #horn-btn[aria-pressed="true"] .horn-off { display: none; }
+#horn-btn[aria-pressed="true"] .horn-on { display: inline; }
+.brand { min-width: 150px; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0 10px; text-decoration: none; }
+.brand-name { font: 800 20px/1 Arena, system-ui, sans-serif; text-transform: uppercase; letter-spacing: .14em; white-space: nowrap; }
+.brand-line { display: flex; align-items: center; gap: 5px; font-size: 11px; line-height: 1.2; font-weight: 600; color: var(--muted);
+  white-space: nowrap; font-variant-numeric: tabular-nums; }
+.brand-line:empty { display: none; }
+.brand-line.live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--red); }
+.burger { position: relative; width: 18px; height: 12px; }
+.burger i { position: absolute; left: 0; width: 18px; height: 2px; border-radius: 1px; background: currentColor; }
+.burger i:first-child { top: 1px; } .burger i:last-child { top: 9px; }
+#menu-btn[aria-expanded="true"] { background: var(--text); color: var(--bg); }
+#menu-btn[aria-expanded="true"] .burger i:first-child { transform: translateY(4px) rotate(45deg); }
+#menu-btn[aria-expanded="true"] .burger i:last-child { transform: translateY(-4px) rotate(-45deg); }
+@media (prefers-reduced-motion: no-preference) { .burger i { transition: transform 200ms ease; } #menu-btn { transition: background 160ms ease, color 160ms ease; } }
+#menu-btn.has-new::after { content: ""; position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 2px var(--surface); }
+/* Wide screens: the main pages sit in the pill, the active one underlined. Phones get them in the menu. */
+.pill-link, .pill-search { display: none; }
+@media (min-width: 900px) {
+  :root[data-nav] { --bar-top: 86px; --bar-bottom: 24px; --dock-at: 10px; }
+  :root[data-nav] .top { top: 0; bottom: auto; padding: calc(12px + env(safe-area-inset-top)) 10px 0; }
+  .navpill { height: 62px; padding: 0 8px; border-radius: 31px; }
+  .pill-link { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 9px 12px 4px; font-size: 14.5px; font-weight: 600;
+    color: var(--muted); text-decoration: none; border-radius: 10px; }
+  .pill-link::after { content: ""; width: 20px; height: 3px; border-radius: 2px; background: transparent; }
+  .pill-link:hover { color: var(--text); }
+  .pill-link.active { color: var(--text); }
+  .pill-link.active::after { background: var(--accent); }
+  .pill-search { display: inline-flex; }
+  .pill-search.active { background: color-mix(in srgb, var(--text) 9%, transparent); }
+  .brand-name { font-size: 22px; }
 }
-.brand { display: flex; align-items: center; gap: 9px; font-weight: 750; text-decoration: none; letter-spacing: .01em; }
-.logo { width: 26px; height: 26px; border-radius: 6px; display: block; }
-.top-link { text-decoration: none; color: var(--muted); font-weight: 500; padding: 6px 10px; border-radius: 8px; }
-.top-link.active { color: var(--text); background: var(--bg); }
+@media (prefers-reduced-motion: no-preference) { .pill-link, .pill-link::after { transition: color 160ms ease, background 160ms ease; } }
+/* Signed out or waiting to be let in: just the name. */
+body.gated :is(.pill-btn, .pill-link) { display: none; }
 
-.tabs {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 5;
-  display: flex; justify-content: center; gap: 4px;
-  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
-  background: var(--surface); border-top: 1px solid var(--border);
+/* The menu: the whole screen, big jumbotron capitals, a line under each saying what's there. At the bottom it reads
+   upward from the bar, on the side of the hand picked in Settings (touch screens), the main pages nearest the thumb. */
+.menu { position: fixed; inset: 0; z-index: 7; overflow-y: auto; overscroll-behavior: contain; background: var(--bg);
+  display: flex; flex-direction: column; align-items: center; gap: 30px;
+  padding: calc(92px + env(safe-area-inset-top)) 24px calc(28px + env(safe-area-inset-bottom)); }
+.menu[hidden] { display: none; }
+.menu-links { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.menu-links a { display: flex; flex-direction: column; align-items: inherit; gap: 2px; text-decoration: none; color: var(--text); padding: 2px 6px; border-radius: 10px; }
+.menu-links b { font: 800 44px/.95 Arena, system-ui, sans-serif; text-transform: uppercase; letter-spacing: .02em; }
+.menu-links span { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--muted); }
+.menu-links a.active span::before { content: ""; width: 22px; height: 3px; border-radius: 2px; background: var(--accent); }
+.menu-links a:hover b { color: var(--accent); }
+.menu-ctl { width: 100%; max-width: 360px; display: grid; gap: 22px; }
+.menu-ctl .league { justify-content: space-between; padding: 4px; border-radius: 14px; background: var(--surface); }
+.menu-ctl .league button { flex: 1; min-height: 40px; font-size: 13.5px; border-radius: 10px; }
+#info-settings.new { color: var(--text); font-weight: 600; }
+:root[data-nav="bottom"] .menu { flex-direction: column-reverse; justify-content: flex-start;
+  padding: calc(28px + env(safe-area-inset-top)) 24px calc(96px + env(safe-area-inset-bottom)); }
+:root[data-nav="bottom"] .menu-links { flex-direction: column-reverse; }
+@media (pointer: coarse) and (max-width: 899px) {
+  :root[data-nav="bottom"][data-hand="right"] :is(.menu, .menu-links) { align-items: flex-end; text-align: right; }
+  :root[data-nav="bottom"][data-hand="left"] :is(.menu, .menu-links) { align-items: flex-start; text-align: left; }
+  :root[data-nav="bottom"][data-hand="right"] .menu-links span { flex-direction: row-reverse; }
 }
-.tabs > a {
-  flex: 1; max-width: 160px; text-align: center; text-decoration: none; font-weight: 600; font-size: 13px;
-  color: var(--muted); padding: 9px 4px; border-radius: 10px;
-}
-.tabs > a.active { color: var(--text); background: var(--bg); }
+@media (min-width: 900px) { :root[data-nav] .menu { flex-direction: column; justify-content: flex-start; align-items: center; text-align: center;
+  padding-top: calc(110px + env(safe-area-inset-top)); padding-bottom: 32px; } :root[data-nav] .menu-links { flex-direction: column; } }
+html.menu-open, html.menu-open body { overflow: hidden; }
+
+/* House lights: a ruler of five stops; the one picked holds a puck. */
+.house { display: grid; gap: 6px; }
+.house-head { display: flex; justify-content: space-between; font-size: 11.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.house-track { position: relative; display: flex; justify-content: space-between; }
+.house-track::before { content: ""; position: absolute; left: 30px; right: 30px; top: 17px; height: 10px; pointer-events: none;
+  background: repeating-linear-gradient(90deg, var(--border) 0 2px, transparent 2px 12px); }
+.house-track button { position: relative; flex: 0 0 64px; min-height: 64px; display: flex; flex-direction: column; align-items: center; gap: 7px;
+  padding: 9px 0 0; border: 0; background: none; color: var(--muted); font-size: 12px; font-weight: 550; cursor: pointer; border-radius: 10px; }
+.house-track button i { width: 26px; height: 26px; border-radius: 50%; background: var(--bg); box-shadow: inset 0 0 0 2px var(--muted); }
+.house-track button[aria-checked="true"] { color: var(--text); font-weight: 750; }
+.house-track button[aria-checked="true"] i { background: #111; box-shadow: inset 0 0 0 4px var(--text), 0 0 0 3px var(--bg), 0 3px 9px rgba(0, 0, 0, .3); }
+@media (prefers-reduced-motion: no-preference) { .house-track button i { transition: background 160ms ease, box-shadow 160ms ease; } }
 
 main { max-width: 760px; margin: 0 auto; padding: 8px 16px 32px; }
 /* Headings speak the way the jumbotron does. Capitals only: it's what the 4 KB font has, and how an arena board reads. */
@@ -375,7 +469,7 @@ tr.cut td { border-top: 2px dashed var(--red); }
 .row-field > span { display: flex; flex-direction: column; gap: 2px; flex: 1 1 200px; }
 .row-field select { flex: 0 1 220px; padding: 8px 10px; font-size: 14px; }
 .suggest { border-top: 1px solid var(--border); padding-top: 10px; padding-bottom: 10px; }
-.toast { position: fixed; left: 50%; bottom: calc(72px + env(safe-area-inset-bottom)); transform: translate(-50%, 12px) scale(.6, .8); opacity: 0;
+.toast { position: fixed; left: 50%; bottom: calc(var(--bar-bottom) + var(--dock-h) + env(safe-area-inset-bottom)); transform: translate(-50%, 12px) scale(.6, .8); opacity: 0;
   pointer-events: none; padding: 9px 16px; border-radius: 999px; background: var(--text); color: var(--bg); font-size: 14px; font-weight: 650;
   box-shadow: 0 4px 16px rgb(0 0 0 / .25); transition: opacity .2s, transform .2s ease-in; z-index: 50; max-width: calc(100% - 32px); }
 /* Springs out from the middle like an island (OpenUI's trip planner demo), shrinks away on the way out. */
@@ -407,7 +501,7 @@ tr.cut td { border-top: 2px dashed var(--red); }
 }
 
 /* league switch */
-.league { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--bg); border: 1px solid var(--border); margin-left: auto; }
+.league { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--bg); border: 1px solid var(--border); }
 .league button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 650;
   padding: 5px 10px; border-radius: 7px; cursor: pointer; }
 .league button.on { background: var(--surface); color: var(--text); box-shadow: 0 0 0 1px var(--border); }
@@ -415,25 +509,20 @@ body.league-pwhl .league button.on { background: var(--accent); color: var(--on-
 .league-head { margin: 22px 0 -6px; font-size: 18px; letter-spacing: .03em; display: flex; align-items: center; gap: 8px; }
 .league-head::before { content: ""; width: 4px; height: 16px; border-radius: 2px; background: #d7263d; }
 .league-head.pwhl::before { background: #163F36; }
-@media (prefers-color-scheme: dark) { .league-head.pwhl::before { background: #B3DFD7; } }
+:root[data-scheme="dark"] .league-head.pwhl::before { background: #B3DFD7; }
 .league-head.ncaam::before, .league-head.ncaaw::before { background: #2E6DB4; }
 @media (max-width: 440px) { .league button { padding: 5px 7px; } }
 @media (max-width: 400px) { .league button { padding: 5px 5px; font-size: 12px; } }
-@media (max-width: 480px) { .brand-name { display: none; } .top { gap: 8px; } }
 
 /* PWHL mode: Boston Fleet colours (from the Fleet logo) */
 :root { --on-accent: #fff; }
 body.league-pwhl { --accent: #163F36; --red: #163F36; --fav: #163F36; --on-accent: #fff; }
-@media (prefers-color-scheme: dark) {
-  body.league-pwhl { --accent: #B3DFD7; --red: #B3DFD7; --fav: #B3DFD7; --on-accent: #081D2B; }
-}
+:root[data-scheme="dark"] body.league-pwhl { --accent: #B3DFD7; --red: #B3DFD7; --fav: #B3DFD7; --on-accent: #081D2B; }
 .btn.primary { color: var(--on-accent); }
 
 /* tickets */
 
 /* What's new */
-.top-link.has-new { position: relative; }
-.top-link.has-new::after { content: ""; position: absolute; top: 4px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 .newbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 12px 0 0; padding: 10px 12px; border-radius: 12px;
   background: var(--surface); border: 1px solid var(--border); font-size: 13.5px; }
 .newbar > span:nth-child(2) { flex: 1; min-width: 120px; }
@@ -460,39 +549,24 @@ body.league-pwhl { --accent: #163F36; --red: #163F36; --fav: #163F36; --on-accen
 /* The slapshot (web/app.js) starts a page off to one side: never let that show a sideways scrollbar. */
 html, body { overflow-x: clip; }
 
-/* ---- tab pill (web/app.js movePill): stretches across to the active tab (Web Animations) ---- */
-.tabs { isolation: isolate; }
-.tabs > a.active { background: transparent; }
-.tab-pill { position: absolute; left: 0; top: 6px; height: calc(100% - 12px - env(safe-area-inset-bottom)); border-radius: 10px;
-  background: var(--bg); z-index: -1; }
-
-/* ---- buttons that look like buttons (tab bar icons, Settings button, league switch, Back) ---- */
-.tabs > a { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px 5px; font-size: 11.5px;
-  transition: gap 180ms ease, padding 180ms ease, color 160ms ease; }
-.tab-ico { width: 20px; height: 20px; display: block; transition: height 180ms ease, opacity 140ms ease, color 160ms ease; }
-/* Scrolling down folds the icons away (a slim bar of labels); any scroll up brings them back (web/app.js). */
-.tabs.compact > a { gap: 0; padding: 5px 4px 4px; }
-.tabs.compact .tab-ico { height: 0; opacity: 0; }
-/* The top bar slides away too (keeping the strip behind the phone's status bar), and comes back on any scroll up. */
+/* ---- buttons that look like buttons (league switch, Back) ---- */
+/* Scrolling down slides the menu bar off its edge; any scroll up (or the top of the page, or a new page) brings it
+   back (web/app.js setCompact). */
 .top { transition: transform 200ms ease; will-change: transform; }
-.top.tucked { transform: translateY(-100%); }
-/* The status bar area (notch, Dynamic Island) keeps a solid strip in the top bar's colour, and the top bar slides
-   fully away underneath it. Leaving a slice of the bar showing instead put half its buttons under the island. */
-body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top, 0px); z-index: 6;
-  background: var(--surface); pointer-events: none; }
-@media (prefers-reduced-motion: reduce) { .tabs > a, .tab-ico, .top { transition: none; } }
-.tabs > a.active .tab-ico { color: var(--accent); }
-.top-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text); background: var(--surface);
-  border: 1px solid var(--border); padding: 6px 11px; border-radius: 10px; font-weight: 600; font-size: 14px; }
-.top-link .ico { width: 17px; height: 17px; }
-.top-link.active { background: var(--bg); border-color: var(--text); }
-@media (max-width: 380px) { .top-label { display: none; } .top-link { padding: 7px; } }
+.top.tucked { transform: translateY(calc(-100% - 4px)); }
+:root[data-nav="bottom"] .top.tucked { transform: translateY(calc(100% + 4px)); }
+@media (min-width: 900px) { :root[data-nav] .top.tucked { transform: translateY(calc(-100% - 4px)); } }
+/* The status bar area (notch, Dynamic Island) keeps a solid strip in the page's colour, and the bar slides fully
+   away underneath it. */
+body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top, 0px); z-index: 9;
+  background: var(--bg); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .top { transition: none; } }
 .league button:not(.on):hover { color: var(--text); background: var(--surface); }
 .league button.on { background: var(--text); color: var(--bg); box-shadow: none; }
 .back { display: inline-flex; align-items: center; gap: 4px; margin: 12px 0 10px; padding: 7px 12px 7px 8px; border-radius: 10px;
   border: 1px solid var(--border); background: var(--surface); color: var(--text); text-decoration: none; font-weight: 600; font-size: 14px; }
 .back .ico { width: 17px; height: 17px; }
-.top-link .ico, .back .ico { color: currentColor; vertical-align: 0; }
+.back .ico { color: currentColor; vertical-align: 0; }
 /* Game page top card: grouped sections divided by a rule. Centred with a mouse; on touch screens everything in a
    section sits on the side of the hand picked in Settings (data-hand), with the main button nearest the thumb. */
 .gsec { display: grid; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--border); }
@@ -707,10 +781,14 @@ body.bug-gone .top.tucked ~ #view .ministrip { transform: none; }
 @media (min-width: 800px) { .hap { margin: 0; padding: 0 0 4px; scroll-padding: 0; } }
 body.row-wheel .hap { scroll-snap-type: none; }   /* set by the first wheel turn: snapping is for fingers */
 
-/* The live dock (web/dock.js): the score strip's look, on every page, riding on top of the tab bar so it folds with it.
-   Two games at once swipe sideways, with the next one showing at the edge. */
-.dock { position: absolute; left: 0; right: 0; bottom: 100%; display: flex; gap: 2px; overflow-x: auto; scroll-snap-type: x mandatory;
-  scrollbar-width: none; box-shadow: 0 -1px 8px rgba(0, 0, 0, .22); }
+/* The live dock (web/dock.js): the score strip's look, on every page, floating at the bottom of the screen (just above
+   the menu bar when that's at the bottom). Two games at once swipe sideways, with the next one showing at the edge. */
+.dock { position: fixed; z-index: 6; left: 10px; right: 10px; bottom: calc(var(--dock-at) + env(safe-area-inset-bottom)); max-width: 440px; margin: 0 auto;
+  display: flex; gap: 2px; overflow-x: auto; scroll-snap-type: x mandatory; border-radius: 16px;
+  scrollbar-width: none; box-shadow: 0 6px 20px rgba(0, 0, 0, .28); }
+/* With the bar at the bottom, the dock drops into its place while it's tucked away. */
+:root[data-nav="bottom"] .top.tucked ~ .dock:not(.aside) { transform: translateY(74px); }
+@media (min-width: 900px) { :root[data-nav] .top.tucked ~ .dock:not(.aside) { transform: none; } }
 .dock[hidden] { display: none; }
 .dock::-webkit-scrollbar { display: none; }
 .dock.aside { opacity: 0; transform: translateY(8px); pointer-events: none; box-shadow: none; }
@@ -722,9 +800,6 @@ body.row-wheel .hap { scroll-snap-type: none; }   /* set by the first wheel turn
     linear-gradient(101deg, color-mix(in srgb, var(--a) 68%, #0a0d12) 50%, color-mix(in srgb, var(--h) 68%, #0a0d12) 50%); }
 .dock.many .dock-item { flex-basis: 90%; }
 .dock-item > .mark:first-child { justify-self: end; }
-@media (min-width: 700px) { .dock { justify-content: center; } .dock-item, .dock.many .dock-item { flex: 0 1 380px; border-radius: 10px 10px 0 0; } .dock { box-shadow: none; } }
-body.has-dock { padding-bottom: calc(122px + env(safe-area-inset-bottom)); }
-body.has-dock .toast { bottom: calc(118px + env(safe-area-inset-bottom)); }
 
 /* Goal lamp: a red beacon sweeping the thing that scored (web/app.js lamp()); it removes itself. */
 .lamp { position: absolute; inset: 0; overflow: hidden; pointer-events: none; opacity: 0; z-index: 1; border-radius: inherit; }

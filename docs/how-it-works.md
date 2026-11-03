@@ -153,7 +153,7 @@ How the app moves (what animates, what must hold still, timings, rules for new U
     re-ranks them (division, conference, league, wild card); standingsBody() draws any list of rows, so the real table
     and the pretend one share a renderer. Ties go points, fewer games, regulation wins, wins, goal difference: close to
     the NHL's order, not exact. Nothing is saved; picks stay in memory across mode switches until Close.
-- The live dock (web/dock.js, loaded 1.2 s after start): your teams' games on now, a child of the tab bar so it folds with it and no page draw touches it. GET /api/live (sog/glance.py) is one request whatever you follow: every LIVE_S (10 s) while one is on, else every IDLE_S (90 s), none while the app is hidden or with no favourites. A game leaves the strip on its own game page, when spoiler-free hides it, and fades while its own card is on screen on Tonight. A final stays KEEP_FINAL (5 min), only if this visit saw it live. draw() rebuilds only when the games change, otherwise it writes numbers, so a swipe and the lamp survive. celebrate() is the one place that decides a goal happened (a first look only records, and coming back to the app counts as one), for the lamp and the horn. Settings > Display > Show the live dock (settings.dock, per person, on by default) hides the strip. It keeps polling only if this device has the horn on, since the horn listens through it; with both off, dock.js isn't even downloaded (syncDock()).
+- The live dock (web/dock.js, loaded 1.2 s after start): your teams' games on now, a rounded strip fixed at the bottom of the screen (above the menu bar when that's at the bottom; it drops into the bar's place while the bar is tucked away), outside #view so no page draw touches it. It also hands the live games to the menu bar's second line (ctx.onLive). GET /api/live (sog/glance.py) is one request whatever you follow: every LIVE_S (10 s) while one is on, else every IDLE_S (90 s), none while the app is hidden or with no favourites. A game leaves the strip on its own game page, when spoiler-free hides it, and fades while its own card is on screen on Tonight. A final stays KEEP_FINAL (5 min), only if this visit saw it live. draw() rebuilds only when the games change, otherwise it writes numbers, so a swipe and the lamp survive. celebrate() is the one place that decides a goal happened (a first look only records, and coming back to the app counts as one), for the lamp and the horn. Settings > Display > Show the live dock (settings.dock, per person, on by default) hides the strip. It keeps polling only if this device has the horn on, since the horn listens through it; with both off, dock.js isn't even downloaded (syncDock()).
 - Goal horn (web/horn.js, Settings > Display): per device, localStorage `horn`, off unless set. Three notes of Web Audio, no file, no league recording. Your teams' goals only, whichever page is open, with the dock showing or hidden. Phones only allow sound after a tap, so arm() waits for the next one, and a goal before that stays silent rather than going off at that tap.
 - This just happened (Tonight, default slate only): GET /api/happened?leagues= (sog/glance.py) reads saved copies only: today's and yesterday's slates, plus the saved game pages of your teams' games for goals with a clip and recaps. Other teams' pages aren't read (each is a parse). Asked for alongside the page's other requests, so it never shifts the page in late. spoilerHidden() filters tiles on the phone. Tiles play through openClip(id, list). A mouse can't swipe the row, so over it the wheel moves it sideways (hapWheel). So the row can't trap the page, a wheel still scrolling the page (within PAGE_WHEEL_MS) passes through, and so does one at either end of the row. A notch is only ~50 px, so WHEEL_GAIN makes it about a tile, and hapGlide() eases there on a timer. The first wheel turn sets `row-wheel` on <body>, which turns snapping off: it would pull every step back, and media queries can't be trusted to tell a mouse from a finger.
 - Season ribbon (team page): home.ribbon() sends the season in a few bytes a game as `ribbon` in /api/team (schedule stays last 10 + next 10), split on the same 60-day gap as the team card. ribbonBlock()/bindRibbon() in web/app.js: plain boxes, a transparent range input over them (the puck, keyboard and screen readers for free; `touch-action: pan-y` keeps the page scrolling), mouse hover moves it too. Wins and losses differ by side of the line first, colour second.
@@ -195,10 +195,24 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   screen, plain route(). Timings in style.css (::view-transition-*). Works in Chromium and Firefox 144+ (checked). placeSwitches only writes when something changed and drops
   its own mutation records (takeRecords): any class write, even removing an absent class, wakes the observer, and a
   switch with nothing picked once froze the page in an endless loop.
-- Navigation chrome: tab bar = icon (20 px) + label (web/index.html inline SVGs); scrolling down adds .compact (icons fold
-  away, ~39 px bar) and .tucked on the header (slides up, keeping the safe-area strip); any scroll up / top of page /
-  new page restores both. Settings = outlined button with a gear,
-  league switch shows the selected league filled. Sub-pages start with backLink(fallback): history.back() when the
+- Menu bar (web/index.html `.top` > `.navpill`, web/app.js startBar/openMenu/closeMenu): one floating pill, centred.
+  On a phone: goal horn (the same per-device `horn` as Settings), the name with a second line (brandLine(): your
+  team's score while they play, from the dock's /api/live via ctx.onLive, spoiler-free games left out; otherwise the
+  league on show and the day), and the menu button (dot = unseen What's new). From 900 px the pill adds Tonight and
+  Pick'em left of the name, League and Wire right of it (active one underlined) and Search. The menu (#menu) is the
+  whole screen: the pages in Arena capitals with a line each, the league switch (.league, so it gets the switch
+  pill) and House lights; #view, the footer and the dock go inert and the page can't scroll under it. A link (or a league:
+  it redraws the page), the
+  button or Escape closes it. Where the bar sits is per device (localStorage `navAt`, Settings > Display, top by
+  default; html[data-nav]); at the bottom (phones only: from 900 px it's always on top) the menu reads upward from
+  it, aligned to the hand picked in Settings on touch screens. Scrolling down adds .tucked (it slides off its own
+  edge); any scroll up / top of page / new page / opening the menu brings it back. CSS vars --bar-top, --bar-bottom,
+  --dock-h and --dock-at keep the page, toast and dock clear of it.
+- House lights (the menu and Settings > Display, per device, localStorage `lights`): Auto (follows the phone, live),
+  Day game, Dusk (light, dimmed), Night, Lights out (true black). html[data-scheme] (light|dark) and html[data-lights]
+  are set by an inline script in index.html before the first paint, then by applyLights(); every dark rule in
+  style.css, the saved team-colour CSS (accentCss, one rule per shade) and the logo sheets key off data-scheme, never
+  prefers-color-scheme. It also sets both theme-color metas (the iPhone status bar strip = the page colour). Sub-pages start with backLink(fallback): history.back() when the
   page was reached inside the app (cameFromApp), else the fallback (games -> #/, teams -> #/league, others -> #/settings).
 - Settings (web/app.js settingsView) save on every change (saveSettings: optimistic, queued PUTs of the whole settings
   object, toast). Team pickers group NHL teams by sog/teams.py DIVISIONS. Home market = one team (local is a list server-side).
@@ -267,7 +281,9 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   cache-first from its own cache (600 entries). NHL photos use this season's mugs URL, else the landing `headshot`.
   Logos are ONE stylesheet, /img/logos.css?v=<hash> (from /api/me `logos` when marks=logos): `.mark.lg-<ABBR>` rules
   with 56 px WebP data URLs (~77 KB gz for all 44 teams, dark versions only where they differ). NHL logos come from
-  ESPN's 500/500-dark PNGs (the NHL's SVGs are up to 35 KB each); until the sheet loads, marks stay badges.
+  ESPN's 500/500-dark PNGs (the NHL's SVGs are up to 35 KB each); until the sheet loads, marks stay badges. Dark
+  versions apply under html[data-scheme="dark"] (House lights), so the files are logos-v2.css / college-logos-v2.css on
+  disk (still served at /img/logos.css and /img/college-logos.css): a copy built with the old @media rule is ignored.
 - Team page: header, next game as a full card, then Games (one line per game) | Players (roster merged with this
   season's stats, per group, best first; milestones on top) | News. The tab is remembered (localStorage teamTab).
 - sog/moneypuck.py: MoneyPuck's season skaters/goalies CSVs (listed on moneypuck.com/data.htm; free for

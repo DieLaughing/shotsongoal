@@ -66,7 +66,9 @@ function readableOn(hex, bg) {
 }
 function accentCss(hex) {
   const set = bg => { const rgb = readableOn(hex, bg); return `--accent:rgb(${rgb});--fav:rgb(${rgb});--on-accent:${contrastOf(rgb, [17, 17, 17]) > contrastOf(rgb, [255, 255, 255]) ? "#111" : "#fff"}`; };
-  return `body,body.league-pwhl{${set("#f5f6f8")}}@media(prefers-color-scheme:dark){body,body.league-pwhl{${set("#0e1116")}}}.league>.seg-pill{background:var(--accent)}.league button.on{color:var(--on-accent)}`;
+  const at = (root, bg) => `${root} body,${root} body.league-pwhl{${set(bg)}}`;   // one rule per House lights shade
+  return `body,body.league-pwhl{${set("#f5f6f8")}}${at(':root[data-lights="dusk"]', "#d5dae1")}${at(':root[data-scheme="dark"]', "#0e1116")}`
+    + `${at(':root[data-lights="out"]', "#000000")}.league>.seg-pill{background:var(--accent)}.league button.on{color:var(--on-accent)}`;
 }
 function applyAccent() {
   const color = TEAMS[accentTeam()]?.color, css = /^#[0-9a-f]{6}$/i.test(color || "") ? accentCss(color) : "";
@@ -410,16 +412,135 @@ function showLoading(text) {
 
 function setNav(name) {
   document.querySelectorAll("[data-nav]").forEach(a => a.classList.toggle("active", a.dataset.nav === name));
-  movePill();
 }
 
-// Scrolling down folds the tab bar's icons away and slides the top bar off; any scroll up (or the top of the page,
-// or a new page) brings both back. One passive listener, read once per frame.
+// ---- the menu bar (index.html): one pill with the goal horn, the name and the menu --------------------------------
+// The name's second line says what's on: your team's score while they play (web/dock.js hands it over), otherwise
+// the league on show and the day. The menu takes the whole screen: the pages in big capitals, the league switch and
+// House lights. Where the bar sits (top or bottom) and House lights are per device, like Rise or Slapshot.
+const topBar = document.getElementById("top"), menu = document.getElementById("menu");
+const menuBtn = document.getElementById("menu-btn"), hornBtn = document.getElementById("horn-btn");
+let menuOpen = false, liveNow = [];
+const LEAGUE_SHORT = { nhl: "NHL", pwhl: "PWHL", ncaa: "NCAA", both: "All leagues" };
+function brandLine() {
+  const live = dockOn() ? liveNow : [], g = live[0], el = document.getElementById("brand-line");   // the dock's setting covers both
+  let text;
+  if (document.body.classList.contains("gated")) text = "";   // signed out or waiting: just the name
+  else if (g) {
+    const mine = favs().has(g.away.abbr) ? "away" : "home", them = mine === "away" ? "home" : "away";
+    text = `${teamName(g[mine].abbr)} ${g[mine].score ?? 0}–${g[them].score ?? 0} · ${g.intermission ? `${g.period} INT` : g.period}`
+      + (live.length > 1 ? ` · +${live.length - 1}` : "");
+  } else text = `${LEAGUE_SHORT[LEAGUE] || "NHL"} · ${new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`;
+  if (el.textContent !== text) el.textContent = text;
+  el.classList.toggle("live", !!g);
+  const info = live.length ? `${live.length === 1 ? "One of your games is" : `${live.length} of your games are`} on now` : "Scores and where to watch";
+  const t = document.getElementById("info-tonight");
+  if (t.textContent !== info) t.textContent = info;
+}
+const onLive = list => { liveNow = list; brandLine(); };
+
+// House lights: Auto follows the phone (and keeps following it); the others pick light or dark and a shade of it.
+const LIGHTS = [["auto", "Auto"], ["day", "Day game"], ["dusk", "Dusk"], ["night", "Night"], ["out", "Lights out"]];
+const LIGHT_BG = { day: "#f5f6f8", dusk: "#d5dae1", night: "#0e1116", out: "#000000" };   // also in index.html
+const darkPhone = matchMedia("(prefers-color-scheme: dark)");
+const lights = () => { try { return localStorage.getItem("lights") || "auto"; } catch { return "auto"; } };
+function applyLights() {
+  const L = LIGHT_BG[lights()] ? lights() : "auto", d = document.documentElement;
+  const scheme = L === "night" || L === "out" || (L === "auto" && darkPhone.matches) ? "dark" : "light";
+  if (d.dataset.scheme !== scheme) d.dataset.scheme = scheme;
+  if (d.dataset.lights !== L) d.dataset.lights = L;
+  // The iPhone's status bar strip: the page's colour (the light meta comes first in index.html).
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m, i) => { m.content = LIGHT_BG[L] || (i ? LIGHT_BG.night : LIGHT_BG.day); });
+  document.querySelectorAll("[data-house]").forEach(b => b.setAttribute("aria-checked", b.dataset.house === L));
+  document.querySelectorAll(".house-now").forEach(e => { e.textContent = LIGHTS.find(([k]) => k === L)[1]; });
+}
+darkPhone.addEventListener("change", () => { if (lights() === "auto") applyLights(); });
+function housePicker() {
+  const L = lights();
+  return `<div class="house"><div class="house-head"><span>House lights</span><span class="house-now">${LIGHTS.find(([k]) => k === L)?.[1] || "Auto"}</span></div>
+    <div class="house-track" role="radiogroup" aria-label="House lights">${LIGHTS.map(([k, l]) =>
+      `<button type="button" role="radio" aria-checked="${k === L}" data-house="${k}"><i aria-hidden="true"></i>${l}</button>`).join("")}</div></div>`;
+}
+
+const navAt = () => { try { return localStorage.getItem("navAt") === "bottom" ? "bottom" : "top"; } catch { return "top"; } };
+function applyNavAt() {
+  document.documentElement.dataset.nav = navAt();
+  if (bugWatch) { const bug = bugWatch.bug; unwatchBug(); if (bug.isConnected) watchBug(); }   // the strip's spot moved
+}
+
+function showHorn() {
+  const on = hornOn();
+  hornBtn.setAttribute("aria-pressed", on);
+  hornBtn.setAttribute("aria-label", on ? "Goal horn: on" : "Goal horn: off");
+  const box = document.getElementById("horn");
+  if (box) box.checked = on;
+}
+function setHorn(on) {   // this device only, like Rise or Slapshot
+  try { localStorage.setItem("horn", on ? "1" : "0"); } catch { /* stays off */ }
+  showHorn();
+  syncDock();
+  if (on) import(`./horn.js${V}`).then(m => { m.arm(); return m.play(); }).catch(() => {});
+}
+
+function openMenu(byKey) {
+  if (menuOpen) return;
+  menuOpen = true;
+  setCompact(false);
+  menu.hidden = false;
+  menuBtn.setAttribute("aria-expanded", "true");
+  menuBtn.setAttribute("aria-label", "Close menu");
+  document.documentElement.classList.add("menu-open");
+  for (const el of [view, document.getElementById("foot"), document.querySelector(".dock")]) if (el) el.inert = true;
+  // The league switch was measured while hidden: give it a fresh pill, in place (no slide in from nowhere).
+  for (const p of menu.querySelectorAll(".seg-pill")) { p.parentElement.classList.remove("has-pill"); p.remove(); }
+  placeSwitches();
+  if (motionOn()) {
+    menu.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: "ease-out" });
+    [...menu.querySelectorAll(".menu-links a")].slice(0, 8).forEach((a, i) => a.animate(
+      [{ transform: "translateY(14px)", opacity: 0 }, { transform: "none", opacity: 1 }],
+      { duration: 300, delay: i * 30, easing: "cubic-bezier(.2, .9, .3, 1)", fill: "backwards" }));
+  }
+  if (byKey) (menu.querySelector(".menu-links a.active") || menu.querySelector(".menu-links a")).focus({ preventScroll: true });
+}
+function closeMenu() {
+  if (!menuOpen) return;
+  menuOpen = false;
+  menuBtn.setAttribute("aria-expanded", "false");
+  menuBtn.setAttribute("aria-label", "Menu");
+  document.documentElement.classList.remove("menu-open");
+  for (const el of [view, document.getElementById("foot"), document.querySelector(".dock")]) if (el) el.inert = false;
+  const done = () => { if (!menuOpen) menu.hidden = true; };   // opened again meanwhile: leave it
+  if (!motionOn()) return done();
+  menu.getAnimations().forEach(a => a.cancel());
+  menu.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, easing: "ease-in" }).finished.then(done, done);
+}
+function startBar() {
+  applyNavAt();
+  applyLights();
+  menu.querySelector(".house-slot").innerHTML = housePicker();
+  showHorn();
+  brandLine();
+  menuBtn.addEventListener("click", e => menuOpen ? closeMenu() : openMenu(e.detail === 0));
+  hornBtn.addEventListener("click", () => {
+    setHorn(!hornOn());
+    toast(hornOn() ? "Goal horn on: it sounds on this device when your team scores" : "Goal horn off");
+  });
+  menu.addEventListener("click", e => { if (e.target.closest("a")) closeMenu(); });   // the page change closes it too
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && menuOpen) { closeMenu(); menuBtn.focus(); } });
+  document.addEventListener("click", e => {   // House lights, in the menu and in Settings
+    const b = e.target.closest("[data-house]");
+    if (!b) return;
+    try { localStorage.setItem("lights", b.dataset.house); } catch { /* this visit only */ }
+    applyLights();
+  });
+}
+
+// Scrolling down slides the menu bar off its edge; any scroll up (or the top of the page, or a new page) brings it
+// back. One passive listener, read once per frame.
 let lastScrollY = 0, scrollQueued = false;
 function setCompact(on) {
-  const bar = document.getElementById("tabs");
-  document.querySelector(".top")?.classList.toggle("tucked", on);  // the top bar slides away with it
-  if (bar && bar.classList.contains("compact") !== on) { bar.classList.toggle("compact", on); requestAnimationFrame(movePill); }
+  if (on && menuOpen) return;
+  topBar.classList.toggle("tucked", on);
 }
 window.addEventListener("scroll", () => {
   if (scrollQueued) return;
@@ -434,7 +555,6 @@ window.addEventListener("scroll", () => {
   });
 }, { passive: true });
 
-// The tab bar's highlight is one pill that slides (with a little spring) to the active tab.
 // Liquid highlight (from OpenUI's trip planner demo): the leading edge gets to the new spot first and the trailing
 // edge follows, so the pill stretches across and snaps to size with a small overshoot. Positions are {x, w} in px.
 function liquid(pill, from, to) {
@@ -454,14 +574,6 @@ function placePill(pill, on, from) {
   Object.assign(pill.style, { width: `${to.w}px`, transform: `translateX(${to.x}px)`, opacity: "1" });
   Object.assign(pill.dataset, to);
   if (from) liquid(pill, from, to);
-}
-
-function movePill() {
-  const bar = document.getElementById("tabs"), on = bar?.querySelector("a.active");
-  let pill = bar?.querySelector(".tab-pill");
-  if (!bar) return;
-  if (!pill) { pill = document.createElement("span"); pill.className = "tab-pill"; bar.prepend(pill); }
-  if (on) placePill(pill, on); else pill.style.opacity = "0";
 }
 
 // Every switch (.seg: Wire kinds, standings modes, team/player tabs, settings; .league: NHL | PWHL | Both) gets the
@@ -508,7 +620,7 @@ const switchWatch = new MutationObserver(records => {
   if (!switchFrame && records.some(touchesSwitch)) switchFrame = requestAnimationFrame(() => { switchFrame = 0; placeSwitches(); });
 });
 switchWatch.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
-window.addEventListener("resize", () => { movePill(); placeSwitches(); });
+window.addEventListener("resize", placeSwitches);
 
 // Live pages ask again this often (s). The server answers from memory; the NHL's own scoreboard moves every ~20 s.
 const LIVE_REFRESH = 10;
@@ -599,7 +711,10 @@ async function markChangesSeen() {
 }
 
 function updateNewDot() {
-  document.querySelector(".top-link[data-nav=settings]")?.classList.toggle("has-new", unseenChanges().length > 0);
+  const fresh = unseenChanges(), info = document.getElementById("info-settings");
+  menuBtn.classList.toggle("has-new", fresh.length > 0);
+  info.textContent = fresh.length ? `New: ${(fresh.find(c => c.link !== "#/new") || fresh[0]).title}` : "Your teams, alerts, display";
+  info.classList.toggle("new", fresh.length > 0);
 }
 
 function newBanner() {
@@ -632,7 +747,8 @@ function whatsNewView() {
 
 // ---- gate -------------------------------------------------------------------------
 function gateView() {
-  document.getElementById("tabs").hidden = true;
+  document.body.classList.add("gated");
+  brandLine();
   const s = ME.status;
   let body;
   if (s === "signed-out") {
@@ -1466,13 +1582,17 @@ async function gameView(id, quiet = false, league = "nhl") {
 let bugWatch = null;
 function unwatchBug() { bugWatch?.io.disconnect(); bugWatch = null; document.body.classList.remove("bug-gone"); }
 function watchBug() {
-  const bug = view.querySelector(".scorebug"), bar = document.querySelector(".top");
+  const bug = view.querySelector(".scorebug");
   if (!bug || bug === bugWatch?.bug) return;
   unwatchBug();
+  // The jumbotron counts as gone once it's under the menu bar (or the status bar, with the bar at the bottom), and the
+  // strip then sits just below that. offsetHeight ignores the bar's tucked-away slide.
+  const atTop = navAt() === "top" || innerWidth >= 900;
+  const hidden = atTop ? topBar.offsetHeight : parseFloat(getComputedStyle(document.body, "::before").height) || 0;
+  document.documentElement.style.setProperty("--top-h", atTop ? `${hidden + 6}px` : "env(safe-area-inset-top, 0px)");
   const io = new IntersectionObserver(([e]) => {
-    document.documentElement.style.setProperty("--top-h", `${bar.offsetHeight}px`);
     document.body.classList.toggle("bug-gone", !e.isIntersecting);
-  }, { rootMargin: "-64px 0px 0px 0px" });
+  }, { rootMargin: `-${Math.round(hidden)}px 0px 0px 0px` });
   io.observe(bug);
   bugWatch = { bug, io };
 }
@@ -2425,12 +2545,17 @@ function settingsView() {
     <div class="card checks"><label><input type="checkbox" id="odds" ${s.odds !== false ? "checked" : ""}>Show odds</label></div>
     <p class="help">Who's favoured to win and how many goals are expected, from DraftKings' lines. Just for fun: nothing here links to betting.</p>
     <div class="card checks"><label><input type="checkbox" id="dock" ${s.dock !== false ? "checked" : ""}>Show the live dock</label></div>
-    <p class="help">The strip above the tab bar that keeps your teams' scores on screen while they play. Turn it off to hide it on all your devices. The goal horn still works.</p>
+    <p class="help">The strip at the bottom of the screen that keeps your teams' scores in sight while they play, and their score under the app's name. Turn it off to hide it on all your devices. The goal horn still works.</p>
     <div class="card checks"><label><input type="checkbox" id="horn" ${hornOn() ? "checked" : ""}>Goal horn</label></div>
-    <p class="help">Sounds a horn on this device when one of your teams scores while the app is open. You'll hear it once when you turn it on.</p>
+    <p class="help">Sounds a horn on this device when one of your teams scores while the app is open. The speaker on the menu bar turns it on and off too. You'll hear it once when you turn it on.</p>
     <div class="seg" role="group" aria-label="Buttons on touch screens">${[["right", "Right-handed"], ["left", "Left-handed"]].map(([k, l]) =>
       `<button data-hand="${k}" class="${(s.hand || "right") === k ? "on" : ""}">${l}</button>`).join("")}</div>
     <p class="help">On phones, foldables and tablets, game page buttons sit on this side, under your thumb. On a computer they're centred.</p>
+    <div class="seg" role="group" aria-label="Menu bar">${[["top", "Menu bar on top"], ["bottom", "At the bottom"]].map(([k, l]) =>
+      `<button data-navat="${k}" class="${navAt() === k ? "on" : ""}">${l}</button>`).join("")}</div>
+    <p class="help">Where the menu bar sits on a phone, on this device. At the bottom it's under your thumb, and the menu reads up from it on your hand's side. Wide screens always have it on top.</p>
+    <div class="card pad">${housePicker()}</div>
+    <p class="help">How bright the app is, on this device. Auto follows your phone's light or dark setting; Lights out is true black. Also in the menu.</p>
 
     <h2>Calendar</h2>
     <div class="card" id="cal"><div class="empty">Loading…</div></div>
@@ -2474,11 +2599,12 @@ function settingsView() {
   document.getElementById("odds").addEventListener("change", e => saveSettings({ odds: e.target.checked }));
   document.getElementById("dock").addEventListener("change", e => saveSettings({ dock: e.target.checked }));
   document.getElementById("photos").addEventListener("change", e => saveSettings({ photos: e.target.checked }));
-  document.getElementById("horn").addEventListener("change", e => {   // this device only, like Rise or Slapshot
-    try { localStorage.setItem("horn", e.target.checked ? "1" : "0"); } catch { /* stays off */ }
-    syncDock();
-    if (e.target.checked) import(`./horn.js${V}`).then(m => { m.arm(); return m.play(); }).catch(() => {});
-  });
+  document.getElementById("horn").addEventListener("change", e => setHorn(e.target.checked));
+  document.querySelectorAll("[data-navat]").forEach(b => b.addEventListener("click", () => {
+    try { localStorage.setItem("navAt", b.dataset.navat); } catch { /* fine */ }
+    document.querySelectorAll("[data-navat]").forEach(x => x.classList.toggle("on", x === b));
+    applyNavAt();
+  }));
   view.querySelectorAll("button[data-marks]").forEach(b => b.addEventListener("click", () => {
     saveSettings({ marks: b.dataset.marks });
     applyLogos();
@@ -2925,7 +3051,7 @@ async function compareView(a, b) {
 const hornOn = () => { try { return localStorage.getItem("horn") === "1"; } catch { return false; } };
 const dockOn = () => ME?.settings?.dock !== false;
 let dock = null;
-const loadDock = () => dock ||= import(`./dock.js${V}`).then(m => { m.start({ api, esc, mark, gameHref, spoilerHidden, motionOn, lamp, teamName, apart, onScreen, hornOn, dockOn, favs, V, teams: () => TEAMS }); return m; }).catch(() => { dock = null; });
+const loadDock = () => dock ||= import(`./dock.js${V}`).then(m => { m.start({ api, esc, mark, gameHref, spoilerHidden, motionOn, lamp, teamName, apart, onScreen, hornOn, dockOn, favs, onLive, menuIsOpen: () => menuOpen, V, teams: () => TEAMS }); return m; }).catch(() => { dock = null; });
 // Hidden in Settings with no horn on this device, it isn't even downloaded.
 function syncDock() {
   if (dock) dock.then(m => m?.refresh());
@@ -2937,7 +3063,9 @@ function renderRoute() {
   viewOff.abort();
   setCompact(false);
   if (ME.status !== "approved") return gateView();
-  document.getElementById("tabs").hidden = false;
+  document.body.classList.remove("gated");
+  closeMenu();
+  brandLine();
   const [, page, arg, arg2] = (location.hash || "#/").split("/");
   if (page !== "settings") editingTeams = false;
   if (page !== "report") reportFrom = location.hash || "#/";
@@ -2981,6 +3109,7 @@ async function start() {
     return;
   }
   TEAMS = Object.fromEntries(ME.teams.map(t => [t.abbr, t]));
+  startBar();
   if (ME.status === "approved") CHANGES = await changes;
   updateNewDot();
   const asked = new URLSearchParams(location.search).get("league");  // a shared link can pick the league

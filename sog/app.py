@@ -679,10 +679,10 @@ _logos = {"mtime": None, "v": None, "building": None}
 _college_logos = {"mtime": None, "v": None, "building": None}
 
 
-def _sheet_url(name: str, state: dict, build) -> str | None:
+def _sheet_url(name: str, file: str, state: dict, build) -> str | None:
     """/img/<name>?v=<content hash> once it's built (the phone keeps each version for good); None until then, and
     the first ask starts the build in the background, so the app opens with badges and never waits for logos."""
-    path = DATA_DIR / "img" / name
+    path = DATA_DIR / "img" / file
     try:
         mtime = path.stat().st_mtime
     except FileNotFoundError:
@@ -698,11 +698,11 @@ def _sheet_url(name: str, state: dict, build) -> str | None:
 
 
 def logos_url() -> str | None:
-    return _sheet_url("logos.css", _logos, _build_logos)
+    return _sheet_url("logos.css", images_mod.LOGOS_FILE, _logos, _build_logos)
 
 
 def college_logos_url() -> str | None:
-    return _sheet_url("college-logos.css", _college_logos, _build_college_logos)
+    return _sheet_url("college-logos.css", images_mod.COLLEGE_LOGOS_FILE, _college_logos, _build_college_logos)
 
 
 async def _build_college_logos():

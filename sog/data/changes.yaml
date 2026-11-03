@@ -3,6 +3,12 @@
 # After editing: `.venv/bin/python tools/changelog.py` rewrites CHANGELOG.md (a test checks they match),
 # and `.venv/bin/python tools/release.py` publishes the day's GitHub Release.
 
+- date: 2026-11-03
+  kind: new
+  title: "A new menu bar, and House lights"
+  text: "The tab bar and top bar are now one menu bar floating at the top. It shows your team's score while they play (or the league and day), the goal horn switch, and a menu button that opens every page in big jumbotron letters, with the league switch and House lights. House lights picks how bright the app is on this device: Auto (follows your phone), Day game, Dusk, Night or Lights out (true black). Rather have the bar under your thumb? Settings > Display > At the bottom. On a computer the main pages sit right in the bar."
+  link: "#/settings"
+
 - date: 2026-11-02
   kind: new
   title: "The live dock: your team's score, everywhere"

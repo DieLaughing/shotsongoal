@@ -210,7 +210,7 @@ def test_logos_are_one_stylesheet(tmp_path):
     css = path.read_text()
     assert ".mark.lg-BOS{background:url(\"data:image/webp;base64," in css and "lg-TOR" not in css
     assert ".mark.lg-PW-BOS{background:url(\"data:image/webp;base64," in css
-    assert css.index("@media (prefers-color-scheme: dark)") < css.rindex(".mark.lg-BOS{background-image")
+    assert ':root[data-scheme="dark"] .mark.lg-BOS{background-image' in css and "@media" not in css
     assert images.css_version(path) and len(images.css_version(path)) == 10
 
 

@@ -191,6 +191,27 @@ def compare_check(page) -> tuple[str, bool]:
     return f"{rows} rows", rows >= 4 and "compare/BOS/TOR" in page.get_attribute("#cp-out a", "href")
 
 
+def menu_check(page) -> tuple[str, bool]:
+    """The menu opens over a page that can't scroll, House lights switch the look, a page link closes it on that page,
+    and the menu bar moves to the bottom and back from Settings."""
+    page.evaluate("document.getElementById('menu-btn').click()")
+    page.wait_for_timeout(400)
+    opened = page.evaluate("!document.getElementById('menu').hidden && document.documentElement.classList.contains('menu-open')")
+    page.evaluate("document.querySelector('[data-house=out]').click()")
+    dark = page.evaluate("[document.documentElement.dataset.scheme, getComputedStyle(document.body).backgroundColor]") == ["dark", "rgb(0, 0, 0)"]
+    page.evaluate("document.querySelector('[data-house=auto]').click()")
+    page.evaluate("document.querySelector('.menu-links a[href=\"#/league\"]').click()")
+    page.wait_for_timeout(600)
+    closed = page.evaluate("document.getElementById('menu').hidden && location.hash === '#/league' && !document.documentElement.classList.contains('menu-open')")
+    page.evaluate("location.hash = '#/settings'")
+    page.wait_for_selector("[data-navat=bottom]")
+    page.evaluate("document.querySelector('[data-navat=bottom]').click()")
+    low = page.evaluate("document.querySelector('.navpill').getBoundingClientRect().bottom > innerHeight - 40")
+    page.evaluate("document.querySelector('[data-navat=top]').click()")
+    high = page.evaluate("document.querySelector('.navpill').getBoundingClientRect().top < 40")
+    return f"opened {opened}, lights {dark}, closed {closed}, bottom {low}, top {high}", opened and dark and closed and low and high
+
+
 def dock_check(page) -> tuple[str, bool]:
     """Your team on now: the strip shows on other pages, a goal lights the lamp, it's gone on that game's own page, and
     Settings hides it."""
@@ -224,7 +245,7 @@ def dock_check(page) -> tuple[str, bool]:
     return f"{shown}, then the lamp, then hidden", shown.startswith("1") and gone and hidden
 
 
-PLAY = [(REPLAY_GAME, "story", story_check), ("#/team/BOS", "ribbon", ribbon_check), ("#/compare/BOS/TOR", "compare", compare_check), ("#/wire", "dock", dock_check), (REPLAY_GAME, "replay", replay_check), (REPLAY_GAME, "clip", clip_check), ("#/", "welcome", welcome_check), ("#/league", "what if", what_if_check), ("#/picks", "flick", flick_check)]
+PLAY = [("#/", "menu", menu_check), (REPLAY_GAME, "story", story_check), ("#/team/BOS", "ribbon", ribbon_check), ("#/compare/BOS/TOR", "compare", compare_check), ("#/wire", "dock", dock_check), (REPLAY_GAME, "replay", replay_check), (REPLAY_GAME, "clip", clip_check), ("#/", "welcome", welcome_check), ("#/league", "what if", what_if_check), ("#/picks", "flick", flick_check)]
 
 # ---- the checks (the same in both apps) ---------------------------------------------------------------------------
 OPEN_MS, SETTLE_MS, STILL_MS, STILL_PX, PILL_PX = 8000, 3200, 800, 1, 2

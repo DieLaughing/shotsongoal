@@ -1,6 +1,6 @@
 // Caches the app shell so it opens instantly; data always comes from the network first. Photos and logos (/img/) are
 // the other way round: the phone's copy first, kept in their own cache, so a face seen once never downloads again.
-const CACHE = "sog-v5";
+const CACHE = "sog-v6";
 const IMAGES = "sog-img-v1";
 const IMAGES_MAX = 600;   // about 2 MB of small photos; the oldest go first
 const SHELL = ["/", "/offline.html", "/style.css", "/app.js", "/manifest.webmanifest", "/icons/icon.svg"];
