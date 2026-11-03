@@ -24,6 +24,8 @@
   <script>try { var d = document.documentElement, L = localStorage.getItem("lights") || "auto";
     var c = { day: "#f5f6f8", dusk: "#d5dae1", night: "#0e1116", out: "#000000" }[L];
     if (!c) L = "auto";
+    // Dim at puck drop, during a game (web/app.js setDimmed): straight to Lights out on a reload, for up to 4 hours.
+    if (localStorage.getItem("dimLive") === "1" && Date.now() - +localStorage.getItem("dimNow") < 144e5) { L = "out"; c = "#000000"; }
     var dark = L === "night" || L === "out" || (L === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
     d.dataset.scheme = dark ? "dark" : "light"; d.dataset.lights = L;
     d.dataset.nav = localStorage.getItem("navAt") === "bottom" ? "bottom" : "top";
@@ -56,9 +58,9 @@
   <div class="menu" id="menu" hidden>
     <nav class="menu-links" aria-label="Main">
       <a href="#/" data-nav="tonight"><b>Tonight</b><span id="info-tonight">Scores and where to watch</span></a>
-      <a href="#/picks" data-nav="picks"><b>Pick'em</b><span>Call tonight's winners</span></a>
-      <a href="#/league" data-nav="league"><b>League</b><span>Standings, leaders, What if?</span></a>
-      <a href="#/wire" data-nav="wire"><b>Wire</b><span>Trades, news and insiders</span></a>
+      <a href="#/picks" data-nav="picks"><b>Pick'em</b><span id="info-picks">Call tonight's winners</span></a>
+      <a href="#/league" data-nav="league"><b>League</b><span id="info-league">Standings, leaders, What if?</span></a>
+      <a href="#/wire" data-nav="wire"><b>Wire</b><span id="info-wire">Trades, news and insiders</span></a>
       <a href="#/search" data-nav="search"><b>Search</b><span>Players, teams, “Bruins vs Leafs”</span></a>
       <a href="#/settings" data-nav="settings"><b>Settings</b><span id="info-settings">Your teams, alerts, display</span></a>
     </nav>
@@ -70,7 +72,7 @@
     </div>
   </div>
   <main id="view" aria-live="polite"></main>
-  <footer class="foot" id="foot" hidden><a href="#/report">Something wrong? Report it</a></footer>
+  <footer class="foot" id="foot" hidden><div class="foot-house house-slot"></div><a href="#/report">Something wrong? Report it</a></footer>
   <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -83,7 +83,9 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   (per device, localStorage `cards`, set before the first paint by index.html, Settings > Display) picks the CSS.
   Tiles (default): two to a row on a phone, auto-fill from 700 px, each painted in your team's colour or the home
   team's (--c, .light = dark ink) with its code behind. A one-word name of 12+ letters gets `.long` (smaller). List =
-  the compact rows. Team pages keep the rows either way.
+  the compact rows. Team pages keep the rows either way. Pick'em uses the same heading (dayHead with base/label/line).
+  League's your-team tiles (yourTeamTiles) are team-colour cards with the place and record from /api/myteams when the
+  phone has them, else points from the table.
 - Spoiler-free: settings.spoilers {teams, games, seen} (game keys <league>:<id>: nhl, pwhl, ncaam, ncaaw), rules in sog/spoilers.py,
   mirrored by spoilerHidden() in web/app.js; /api/hidden lists them for pages. Started games from today/yesterday
   only. Hidden = no score on cards/hero, game page cover, Standings/team page covered when a hidden game is final, Wire items about it after puck drop
@@ -223,7 +225,16 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   Day game, Dusk (light, dimmed), Night, Lights out (true black). html[data-scheme] (light|dark) and html[data-lights]
   are set by an inline script in index.html before the first paint, then by applyLights(); every dark rule in
   style.css, the saved team-colour CSS (accentCss, one rule per shade) and the logo sheets key off data-scheme, never
-  prefers-color-scheme. It also sets both theme-color metas (the iPhone status bar strip = the page colour). Sub-pages start with backLink(fallback): history.back() when the
+  prefers-color-scheme. It also sets both theme-color metas (the iPhone status bar strip = the page colour).
+  On wide screens (900 px+) the same picker sits in the footer too (`.house-slot`, Halpin-style), except on Settings.
+  Dim at puck drop (checkbox under the ruler, per device, localStorage `dimLive`, off by default): while one of your
+  teams is live (the dock's /api/live via onLive, spoiler-free games left out) applyLights shows Lights out whatever
+  was picked, with a 1.4 s view-transition fade (setDimmed) and a toast, and lifts at the final. The dock polls when
+  this is on even with the dock and horn off. `dimNow` (timestamp, honoured 4 h) lets index.html paint a reload during
+  a game dark. Turning it on with nothing live previews it for 3 s.
+- Menu lines (menuLines(), on opening the menu): Pick'em (left to pick + when the first locks), League (your first
+  team's place, from /api/myteams) and Wire (items newer than `wireSeen`, set whenever the Wire is shown) are read from
+  GET_CACHE copies that prefetch() keeps fresh, so the menu never makes a request; with no copy the plain text stays. Sub-pages start with backLink(fallback): history.back() when the
   page was reached inside the app (cameFromApp), else the fallback (games -> #/, teams -> #/league, others -> #/settings).
 - Settings (web/app.js settingsView) save on every change (saveSettings: optimistic, queued PUTs of the whole settings
   object, toast). Team pickers group NHL teams by sog/teams.py DIVISIONS. Home market = one team (local is a list server-side).

@@ -5,6 +5,12 @@
 
 - date: 2026-11-03
   kind: new
+  title: "Dim at puck drop, and a menu that tells you what's waiting"
+  text: "Turn on Dim at puck drop under House lights and the app goes to Lights out when your team's game starts, like the arena, then comes back up at the final horn. The menu now says what's waiting: how many games are left to pick and when the first locks, where your team stands, and how many Wire stories came in since you last looked. Pick'em and League get the new look too, and on a computer House lights sit at the bottom of every page."
+  link: "#/settings"
+
+- date: 2026-11-03
+  kind: new
   title: "Tonight, in team colours"
   text: "Tonight opens with the day in big letters and what's on (how many games, how many live). Your team's card now says what's happening in words, like \"Bruins lead Golden Knights\", over a scoreboard with the shots while they play. Every other game is its own card in your team's colour or the home team's, two to a row on a phone. Rather have the compact list? Settings > Display > Compact list, on this device."
   link: "#/"

@@ -165,6 +165,8 @@ html.menu-open, html.menu-open body { overflow: hidden; }
 .house-track button i { width: 26px; height: 26px; border-radius: 50%; background: var(--bg); box-shadow: inset 0 0 0 2px var(--muted); }
 .house-track button[aria-checked="true"] { color: var(--text); font-weight: 750; }
 .house-track button[aria-checked="true"] i { background: #111; box-shadow: inset 0 0 0 4px var(--text), 0 0 0 3px var(--bg), 0 3px 9px rgba(0, 0, 0, .3); }
+.house-dim { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer; }
+.house-dim input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
 @media (prefers-reduced-motion: no-preference) { .house-track button i { transition: background 160ms ease, box-shadow 160ms ease; } }
 
 main { max-width: 760px; margin: 0 auto; padding: 8px 16px 32px; }
@@ -299,6 +301,16 @@ h2 { font-size: 17px; line-height: 1.15; letter-spacing: .03em; color: var(--mut
 .watch .ok { color: var(--have-fg); font-weight: 650; }
 .watch .no { color: var(--need-fg); font-weight: 650; }
 .tiles-top { margin: 12px 0 4px; }
+/* League: your teams as team-colour cards, the code faint behind (like Tonight's tiles). */
+.tile.team-tile { position: relative; overflow: hidden; isolation: isolate; display: grid; align-content: start; justify-items: start; gap: 6px;
+  min-height: 104px; padding: 14px; border: 0; border-radius: 24px; --ink: #fff; --ring: rgba(255, 255, 255, .55); color: var(--ink);
+  background: linear-gradient(160deg, var(--c), color-mix(in srgb, var(--c) 70%, #000)); }
+.tile.team-tile.light { --ink: #111; --ring: rgba(0, 0, 0, .35); background: linear-gradient(160deg, var(--c), color-mix(in srgb, var(--c) 85%, #000)); }
+:root[data-scheme="dark"] .team-tile { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+.team-tile .ghost { font-size: 84px; left: auto; right: -.04em; }
+.team-tile .mark { box-shadow: 0 0 0 1.5px var(--ring); }
+.tt-n { font: 800 22px/1 Arena, Score, system-ui, sans-serif; text-transform: uppercase; letter-spacing: .01em; padding-bottom: 1px; overflow-wrap: anywhere; }
+.tt-k { font-size: 12px; font-weight: 600; opacity: .9; }
 .more-stats { margin-top: 22px; }
 .more-stats > summary { cursor: pointer; list-style: none; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px;
   background: var(--surface); font-weight: 650; font-size: 14px; }
@@ -336,10 +348,8 @@ h2 { font-size: 17px; line-height: 1.15; letter-spacing: .03em; color: var(--mut
 .ms-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; }
 .ms-row + .ms-row { border-top: 1px solid var(--border); }
 
-/* day header */
-.daybar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 4px; }
-.daybar h1 { margin: 0; font-size: 27px; text-align: center; flex: 1; }
-.daybar a, .btn {
+/* buttons */
+.btn {
   text-decoration: none; padding: 7px 12px; border-radius: 9px; border: 1px solid var(--border);
   background: var(--surface); color: var(--text); font-weight: 600; font-size: 13px; cursor: pointer;
 }
@@ -607,6 +617,12 @@ body.league-pwhl { --accent: #163F36; --red: #163F36; --fav: #163F36; --on-accen
 /* bug reports */
 .foot { max-width: 760px; margin: 0 auto; padding: 0 16px 24px; text-align: center; font-size: 13px; }
 .foot a { color: var(--muted); }
+.foot-house { display: none; }
+@media (min-width: 900px) {
+  .foot-house { display: block; max-width: 400px; margin: 28px auto 22px; padding-top: 22px; border-top: 1px solid var(--border); text-align: left; }
+  .foot-house .house-dim { justify-content: center; }
+  .foot.no-house .foot-house { display: none; }
+}
 .bugtext { width: 100%; box-sizing: border-box; resize: vertical; font-size: 15px; line-height: 1.4; }
 .report-row { display: flex; flex-direction: column; gap: 4px; padding: 11px 14px; border-top: 1px solid var(--border); text-decoration: none; color: inherit; }
 .report-row:first-child { border-top: 0; }
@@ -782,6 +798,8 @@ body.league-pwhl .league.has-pill > button.on { background: transparent; box-sha
 
 /* ---- shared-element page changes (web/app.js navigate): a game card grows into the game page's scoreboard ---- */
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 200ms; }
+/* Dim at puck drop: the whole screen fades down (or up) slowly, like the arena's lights. */
+:root.dim-fade::view-transition-old(root), :root.dim-fade::view-transition-new(root) { animation-duration: 1400ms; animation-timing-function: ease-in-out; }
 ::view-transition-group(matchup) { animation-duration: 340ms; animation-timing-function: cubic-bezier(.2, .9, .3, 1); }
 ::view-transition-old(matchup), ::view-transition-new(matchup) { animation-duration: 340ms; height: 100%; object-fit: contain; }
 
@@ -902,7 +920,7 @@ body.row-wheel .hap { scroll-snap-type: none; }   /* set by the first wheel turn
 .rp-goal-by { flex-basis: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 32px; color: var(--text); font-weight: 650; }
 
 /* Team and player pages: the jumbotron's cousin, one team's colour with the same slant and one big number. Always dark. */
-.card.banner { position: relative; display: flex; align-items: center; gap: 14px; padding: 18px 16px; border: 0; color: #fff;
+.card.banner { position: relative; display: flex; align-items: center; gap: 14px; padding: 18px 16px; border: 0; color: #fff; border-radius: 28px;
   background: linear-gradient(101deg, color-mix(in srgb, var(--c) 64%, #0a0d12) 66%, color-mix(in srgb, var(--c) 40%, #0a0d12) 66%); }
 .banner .mark.big { width: 64px; height: 46px; flex: none; }
 .bn-text { flex: 1; min-width: 0; }

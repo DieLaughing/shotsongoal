@@ -70,7 +70,7 @@ async function tick() {
   clearTimeout(timer);
   if (document.hidden) return;   // visibilitychange starts it again
   let live = false;
-  if (ctx.favs().size && (ctx.dockOn() || ctx.hornOn())) {   // hidden, it still listens for the horn
+  if (ctx.favs().size && (ctx.dockOn() || ctx.hornOn() || ctx.dimOn())) {   // hidden, it still listens for the horn and the lights
     try {
       games = (await ctx.api("/api/live")).games;
       live = games.some(g => g.state === "live");

@@ -229,18 +229,6 @@ const rankTag = side => side?.rank ? `<span class="rk">${side.rank}</span>` : ""
 
 const time = iso => new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
-function dayTitle(iso) {
-  const [y, m, d] = iso.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const diff = Math.round((date - today) / 86400000);
-  const label = date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
-  if (diff === 0) return `Today · ${label}`;
-  if (diff === 1) return `Tomorrow · ${label}`;
-  if (diff === -1) return `Yesterday · ${label}`;
-  return label;
-}
-
 const shortDate = iso => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }); };
 
 function statusCell(g) {
@@ -443,7 +431,38 @@ function brandLine() {
   const t = document.getElementById("info-tonight");
   if (t.textContent !== info) t.textContent = info;
 }
-const onLive = list => { liveNow = list; brandLine(); };
+// The menu's lines that say what's waiting, read from the phone's own copies (prefetch() keeps Pick'em and the Wire
+// under ~90 s old), so opening the menu never makes a request. No copy yet: the plain description stays.
+const MENU_INFO = { picks: "Call tonight's winners", league: "Standings, leaders, What if?", wire: "Trades, news and insiders" };
+const wireSeen = () => { try { return localStorage.getItem("wireSeen") || ""; } catch { return ""; } };
+function sinceWhen(iso) {
+  const d = new Date(iso), today = new Date().toDateString() === d.toDateString();
+  return today ? time(iso) : d.toLocaleDateString(undefined, { weekday: "short" });
+}
+function menuLines() {
+  const set = (id, text) => { const el = document.getElementById(`info-${id}`); if (el && el.textContent !== text) el.textContent = text || MENU_INFO[id]; };
+  // Pick'em: how many are left to pick and when the first of them locks.
+  const pk = GET_CACHE.get(`/api/pickem?leagues=${shownLeagues().join(",")}`)?.data, now = new Date().toISOString();
+  let picks = "";
+  if (pk?.games?.length) {
+    const open = pk.games.filter(g => g.state === "pre" && g.start && g.start > now), left = open.filter(g => !g.mine);
+    const day = pk.date && pk.date !== pk.today ? `${shortDate(pk.date).split(",")[0]} · ` : "";
+    picks = left.length ? `${day}${left.length} to pick · first locks at ${time(left.map(g => g.start).sort()[0])}`
+      : open.length ? `${day}All picked · good luck`
+      : pk.games.some(g => g.state === "live") ? "Picks locked · games on now" : "";
+  }
+  set("picks", picks);
+  // League: where your first team stands.
+  const c = (myTeams.data?.teams || []).find(t => shownLeagues().includes(t.league) && t.standing?.place);
+  set("league", c ? `${teamName(c.abbr)}: ${c.standing.place}` : "");
+  // Wire: what's come in since you last opened it.
+  let w = { kind: "", mine: false };
+  try { w = { ...w, ...JSON.parse(localStorage.getItem("wire") || "{}") }; } catch { /* defaults */ }
+  const seen = wireSeen(), items = proLeagues().flatMap(l => GET_CACHE.get(`/api/wire?league=${l}&kind=${w.kind}&mine=${w.mine ? 1 : 0}`)?.data || []);
+  const fresh = seen ? items.filter(i => i.time > seen).length : 0;
+  set("wire", fresh ? `${fresh} new since ${sinceWhen(seen)}` : "");
+}
+const onLive = list => { liveNow = list; brandLine(); dimForLive(list); };
 
 // House lights: Auto follows the phone (and keeps following it); the others pick light or dark and a shade of it.
 const LIGHTS = [["auto", "Auto"], ["day", "Day game"], ["dusk", "Dusk"], ["night", "Night"], ["out", "Lights out"]];
@@ -452,20 +471,63 @@ const darkPhone = matchMedia("(prefers-color-scheme: dark)");
 const lights = () => { try { return localStorage.getItem("lights") || "auto"; } catch { return "auto"; } };
 function applyLights() {
   const L = LIGHT_BG[lights()] ? lights() : "auto", d = document.documentElement;
-  const scheme = L === "night" || L === "out" || (L === "auto" && darkPhone.matches) ? "dark" : "light";
+  const E = dimmed ? "out" : L;   // what's showing: Lights out while dimmed for a game, whatever was picked
+  const scheme = E === "night" || E === "out" || (E === "auto" && darkPhone.matches) ? "dark" : "light";
   if (d.dataset.scheme !== scheme) d.dataset.scheme = scheme;
-  if (d.dataset.lights !== L) d.dataset.lights = L;
+  if (d.dataset.lights !== E) d.dataset.lights = E;
   // The iPhone's status bar strip: the page's colour (the light meta comes first in index.html).
-  document.querySelectorAll('meta[name="theme-color"]').forEach((m, i) => { m.content = LIGHT_BG[L] || (i ? LIGHT_BG.night : LIGHT_BG.day); });
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m, i) => { m.content = LIGHT_BG[E] || (i ? LIGHT_BG.night : LIGHT_BG.day); });
   document.querySelectorAll("[data-house]").forEach(b => b.setAttribute("aria-checked", b.dataset.house === L));
-  document.querySelectorAll(".house-now").forEach(e => { e.textContent = LIGHTS.find(([k]) => k === L)[1]; });
+  const name = LIGHTS.find(([k]) => k === L)[1];
+  document.querySelectorAll(".house-now").forEach(e => { e.textContent = dimmed ? `${name} · dimmed for the game` : name; });
+  document.querySelectorAll("[data-dim]").forEach(c => { c.checked = dimOn(); });
+}
+
+// Dim at puck drop (House lights, per device, off unless set): while one of your teams is playing, the app goes to
+// Lights out, the way the arena does, and comes back up at the final horn. The live games come from the dock's
+// /api/live (ctx.onLive), which also polls for this. `dimNow` (a timestamp) lets index.html paint a reload during the
+// game dark straight away; it only counts for 4 hours, so a game the app never saw end can't leave it dark.
+const dimOn = () => { try { return localStorage.getItem("dimLive") === "1"; } catch { return false; } };
+let dimmed = (() => { try { return dimOn() && Date.now() - +localStorage.getItem("dimNow") < 4 * 3600000; } catch { return false; } })();
+let dimDemo = 0;
+function setDimmed(on, why = "") {
+  if (on === dimmed) return;
+  const swap = () => {
+    dimmed = on;
+    try { on ? localStorage.setItem("dimNow", String(Date.now())) : localStorage.removeItem("dimNow"); } catch { /* fine */ }
+    applyLights();
+  };
+  // A slow cross-fade of the whole screen, like the arena's lights, where the browser can; otherwise at once.
+  if (document.startViewTransition && motionOn() && !document.hidden) {
+    document.documentElement.classList.add("dim-fade");
+    document.startViewTransition(swap).finished.finally(() => document.documentElement.classList.remove("dim-fade"));
+  } else swap();
+  if (why) toast(why);
+}
+function dimForLive(list) {
+  if (dimDemo) return;
+  const g = list[0], on = dimOn() && !!g;
+  if (on === dimmed) { if (on) try { localStorage.setItem("dimNow", String(Date.now())); } catch { /* fine */ } return; }
+  const mine = g && (favs().has(g.away.abbr) ? g.away.abbr : g.home.abbr);
+  setDimmed(on, on ? `Lights down: the ${teamName(mine)} are on` : dimOn() ? "Lights up: that's the final horn" : "");
+}
+function setDim(on) {
+  try { localStorage.setItem("dimLive", on ? "1" : "0"); } catch { /* fine */ }
+  syncDock();   // the dock's poll is what tells the app a game is on
+  clearTimeout(dimDemo); dimDemo = 0;
+  if (!on) return setDimmed(false), applyLights();
+  if (liveNow.length) return dimForLive(liveNow);
+  // Nothing on right now: a short preview, so you see what you just turned on.
+  setDimmed(true, "This is puck drop: the lights stay down until the final horn");
+  dimDemo = setTimeout(() => { dimDemo = 0; setDimmed(false); }, 3200);
 }
 darkPhone.addEventListener("change", () => { if (lights() === "auto") applyLights(); });
 function housePicker() {
   const L = lights();
   return `<div class="house"><div class="house-head"><span>House lights</span><span class="house-now">${LIGHTS.find(([k]) => k === L)?.[1] || "Auto"}</span></div>
     <div class="house-track" role="radiogroup" aria-label="House lights">${LIGHTS.map(([k, l]) =>
-      `<button type="button" role="radio" aria-checked="${k === L}" data-house="${k}"><i aria-hidden="true"></i>${l}</button>`).join("")}</div></div>`;
+      `<button type="button" role="radio" aria-checked="${k === L}" data-house="${k}"><i aria-hidden="true"></i>${l}</button>`).join("")}</div>
+    <label class="house-dim"><input type="checkbox" data-dim ${dimOn() ? "checked" : ""}>Dim at puck drop</label></div>`;
 }
 
 // How Tonight draws its games, per device: "tiles" (team-colour cards, default) or "list" (the compact rows). Pure CSS
@@ -495,6 +557,7 @@ function openMenu(byKey) {
   if (menuOpen) return;
   menuOpen = true;
   setCompact(false);
+  menuLines();
   menu.hidden = false;
   menuBtn.setAttribute("aria-expanded", "true");
   menuBtn.setAttribute("aria-label", "Close menu");
@@ -526,7 +589,8 @@ function closeMenu() {
 function startBar() {
   applyNavAt();
   applyLights();
-  menu.querySelector(".house-slot").innerHTML = housePicker();
+  // House lights live in the menu, and on wide screens in the footer too (Halpin-style), where a mouse finds them.
+  document.querySelectorAll(".house-slot").forEach(el => { el.innerHTML = housePicker(); });
   showHorn();
   brandLine();
   menuBtn.addEventListener("click", e => menuOpen ? closeMenu() : openMenu(e.detail === 0));
@@ -542,6 +606,7 @@ function startBar() {
     try { localStorage.setItem("lights", b.dataset.house); } catch { /* this visit only */ }
     applyLights();
   });
+  document.addEventListener("change", e => { if (e.target.matches?.("[data-dim]")) setDim(e.target.checked); });
 }
 
 // Scrolling down slides the menu bar off its edge; any scroll up (or the top of the page, or a new page) brings it
@@ -959,7 +1024,7 @@ function foldIsOpen(league, page = "") {
 
 // Tonight's heading: the day in a word ("Tonight", "Tomorrow", "Saturday") in big Arena capitals, the date over it,
 // a line on what's on under it, and the arrows to step a day.
-function dayHead(day, games) {
+function dayHead(day, games, { base = "#/day/", label = "", line = null } = {}) {
   let word = "Games", kick = "", sum = "";
   if (day.date) {
     const [y, m, d] = day.date.split("-").map(Number), date = new Date(y, m - 1, d);
@@ -969,7 +1034,9 @@ function dayHead(day, games) {
     word = { 0: "Tonight", 1: "Tomorrow", [-1]: "Yesterday" }[diff] || date.toLocaleDateString(undefined, { weekday: "long" });
     kick = diff >= -1 && diff <= 1 ? full : date.toLocaleDateString(undefined, { month: "long", day: "numeric", year: date.getFullYear() === today.getFullYear() ? undefined : "numeric" });
   }
-  if (games.length) {
+  if (label) kick = kick ? `${label} · ${kick}` : label;
+  if (line != null) sum = line;
+  else if (games.length) {
     const n = st => games.filter(g => g.state === st).length, live = n("live"), done = n("final");
     const first = games.filter(g => g.state === "pre" && g.start).map(g => g.start).sort()[0];
     sum = [`${games.length} game${games.length > 1 ? "s" : ""}`,
@@ -977,7 +1044,7 @@ function dayHead(day, games) {
       done === games.length ? "All final" : done ? `${done} final` : "",
       !live && !done && first ? `First at ${esc(time(first))}` : ""].filter(Boolean).join(`<span aria-hidden="true">·</span>`);
   }
-  const arrow = (to, label, glyph) => to ? `<a href="#/day/${to}" aria-label="${label}">${glyph}</a>` : `<span></span>`;
+  const arrow = (to, name, glyph) => to ? `<a href="${base}${to}" aria-label="${name}">${glyph}</a>` : `<span></span>`;
   return `<div class="dayhead"><div class="dh-top"><div class="dh-k">${esc(kick)}</div>
       <div class="dh-arrows">${arrow(day.prev, "Previous day", "←")}${arrow(day.next, "Next day", "→")}</div></div>
     <h1>${esc(word)}${day.date ? "." : ""}</h1>${sum ? `<div class="dh-sum">${sum}</div>` : ""}</div>`;
@@ -1074,6 +1141,13 @@ async function tonightView(date, quiet = false) {
 // ---- Pick'em -----------------------------------------------------------------------------------
 // Pick a winner for every game before puck drop. ★ = lock of the night: 2 points if right, nothing if wrong.
 // Friends' picks show once a game starts. Scores follow spoiler-free like everywhere else.
+// Pick'em's line under the day: how many games, and how many are left to pick (or that they're all in).
+function pickLine(games) {
+  if (!games.length) return "";
+  const now = new Date().toISOString(), open = games.filter(g => g.state === "pre" && g.start && g.start > now);
+  const left = open.filter(g => !g.mine).length, sep = `<span aria-hidden="true">·</span>`;
+  return `${games.length} game${games.length > 1 ? "s" : ""}${sep}${left ? `<b>${left} to pick</b>` : open.length ? "All picked" : "Picks locked"}`;
+}
 async function pickemView(date, quiet = false) {
   setNav("picks");
   if (!quiet) showLoading(`Loading Pick'em…`);
@@ -1154,11 +1228,7 @@ async function pickemView(date, quiet = false) {
   };
   const hid = hidden.filter(g => g.state === "final" && leagues.includes(g.league || "nhl"));
   view.innerHTML = `
-    <div class="daybar">
-      ${d.prev ? `<a href="#/picks/${d.prev}" aria-label="Previous day">←</a>` : "<span></span>"}
-      <h1>${esc(dayTitle(d.date))}</h1>
-      ${d.next ? `<a href="#/picks/${d.next}" aria-label="Next day">→</a>` : "<span></span>"}
-    </div>
+    ${dayHead(d, d.games, { base: "#/picks/", label: "Pick'em", line: pickLine(d.games) })}
     <p class="help">Tap who wins: <b>1 point</b> for every one you get right${pro.some(g => g.bonus) ? `, or <b>2 points</b> if they win as the underdog (marked <b>2×</b>)` : ""}. Tap ★ on one game a night to make it your lock: it <b>doubles</b> that game's points (nothing if it's wrong). Picks lock at puck drop.${college.length ? ` College gets its own ★ and table; no underdog bonus there, and a tie counts as wrong.` : ""}</p>
     <div class="pick-clock" id="pickclock"></div>
     <div class="pick-dice"><button class="btn small primary" id="flick" hidden>🏒 Flick your picks</button><button class="btn small" id="dice" hidden></button></div>
@@ -1708,6 +1778,7 @@ async function wireView(quiet = false) {
   const block = (items, l) => (leagues.length > 1 ? `<div class="league-head ${l}">${LEAGUE_NAME[l]}</div>` : "") +
     (items.length ? `<div class="card">${items.slice(0, leagues.length > 1 ? 40 : 150).map(i => wireItem(i, fav, hidden)).join("")}</div>`
       : `<div class="empty">Nothing here yet.${state.mine ? " Try turning off \"Only my teams\"." : ""}</div>`);
+  try { localStorage.setItem("wireSeen", new Date().toISOString()); } catch { /* fine */ }   // the menu's "N new since"
   view.innerHTML = `
     <div class="seg">${WIRE_KINDS.map(([k, l]) => `<button data-kind="${k}" class="${k === state.kind ? "on" : ""}">${l}</button>`).join("")}</div>
     <label class="toggle"><input type="checkbox" id="mine" ${state.mine ? "checked" : ""}> Only my teams</label>
@@ -1901,10 +1972,20 @@ function collegeStandings(rows, lg) {
   return body + `<p class="help">${esc(LEAGUE_NAME[lg])}${rows[0]?.season ? `, ${esc(rows[0].season)}` : ""}: every game's record, not conference standings (ESPN doesn't publish those). Poll: this week's USCHO ranking.</p>`;
 }
 
-// Your teams as shortcuts above the standings; every team name in the tables opens its page too.
-function yourTeamTiles(lg) {
+// Your teams as shortcuts above the standings, as team-colour cards like Tonight's: the place and record from the team
+// cards when the phone has them (/api/myteams), else the points from the table. Every team name in the tables opens
+// its page too.
+function yourTeamTiles(lg, rows = []) {
   const mine = [...favs()].filter(a => leagueOf(a) === lg);
-  return mine.length ? `<div class="grid tiles-top">${mine.map(a => `<a class="tile" href="#/team/${a}">${mark(a)}${esc(teamName(a))}</a>`).join("")}</div>` : "";
+  const line = a => {
+    const c = myTeams.data?.teams?.find(t => t.abbr === a), r = rows.find(x => x.abbr === a);
+    if (c?.standing?.place) return `${c.standing.place}${c.record ? ` · ${c.record}` : ""}`;
+    return r?.pts != null ? `${r.pts} pts` : "";
+  };
+  return mine.length ? `<div class="grid tiles-top">${mine.map(a => { const t = TEAMS[a] || {};
+    return `<a class="tile team-tile${t.light ? " light" : ""}" href="#/team/${a}" style="--c:${esc(t.color || "#3a3f47")}">
+      <span class="ghost" aria-hidden="true">${esc((t.code || a).slice(0, 4))}</span>${mark(a)}
+      <span class="tt-n">${esc(teamName(a))}</span>${line(a) ? `<span class="tt-k">${esc(line(a))}</span>` : ""}</a>`; }).join("")}</div>` : "";
 }
 
 // The table for a mode, from any list of rows: the real one, or What if?'s.
@@ -1951,13 +2032,13 @@ async function standingsView(mode = "division") {
   if (lg === "pwhl" || isCollege(lg)) {
     let rows;
     try { rows = await standings(lg); } catch (e) { view.innerHTML = failed(e); return; }
-    view.innerHTML = leagueTabs("standings") + leaguePicker(lg) + yourTeamTiles(lg) + (lg === "pwhl" ? pwhlStandings(rows) : collegeStandings(rows, lg));
+    view.innerHTML = leagueTabs("standings") + leaguePicker(lg) + yourTeamTiles(lg, rows) + (lg === "pwhl" ? pwhlStandings(rows) : collegeStandings(rows, lg));
     bindLeaguePicker(() => standingsView(mode));
     return;
   }
   let rows;
   try { rows = await standings(); } catch (e) { view.innerHTML = failed(e); return; }
-  view.innerHTML = `${leagueTabs("standings")}${leaguePicker("nhl")}${yourTeamTiles("nhl")}<div class="seg">${STANDING_MODES.map(([k, l]) => `<button data-mode="${k}" class="${k === mode ? "on" : ""}">${l}</button>`).join("")}</div>
+  view.innerHTML = `${leagueTabs("standings")}${leaguePicker("nhl")}${yourTeamTiles("nhl", rows)}<div class="seg">${STANDING_MODES.map(([k, l]) => `<button data-mode="${k}" class="${k === mode ? "on" : ""}">${l}</button>`).join("")}</div>
     <div class="wi-open"><button class="btn small" id="whatif">🔮 What if?</button></div><div id="wi-slot"></div><div id="table">${standingsBody(rows, mode)}</div>`;
   bindLeaguePicker(() => standingsView(mode));
   const opener = view.querySelector(".wi-open");
@@ -3113,11 +3194,11 @@ async function compareView(a, b) {
 const hornOn = () => { try { return localStorage.getItem("horn") === "1"; } catch { return false; } };
 const dockOn = () => ME?.settings?.dock !== false;
 let dock = null;
-const loadDock = () => dock ||= import(`./dock.js${V}`).then(m => { m.start({ api, esc, mark, gameHref, spoilerHidden, motionOn, lamp, teamName, apart, onScreen, hornOn, dockOn, favs, onLive, menuIsOpen: () => menuOpen, V, teams: () => TEAMS }); return m; }).catch(() => { dock = null; });
+const loadDock = () => dock ||= import(`./dock.js${V}`).then(m => { m.start({ api, esc, mark, gameHref, spoilerHidden, motionOn, lamp, teamName, apart, onScreen, hornOn, dockOn, dimOn, favs, onLive, menuIsOpen: () => menuOpen, V, teams: () => TEAMS }); return m; }).catch(() => { dock = null; });
 // Hidden in Settings with no horn on this device, it isn't even downloaded.
 function syncDock() {
   if (dock) dock.then(m => m?.refresh());
-  else if (dockOn() || hornOn()) loadDock();
+  else if (dockOn() || hornOn() || dimOn()) loadDock();
 }
 
 function renderRoute() {
@@ -3132,6 +3213,7 @@ function renderRoute() {
   if (page !== "settings") editingTeams = false;
   if (page !== "report") reportFrom = location.hash || "#/";
   document.getElementById("foot").hidden = page === "report";
+  document.getElementById("foot").classList.toggle("no-house", page === "settings");   // Settings has its own
   if (!keepScroll) window.scrollTo(0, 0);
   keepScroll = false;
   if (page === "day" && /^\d{4}-\d{2}-\d{2}$/.test(arg || "")) return tonightView(arg);

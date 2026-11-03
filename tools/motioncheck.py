@@ -192,14 +192,22 @@ def compare_check(page) -> tuple[str, bool]:
 
 
 def menu_check(page) -> tuple[str, bool]:
-    """The menu opens over a page that can't scroll, House lights switch the look, a page link closes it on that page,
-    and the menu bar moves to the bottom and back from Settings."""
+    """The menu opens over a page that can't scroll, House lights switch the look, Dim at puck drop previews itself, a
+    page link closes it on that page, and the menu bar moves to the bottom and back from Settings."""
     page.evaluate("document.getElementById('menu-btn').click()")
     page.wait_for_timeout(400)
     opened = page.evaluate("!document.getElementById('menu').hidden && document.documentElement.classList.contains('menu-open')")
     page.evaluate("document.querySelector('[data-house=out]').click()")
     dark = page.evaluate("[document.documentElement.dataset.scheme, getComputedStyle(document.body).backgroundColor]") == ["dark", "rgb(0, 0, 0)"]
     page.evaluate("document.querySelector('[data-house=auto]').click()")
+    # Dim at puck drop with nothing on: a preview goes to Lights out and comes back up by itself.
+    page.evaluate("document.querySelector('.menu [data-dim]').click()")
+    page.wait_for_timeout(300)
+    dimmed = page.evaluate("document.documentElement.dataset.lights") == "out"
+    page.wait_for_timeout(4800)
+    lifted = page.evaluate("document.documentElement.dataset.lights") == "auto"
+    page.evaluate("document.querySelector('.menu [data-dim]').click()")
+    dim = dimmed and lifted
     page.evaluate("document.querySelector('.menu-links a[href=\"#/league\"]').click()")
     page.wait_for_timeout(600)
     closed = page.evaluate("document.getElementById('menu').hidden && location.hash === '#/league' && !document.documentElement.classList.contains('menu-open')")
@@ -209,7 +217,8 @@ def menu_check(page) -> tuple[str, bool]:
     low = page.evaluate("document.querySelector('.navpill').getBoundingClientRect().bottom > innerHeight - 40")
     page.evaluate("document.querySelector('[data-navat=top]').click()")
     high = page.evaluate("document.querySelector('.navpill').getBoundingClientRect().top < 40")
-    return f"opened {opened}, lights {dark}, closed {closed}, bottom {low}, top {high}", opened and dark and closed and low and high
+    return (f"opened {opened}, lights {dark}, dim preview {dim}, closed {closed}, bottom {low}, top {high}",
+            opened and dark and dim and closed and low and high)
 
 
 def dock_check(page) -> tuple[str, bool]:
