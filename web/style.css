@@ -91,7 +91,8 @@ body.has-dock { --dock-h: 60px; }
 .pill-btn { flex: none; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; position: relative;
   border: 0; border-radius: 22px; background: transparent; color: var(--text); cursor: pointer; }
 .pill-btn .ico { width: 21px; height: 21px; vertical-align: 0; color: currentColor; }
-.pill-btn:hover { background: color-mix(in srgb, var(--text) 7%, transparent); }
+/* Hover looks only where there's a mouse: a phone keeps :hover on the last thing touched (a menu line stayed red). */
+@media (hover: hover) { .pill-btn:hover { background: color-mix(in srgb, var(--text) 7%, transparent); } .menu-links a:hover b { color: var(--accent); } }
 #horn-btn .horn-on, #horn-btn[aria-pressed="true"] .horn-off { display: none; }
 #horn-btn[aria-pressed="true"] .horn-on { display: inline; }
 .brand { min-width: 150px; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0 10px; text-decoration: none; }
@@ -140,7 +141,6 @@ body.gated :is(.pill-btn, .pill-link) { display: none; }
 .menu-links b { font: 800 44px/.95 Arena, system-ui, sans-serif; text-transform: uppercase; letter-spacing: .02em; }
 .menu-links span { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--muted); }
 .menu-links a.active span::before { content: ""; width: 22px; height: 3px; border-radius: 2px; background: var(--accent); }
-.menu-links a:hover b { color: var(--accent); }
 .menu-ctl { width: 100%; max-width: 360px; display: grid; gap: 22px; }
 .menu-ctl .league { justify-content: space-between; padding: 4px; border-radius: 14px; background: var(--surface); }
 .menu-ctl .league button { flex: 1; min-height: 40px; font-size: 13.5px; border-radius: 10px; }
