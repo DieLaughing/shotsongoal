@@ -3,6 +3,10 @@
 Every update to [Shots on Goal](https://github.com/DieLaughing/shotsongoal), newest first. The same list is on the app's What's new page.
 This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit that file, not this one.
 
+## November 10, 2026
+
+- **Fixed: Nothing hides under a side status bar.** On phones that put the time and battery down the side of the screen (like iPhone Duo folded, or any iPhone turned sideways), the menu bar, pages, the live dock, first-time setup, Flick, clips and Game story now stay clear of it. Settings has a new This screen line that shows how much room your phone keeps clear on each side, in case something still looks cut off.
+
 ## November 3, 2026
 
 - **New: Dim at puck drop, and a menu that tells you what's waiting.** Turn on Dim at puck drop under House lights and the app goes to Lights out when your team's game starts, like the arena, then comes back up at the final horn. The menu now says what's waiting: how many games are left to pick and when the first locks, where your team stands, and how many Wire stories came in since you last looked. Pick'em and League get the new look too, and on a computer House lights sit at the bottom of every page.

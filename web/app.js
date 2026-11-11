@@ -2703,7 +2703,14 @@ function settingsView() {
     <a class="card pad whatsnew-link" href="#/report"><b>Report a problem or suggest an idea</b><span class="muted small">Goes straight to the to-do list →</span></a>
     <div id="myreports"></div>
     ${ME.admin ? `<a class="card pad whatsnew-link" href="#/admin" style="margin-top:10px"><b>Admin</b><span class="muted small">People, invites, insiders, sources →</span></a>` : ""}
-    <p class="help" style="margin-top:12px">Signed in as ${esc(ME.email)}.</p>`;
+    <p class="help" style="margin-top:12px">Signed in as ${esc(ME.email)}.</p>
+
+    <h2>This screen</h2>
+    <div class="card pad small"><div id="screen-now">${esc(screenText())}</div>
+      <p class="help" style="margin:6px 0 0">Space the device keeps clear on each side, in points. Handy when something looks cut off.</p></div>`;
+  const screenNow = view.querySelector("#screen-now");
+  const showScreen = () => { if (screenNow.isConnected) screenNow.textContent = screenText(); else removeEventListener("resize", showScreen); };
+  addEventListener("resize", showScreen);
   showCalendar();
   showNotifications();
   showMyReports("myreports");
@@ -2772,13 +2779,27 @@ function settingsView() {
 // Filed as GitHub issues by the server, without anyone's name or email. "Your reports" shows their state.
 let reportFrom = "#/";   // the page someone was on when they tapped "Report it"
 
+// The safe areas this screen reports (CSS env() can't be read from script, so a hidden element is padded with them).
+function screenEdges() {
+  let probe = document.querySelector(".edge-probe");
+  if (!probe) { probe = document.createElement("div"); probe.className = "edge-probe"; document.body.append(probe); }
+  const cs = getComputedStyle(probe), px = side => Math.round(parseFloat(cs[`padding${side}`]) || 0);
+  return { top: px("Top"), right: px("Right"), bottom: px("Bottom"), left: px("Left") };
+}
+function screenText() {
+  const e = screenEdges();
+  return `${window.innerWidth}×${window.innerHeight} · top ${e.top} · right ${e.right} · bottom ${e.bottom} · left ${e.left}`
+    + (isStandalone() ? " · home-screen app" : "");
+}
+
 function deviceLabel() {
   const ua = navigator.userAgent;
   const os = { ios: /iPad/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ? "iPad" : "iPhone",
     "ios-other": "iPhone", android: "Android", desktop: /Mac/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "Computer" }[device()];
   const browser = /EdgiOS|Edg\//.test(ua) ? "Edge" : /CriOS|Chrome\//.test(ua) ? "Chrome" : /FxiOS|Firefox\//.test(ua) ? "Firefox"
     : /Safari\//.test(ua) ? "Safari" : "browser";
-  return `${os} · ${browser}${isStandalone() ? " · home-screen app" : ""} · ${window.innerWidth}px wide`;
+  const e = screenEdges(), edges = e.left || e.right ? ` · sides ${e.left}/${e.right}` : "";
+  return `${os} · ${browser}${isStandalone() ? " · home-screen app" : ""} · ${window.innerWidth}px wide${edges}`;
 }
 
 const REPORT_STATE = { open: ["Open", "info"], fixed: ["Fixed", "have"], closed: ["Closed", "need"] };

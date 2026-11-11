@@ -3,6 +3,12 @@
 # After editing: `.venv/bin/python tools/changelog.py` rewrites CHANGELOG.md (a test checks they match),
 # and `.venv/bin/python tools/release.py` publishes the day's GitHub Release.
 
+- date: 2026-11-10
+  kind: fixed
+  title: "Nothing hides under a side status bar"
+  text: "On phones that put the time and battery down the side of the screen (like iPhone Duo folded, or any iPhone turned sideways), the menu bar, pages, the live dock, first-time setup, Flick, clips and Game story now stay clear of it. Settings has a new This screen line that shows how much room your phone keeps clear on each side, in case something still looks cut off."
+  link: "#/settings"
+
 - date: 2026-11-03
   kind: new
   title: "Dim at puck drop, and a menu that tells you what's waiting"

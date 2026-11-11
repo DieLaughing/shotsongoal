@@ -3,7 +3,7 @@
 // refresh can't touch it. The stream is never played directly: the league's player is what it publishes, whole.
 const PLAYER = "https://players.brightcove.net/6415718365001/default_default/index.html";
 const CSS = `
-.clipview { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); background: rgba(5, 7, 10, .975); color: #fff; outline: 0; }
+.clipview { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: env(safe-area-inset-top, 0px) var(--sr, 0px) env(safe-area-inset-bottom, 0px) var(--sl, 0px); background: rgba(5, 7, 10, .975); color: #fff; outline: 0; }
 .cv-box { width: min(100%, 960px, calc((100dvh - 150px) * 16 / 9)); min-width: min(100%, 320px); }
 .cv-top { display: flex; align-items: center; gap: 10px; padding: 8px 14px; min-width: 0; background: color-mix(in srgb, var(--c) 68%, #0a0d12); }
 .cv-who { min-width: 0; line-height: 1.25; }

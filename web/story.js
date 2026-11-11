@@ -3,7 +3,7 @@
 // count of what's left, and a clip's Next button stops at the goal you've reached. Loaded on demand (web/app.js openStory).
 // It sits on <body>, so a live refresh can't touch it, with its own step in the history so the back gesture closes it.
 const CSS = `
-.st { position: fixed; inset: 0; z-index: 25; display: flex; flex-direction: column; padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+.st { position: fixed; inset: 0; z-index: 25; display: flex; flex-direction: column; padding: env(safe-area-inset-top, 0px) var(--sr, 0px) env(safe-area-inset-bottom, 0px) var(--sl, 0px);
   background: #07090d; color: #fff; outline: 0; }
 .st-in { flex: 1; min-height: 0; width: 100%; max-width: 620px; margin: 0 auto; display: flex; flex-direction: column; }
 .st-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 6px 16px; }

@@ -2,7 +2,7 @@
 // Loaded on demand from the Pick'em page (web/app.js); saves through the same POST /api/pickem as the list.
 const CSS = `
 .flick { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; color: #fff; background: #0a0d12;
-  padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); touch-action: none; user-select: none; -webkit-user-select: none; outline: 0; }
+  padding: env(safe-area-inset-top, 0px) var(--sr, 0px) env(safe-area-inset-bottom, 0px) var(--sl, 0px); touch-action: none; user-select: none; -webkit-user-select: none; outline: 0; }
 .fk-top { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
 .fk-n { font: 800 22px/1 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
 .fk-bar { flex: 1; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .16); overflow: hidden; }

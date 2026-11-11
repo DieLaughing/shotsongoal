@@ -3,14 +3,14 @@
 // end or a skip, through the same saveSettings() as Settings.
 const CSS = `
 .wl { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; background: var(--bg); color: var(--text); outline: 0; }
-.wl-head { flex: none; padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 14px; color: #fff; transition: background-color 240ms ease;
+.wl-head { flex: none; padding: calc(16px + env(safe-area-inset-top, 0px)) calc(16px + var(--sr, 0px)) 14px calc(16px + var(--sl, 0px)); color: #fff; transition: background-color 240ms ease;
   background: color-mix(in srgb, var(--c, #2a2f38) 70%, #0a0d12); }
 .wl-pips { display: flex; gap: 5px; margin-bottom: 12px; }
 .wl-pips i { flex: 1; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .25); }
 .wl-pips i.on { background: #fff; }
 .wl-head h1 { margin: 0 0 3px; font-size: 25px; line-height: 1.15; }
 .wl-head p { margin: 0; font-size: 13.5px; color: rgba(255, 255, 255, .85); }
-.wl-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px; -webkit-overflow-scrolling: touch; }
+.wl-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px calc(16px + var(--sr, 0px)) 12px calc(16px + var(--sl, 0px)); -webkit-overflow-scrolling: touch; }
 .wl-inner, .wl-foot > div { width: 100%; max-width: 720px; margin: 0 auto; }
 .wl-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
 .wl-tabs button { flex: 1; min-height: 38px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--muted); font: inherit; font-weight: 700; cursor: pointer; }
@@ -20,7 +20,7 @@ const CSS = `
 .wl-t .mark { width: 46px; height: 36px; }
 .wl-t.on { --ring: color-mix(in srgb, var(--c) 55%, var(--text)); border-color: var(--ring); box-shadow: inset 0 0 0 1.5px var(--ring); }
 .wl-t em { position: absolute; top: 3px; right: 5px; font-style: normal; font-size: 12px; font-weight: 800; }
-.wl-foot { flex: none; padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--border); }
+.wl-foot { flex: none; padding: 10px calc(16px + var(--sr, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) calc(16px + var(--sl, 0px)); background: var(--surface); border-top: 1px solid var(--border); }
 .wl-tray { display: flex; gap: 6px; overflow-x: auto; min-height: 38px; align-items: center; margin-bottom: 8px; scrollbar-width: none; }
 .wl-tray:empty::before { content: "Nobody yet"; font-size: 12.5px; color: var(--muted); }
 .wl-chip { flex: none; display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 0 9px 0 5px; border: 1px solid var(--border); border-radius: 18px; background: var(--bg); color: var(--text); font: inherit; font-size: 12.5px; font-weight: 650; cursor: pointer; }
