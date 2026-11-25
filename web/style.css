@@ -423,6 +423,34 @@ h2 { font-size: 17px; line-height: 1.15; letter-spacing: .03em; color: var(--mut
 :root:not([data-cards="list"]) .slate .watch .no { opacity: .75; }
 :root:not([data-cards="list"]) .slate .upset { color: inherit; }
 
+/* Showcase games (app.js evRibbon/evClass): a ribbon naming the event. Outdoor and stadium games swap the team colour
+   for a night sky (.ev-sky, always dark ink); outdoor ones add still snow (.ev-outdoor::after: three tiled sizes of
+   flake so it doesn't read as a grid). Nothing here moves: decoration never does (docs/motion.md). */
+:root { --sky-hi: #24557f; --sky-lo: #0b1d30;
+  --snow: radial-gradient(circle at 22% 30%, rgba(255, 255, 255, .9) 1.1px, transparent 1.7px) 0 0 / 43px 47px,
+          radial-gradient(circle at 68% 62%, rgba(255, 255, 255, .7) .9px, transparent 1.5px) 0 0 / 31px 37px,
+          radial-gradient(circle at 40% 84%, rgba(225, 240, 255, .55) 1.8px, transparent 2.6px) 0 0 / 71px 61px; }
+.evline { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 6px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.evline > span { flex: none; }
+:root:not([data-cards="list"]) .slate .game .evline { color: inherit; opacity: .9; margin-bottom: 4px; font-size: 10.5px; }
+:root:not([data-cards="list"]) .slate .game .evwhere { display: none; }
+:root:not([data-cards="list"]) .slate .game.ev-sky, .hero.ev-sky { --ink: #fff; --ring: rgba(255, 255, 255, .55); --wash: rgba(255, 255, 255, .14);
+  color: #fff; background: linear-gradient(165deg, var(--sky-hi), var(--sky-lo)); }
+:root:not([data-cards="list"]) .slate .game.ev-sky .status .live { color: var(--sky-lo); }
+.hero.ev-sky .chip.strong { color: var(--sky-lo); }
+:root:not([data-cards="list"]) .slate .game.ev-outdoor::after, .hero.ev-outdoor::after, .scorebug.ev-outdoor::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--snow); opacity: .8; border-radius: inherit; }
+.scorebug.ev-outdoor { isolation: isolate; }
+.scorebug.ev-outdoor::after { z-index: 0; opacity: .45; }
+.scorebug.ev-outdoor > * { position: relative; z-index: 1; }
+/* Game page: a band over the jumbotron naming the event, and the weather at puck drop for outdoor games. */
+.evband { padding: 10px 14px; color: #fff; text-align: center; display: grid; gap: 2px; background: linear-gradient(165deg, #2f3540, #15181e); }
+.evband.ev-sky { background: var(--snow), linear-gradient(165deg, var(--sky-hi), var(--sky-lo)); }
+.evband .evname { display: flex; justify-content: center; align-items: center; gap: 6px; font: 800 15px/1.1 Arena, Score, system-ui, sans-serif;
+  text-transform: uppercase; letter-spacing: .04em; }
+.evband .evwx { font-size: 12.5px; opacity: .88; }
+
 /* where to watch */
 .watch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
 .watch .app { font-weight: 650; color: var(--text); }

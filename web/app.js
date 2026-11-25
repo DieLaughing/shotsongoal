@@ -322,6 +322,27 @@ function spoilCover(games, what, verb = "includes") {
     <button class="btn small" data-spoil="peekall" data-k="${esc(games.map(spKey).join(","))}">Show anyway</button></div>`;
 }
 
+// Showcase games (sog/nhl.py parse_event): a ribbon naming the event and where it's played. Outdoor and stadium games
+// also trade the team colour for a night sky (.ev-sky); outdoor ones get still snow (.ev-outdoor). Nothing moves.
+const EV_ICON = { outdoor: "❄", stadium: "🏟", global: "🌍" };
+const evSky = g => ["outdoor", "stadium"].includes(g?.event?.kind);
+const evClass = g => g?.event ? ` ev ev-${g.event.kind}${evSky(g) ? " ev-sky" : ""}` : "";
+// Abroad, the city says more than the arena (Düsseldorf, not PSD Bank Dome); outdoors, the stadium is the story.
+const evWhere = g => g.event.kind === "global" ? g.event.city || g.venue : g.venue;
+// On cards: the event's name, and where (the list look only: a tile is too narrow, so CSS hides .evwhere there).
+function evRibbon(g) {
+  const ev = g?.event;
+  if (!ev) return "";
+  const where = evWhere(g);
+  return `<div class="evline"><span aria-hidden="true">${EV_ICON[ev.kind] || "★"}</span> ${esc(ev.name)}${where ? `<span class="evwhere"> · ${esc(where)}</span>` : ""}</div>`;
+}
+// "27°F and light snow at puck drop": °C for people in Canada (Settings > Where you watch), °F otherwise.
+function weatherLine(wx) {
+  if (!wx || wx.c == null) return "";
+  const t = ME?.settings?.country === "CA" ? `${Math.round(wx.c)}°C` : `${Math.round(wx.c * 9 / 5 + 32)}°F`;
+  return `${t}${wx.text ? ` and ${esc(wx.text)}` : ""} forecast at puck drop`;
+}
+
 function gameCard(g, fav) {
   const a = g.away, h = g.home, hide = spoilerHidden(g), done = g.state === "final" && !hide;
   const lost = side => done && a.score != null && h.score != null && side.score < (side === a ? h.score : a.score) ? " lost" : "";
@@ -333,8 +354,9 @@ function gameCard(g, fav) {
   // faint behind. The list look ignores both.
   const own = fav.has(a.abbr) && !fav.has(h.abbr) ? a.abbr : h.abbr, t = TEAMS[own] || {};
   // The watch line sits outside the game link so its own link (ESPN+, NESN 360...) can be tapped.
-  return `<div class="game${isFav ? " fav" : ""}${t.light ? " light" : ""}" style="--c:${esc(t.color || "#3a3f47")}">
+  return `<div class="game${isFav ? " fav" : ""}${t.light && !evSky(g) ? " light" : ""}${evClass(g)}" style="--c:${esc(t.color || "#3a3f47")}">
     <span class="ghost" aria-hidden="true">${esc((t.code || own).slice(0, 4))}</span>
+    ${evRibbon(g)}
     <a class="body" href="${gameHref(g)}">
       <div class="team-line${lost(a)}">${mark(a.abbr)}${nm(a)}${sc(a)}</div>
       ${hide ? `<div class="status"><div class="t">🙈 Hidden</div></div>` : statusCell(g)}
@@ -911,7 +933,8 @@ function heroCard(c, live) {
     c.milestones?.length ? c.milestones.map(m => `<div>🎯 ${esc(m.text)}</div>`).join("") : "",
     c.after?.length ? `<div><b>Then</b> ${c.after.map(a => `${a.home ? "vs" : "at"} ${esc(TEAMS[a.opp]?.code || a.opp)} ${esc(shortDate(a.date).split(",")[0])}`).join(" · ")}</div>` : "",
   ].join("");
-  return `<div class="hero${t.light ? " light" : ""}" style="--c:${esc(t.color || "#333")};--pop:${esc(t.light ? t.color : "#fff")}">
+  if (g?.event && !hide) kicker += ` · ${g.event.name}`;
+  return `<div class="hero${t.light && !evSky(g) ? " light" : ""}${evClass(g)}" style="--c:${esc(t.color || "#333")};--pop:${esc(t.light ? t.color : "#fff")}">
     <span class="ghost" aria-hidden="true">${esc((t.code || c.abbr).slice(0, 4))}</span>
     <a class="hero-top" href="${g ? gameHref(g) : `#/team/${encodeURIComponent(c.abbr)}`}">
       <div class="hero-k">${esc(kicker)}</div>
@@ -1573,8 +1596,15 @@ async function gameView(id, quiet = false, league = "nhl") {
   const films = gameUi.films.length || storyBtn ? `<div class="gsec gsec-row films">${storyBtn}${gameUi.films.map(f => `<button class="clipbtn" data-clip="${esc(f.id)}"><span class="clip-ico" aria-hidden="true">▶</span> ${esc(f.who)}</button>`).join("")}</div>` : "";
   const paints = `--a:${esc(apart(ac, hc))};--h:${esc(hc)}`;
   const big = showScore ? `<b data-sc="a">${g.away.score ?? 0}</b><i>–</i><b data-sc="h">${g.home.score ?? 0}</b>` : g.start && g.state === "pre" ? esc(time(g.start)) : "vs";
+  const wx = weatherLine(d.weather);
+  // Game page: the event's name over the jumbotron; under it the venue, the city, and outdoors the weather at puck drop.
+  const ev = g.event, evLine = ev && [g.venue, ev.kind === "outdoor" ? `Outdoors${ev.city ? ` in ${ev.city}` : ""}` : ev.city]
+    .filter(Boolean).map(esc).join(" · ");
+  const band = ev ? `<div class="evband${evClass(g)}"><div class="evname"><span aria-hidden="true">${EV_ICON[ev.kind] || "★"}</span>${esc(ev.name)}</div>
+    ${evLine || wx ? `<div class="evwx">${[evLine, wx].filter(Boolean).join(" · ")}</div>` : ""}</div>` : "";
   let html = `${backLink("#/")}<div class="card">
-    <div class="scorebug" style="${paints}">
+    ${band}
+    <div class="scorebug${g.event?.kind === "outdoor" ? " ev-outdoor" : ""}" style="${paints}">
       ${side(g.away, a)}
       <div><div class="score${showScore ? "" : " tbd"}">${big}</div><div class="state">${state}</div>${sit}</div>
       ${side(g.home, h)}

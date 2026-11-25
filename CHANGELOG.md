@@ -5,6 +5,7 @@ This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit th
 
 ## November 25, 2026
 
+- **New: Winter Classic, Stadium Series and Global Series games dress up.** Special games now look special. The Winter Classic (Avalanche at Mammoth, Dec 31) and the Stadium Series turn their card night-sky blue, with snow on the outdoor one, and their game page names the event, the stadium and the city. For the Winter Classic it also shows the weather forecast for puck drop once it's a week away. The Global Series games in Düsseldorf on Dec 18 and 20 get their own label too.
 - **Fixed: Pick'em opens fast the morning after.** The first time Pick'em opened after a night of games, it checked last night's results one league at a time before showing anything, so a slow league could keep you waiting 10 seconds or more. It now checks them all at once and never waits more than a couple of seconds. If a league is still slow, the page opens anyway and last night's points show up the next time you look.
 
 ## November 10, 2026

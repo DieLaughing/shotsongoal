@@ -494,7 +494,7 @@ async def games(request: Request, date: str | None = None, league: str = "nhl"):
     # No date = today in Eastern time (last night's games until 6 am); see feed.slate_date.
     target = date or feed.opening_day()
     day = await _upstream(feed.today_page() if target == feed.today else feed.day(target))
-    return {**day, "games": odds.attach(_with_watchers(_with_watch([dict(g) for g in day["games"]], _settings(request)), request))}
+    return {**day, "games": odds.attach(_with_watchers(_with_watch(feed.with_events([dict(g) for g in day["games"]]), _settings(request)), request))}
 
 
 LIVE_FIELDS = ("state", "raw_state", "period", "clock", "running", "intermission", "outcome", "situation")
@@ -518,6 +518,8 @@ def _freshen(g: dict) -> dict:
 async def game(game_id: int, request: Request):
     detail = await _upstream(feed.game(game_id))
     detail = {**detail, "game": _freshen(dict(detail["game"]))}
+    if wx := feed.weather_peek(detail["game"]):   # outdoor games only, within a week of puck drop
+        detail["weather"] = wx
     _with_watch([detail["game"]], _settings(request))
     odds.attach([detail["game"]])
     if detail.get("preview"):

@@ -5,6 +5,8 @@ instead of breaking the page.
 """
 from __future__ import annotations
 
+import re
+
 from curl_cffi.requests import AsyncSession
 
 from .odds import american
@@ -109,6 +111,28 @@ def _odds(g: dict, partner: int) -> dict | None:
     return line if None not in line.values() else None
 
 
+# Showcase games the NHL names in specialEvent. Outdoor ones get snow and the weather; stadium ones (often under a roof)
+# the night-sky look without snow; the Global Series a ribbon. Other names count only at a neutral site, which leaves
+# out marketing tags on ordinary home games (the Original 6 Series).
+EVENT_KINDS = (("winter classic", "outdoor"), ("heritage classic", "outdoor"), ("stadium series", "stadium"),
+               ("global series", "global"))
+
+
+def parse_event(g: dict) -> dict | None:
+    """{"name": "Winter Classic", "kind": outdoor|stadium|global|event, "city": "Salt Lake City"} or None.
+    The scoreboard feed leaves specialEvent out; team schedules and game pages carry it."""
+    full = _t((g.get("specialEvent") or {}).get("name"))
+    if not full:
+        return None
+    low = full.lower()
+    kind = next((k for words, k in EVENT_KINDS if words in low), "event")
+    if kind == "event" and not g.get("neutralSite"):
+        return None
+    # "Discover NHL Winter Classic", "2027 Navy Federal Credit Union NHL Stadium Series" -> the part after "NHL".
+    name = re.sub(r"^\d{4}\s+", "", full.split("NHL ", 1)[-1]).strip() or full
+    return {"name": name, "kind": kind, "city": _t(g.get("venueLocation")) or None}
+
+
 def parse_game(g: dict, odds_partner: int | None = None) -> dict:
     clock = g.get("clock") or {}
     pd = g.get("periodDescriptor") or {}
@@ -130,6 +154,7 @@ def parse_game(g: dict, odds_partner: int | None = None) -> dict:
         "intermission": bool(clock.get("inIntermission")),
         "outcome": (g.get("gameOutcome") or {}).get("lastPeriodType"),
         "venue": _t(g.get("venue")),
+        "event": parse_event(g),
         "recap": f"https://www.nhl.com{recap}" if recap else None,
         "tickets": g.get("ticketsLink") or None,  # Ticketmaster, from the NHL's own schedule
         "broadcasts": [{"network": (b.get("network") or "").strip(), "market": b.get("market"),
