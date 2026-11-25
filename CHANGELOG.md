@@ -3,6 +3,10 @@
 Every update to [Shots on Goal](https://github.com/DieLaughing/shotsongoal), newest first. The same list is on the app's What's new page.
 This file is generated from `data/changes.yaml` by `tools/changelog.py`; edit that file, not this one.
 
+## November 25, 2026
+
+- **Fixed: Pick'em opens fast the morning after.** The first time Pick'em opened after a night of games, it checked last night's results one league at a time before showing anything, so a slow league could keep you waiting 10 seconds or more. It now checks them all at once and never waits more than a couple of seconds. If a league is still slow, the page opens anyway and last night's points show up the next time you look.
+
 ## November 10, 2026
 
 - **Fixed: Nothing hides under a side status bar.** On phones that put the time and battery down the side of the screen (like iPhone Duo folded, or any iPhone turned sideways), the menu bar, pages, the live dock, first-time setup, Flick, clips and Game story now stay clear of it. Settings has a new This screen line that shows how much room your phone keeps clear on each side, in case something still looks cut off.

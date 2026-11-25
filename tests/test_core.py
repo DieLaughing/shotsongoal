@@ -693,3 +693,42 @@ def test_checkpoint_runs_on_its_own_connection(tmp_path):
     busy, frames, done = store.checkpoint()
     assert busy == 0 and frames > 0 and done == frames   # everything folded in, nothing in the way
     assert store.get("k49")["data"]["i"] == 49
+
+
+def _pickem_with_old_pick(client, monkeypatch, delay):
+    """Owner picked BOS on Nov 3; it's now Nov 4 and that game is final (3-1 BOS) on a slate that takes `delay` s."""
+    import asyncio
+    import time
+    from datetime import datetime, timezone
+    from sog import picks
+    as_user(monkeypatch, "owner@x.com")
+    mod = client.mod
+    old = {"id": 7, "league": "nhl", "date": "2026-11-03", "start": "2026-11-03T23:00:00Z", "state": "pre",
+           "away": {"abbr": "TOR", "score": None}, "home": {"abbr": "BOS", "score": None}}
+    picks.set_pick("owner@x.com", old, "BOS", now=datetime(2026, 11, 3, 12, tzinfo=timezone.utc))
+    final = dict(old, state="final", away={"abbr": "TOR", "score": 1}, home={"abbr": "BOS", "score": 3})
+
+    async def slate(lg, d):
+        if d == "2026-11-03":
+            await asyncio.sleep(delay)
+            return {"games": [final]}
+        return {"games": []}
+    monkeypatch.setattr(mod, "_slate", slate)
+    monkeypatch.setattr(mod.feed, "opening_day", lambda: "2026-11-04")
+    monkeypatch.setattr(mod, "CATCHUP_WAIT", 0.3, raising=False)
+    t = time.perf_counter()
+    r = client.get("/api/pickem")
+    assert r.status_code == 200
+    me = next((row for row in r.json()["boards"]["pro"]["table"] if row["me"]), None)   # no row until a pick is scored
+    return time.perf_counter() - t, me
+
+
+def test_pickem_scores_last_nights_picks_when_the_league_answers_quickly(client, monkeypatch):
+    took, me = _pickem_with_old_pick(client, monkeypatch, delay=0)
+    assert me["w"] == 1 and me["pts"] == 1
+
+
+def test_a_slow_league_cant_hold_up_pickem(client, monkeypatch):
+    took, me = _pickem_with_old_pick(client, monkeypatch, delay=5)
+    assert took < 2   # it used to wait the whole 5 s (and up to 20 s a day, one day after another)
+    assert me is None   # not scored yet: the table catches up on the next load

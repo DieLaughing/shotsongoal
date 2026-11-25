@@ -864,6 +864,21 @@ def _day_before(day: str) -> str:
     return (datetime.fromisoformat(day) - timedelta(days=1)).date().isoformat()
 
 
+CATCHUP_WAIT = 2.0   # seconds a Pick'em page waits for older days' results before answering without them
+
+
+def _catch_up(today: str, shown: str, lgs: list[str]) -> list[asyncio.Task]:
+    """Scores older picks still waiting for a result (last night's, the morning after). Each (league, day) is fetched
+    once, in the background and side by side with the others, so one slow league can't hold up the page or pile up
+    reloads behind it. Returns the catch-ups in flight."""
+    for lg, d in picks.pending(today):
+        if (d != shown or lg not in lgs) and d < today:
+            async def score(lg=lg, d=d):
+                picks.record_results([dict(g, league=lg) for g in (await _slate(lg, d))["games"]])
+            feed.refresh_later(f"pickem:catchup:{lg}:{d}", score)
+    return [t for k, t in feed.refreshing.items() if k.startswith("pickem:catchup:")]
+
+
 @app.get("/api/pickem")
 async def pickem(request: Request, date: str | None = None, leagues: str = "nhl"):
     if date and not DATE.match(date):
@@ -871,15 +886,12 @@ async def pickem(request: Request, date: str | None = None, leagues: str = "nhl"
     lgs = [lg for lg in LEAGUES if lg in leagues.split(",")] or ["nhl"]
     today = feed.opening_day()
     date = date or today
+    catchup = _catch_up(today, date, lgs)
     days = await asyncio.gather(*[_upstream(_slate(lg, date)) for lg in lgs])
     games = odds.attach([dict(g, league=lg) for lg, d in zip(lgs, days) for g in d["games"]])
     picks.record_results(games)
-    for lg, d in picks.pending(today):  # older picks still waiting for a result (the app was down, say)
-        if (d != date or lg not in lgs) and d < today:
-            try:
-                picks.record_results([dict(g, league=lg) for g in (await _slate(lg, d))["games"]])
-            except Exception:
-                pass
+    if catchup:
+        await asyncio.wait(catchup, timeout=CATCHUP_WAIT)   # not done by then: the table catches up on the next load
     games.sort(key=lambda g: (g.get("start") or "", g["id"]))
     names = friend_names()
     me = request.state.email

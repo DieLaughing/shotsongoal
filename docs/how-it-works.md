@@ -92,7 +92,7 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   blurred; alerts.py skips goal/final pushes (puck drop still sent).
 - Pick'em (#/picks, sog/picks.py, pick table): one pick per person per game before its start (server checks the
   slate's state/start), one lock per date (2 pts if right, 0 if wrong). Results are filled from final games in the
-  slates GET /api/pickem loads (+ up to 10 older pending dates); underdog bonus: see Odds. Friends' picks only after puck drop; names =
+  slates GET /api/pickem loads. Up to 10 older pending (league, date)s are caught up by _catch_up(): one background task per pair (Feed.refresh_later, key pickem:catchup:<lg>:<date>), all side by side; the page waits at most CATCHUP_WAIT (2 s) for them, so a slow league never holds it up (on 2026-11-04 one-after-another catch-ups took a load to 10 s) and what's not done shows on the next load; underdog bonus: see Odds. Friends' picks only after puck drop; names =
   settings.nickname or the email's local part (friend_names(); emails never sent). Season = Jul-Jun, week = Mon-Sun.
   The table is covered while a spoiler-free game is hidden.
   Pools (picks.POOLS): the pros (NHL + PWHL) and college (ncaam + ncaaw) each have their own lock per date and their
