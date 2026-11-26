@@ -743,19 +743,29 @@ MONTH = re.compile(r"^\d{4}-\d{2}$")
 
 @app.get("/api/month")
 async def calendar_month(request: Request, month: str | None = None, leagues: str = "nhl"):
-    """The Calendar page: a month of games (NHL and PWHL) from saved schedules, your teams' games, showcase games and
-    the season's moments. College isn't on it (hundreds of schools); a college-only pill shows the NHL."""
+    """The Calendar page: a month of games from saved schedules. The league switch picks what's counted (NHL and/or
+    PWHL; college isn't counted, hundreds of schools) and whose showcase games are marked; your teams' games are
+    always on it, from every league."""
     if month and not MONTH.match(month):
         raise HTTPException(400)
-    lgs = [lg for lg in ("nhl", "pwhl") if lg in leagues.split(",")] or ["nhl"]
+    asked = leagues.split(",")
+    lgs = [lg for lg in ("nhl", "pwhl") if lg in asked] or (["nhl"] if not any(lg in ncaa.LEAGUES for lg in asked) else [])
     today = feed.opening_day()
-    games = feed.season_games() if "nhl" in lgs else []
-    if "pwhl" in lgs:
+    favorites = [a for a in _settings(request)["favorites"] if a in teams.ALL]
+    nhl = feed.season_games() if "nhl" in lgs or any(teams.league_of(a) == "nhl" for a in favorites) else []
+    pwhl: list[dict] = []
+    if "pwhl" in lgs or any(teams.league_of(a) == "pwhl" for a in favorites):
         try:
-            games += [dict(g, league="pwhl") for g in await feed.pwhl_games()]
+            pwhl = [dict(g, league="pwhl") for g in await feed.pwhl_games()]
         except Exception:
             pass
-    return cal_month.build(month or today[:7], games, _settings(request)["favorites"], today, lgs)
+    shown = (nhl if "nhl" in lgs else []) + (pwhl if "pwhl" in lgs else [])
+    own = (nhl if "nhl" not in lgs else []) + (pwhl if "pwhl" not in lgs else [])
+    college = [a for a in favorites if teams.league_of(a) in ncaa.LEAGUES]   # their saved schedules, as on the team cards
+    for found in await asyncio.gather(*[feed.ncaa_schedule(a) for a in college], return_exceptions=True):
+        if not isinstance(found, Exception):
+            own += [dict(g, league=g.get("league") or ncaa.league_of(g["home"]["abbr"])) for g in found]
+    return cal_month.build(month or today[:7], shown, favorites, today, lgs, own)
 
 
 @app.get("/api/myteams")

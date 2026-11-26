@@ -44,3 +44,16 @@ def test_the_ends_of_the_season():
     assert calendar.build("2026-10", GAMES, [], "2026-12-20", ["nhl"])["prev"] is None
     assert calendar.build("2027-01", GAMES, [], "2026-12-20", ["nhl"])["next"] is None
     assert calendar.shift("2026-12", 1) == "2027-01" and calendar.shift("2027-01", -1) == "2026-12"
+
+
+def test_your_teams_from_every_league_whatever_the_switch_says():
+    nhl = [g(1, "2026-12-23", "BOS", "TOR"), g(2, "2026-12-23", "MTL", "OTT")]
+    own = [g(9, "2026-12-23", "PW-BOS", "PW-MTL", league="pwhl"), g(77, "2026-12-27", "CM-25", "CM-111", league="ncaam")]
+    d = calendar.build("2026-12", nhl, ["PW-BOS", "BOS", "CM-25"], "2026-12-20", ["nhl"], own)
+    day = d["days"]["2026-12-23"]
+    assert day["n"] == 2                                                   # counts stay NHL-only, as the switch says
+    assert [x["league"] for x in day["mine"]] == ["pwhl", "nhl"]          # your first team first: it colours the day
+    assert d["days"]["2026-12-27"]["mine"][0]["league"] == "ncaam" and d["days"]["2026-12-27"]["n"] == 0
+    college_only = calendar.build("2026-12", [], ["CM-25"], "2026-12-20", [], own)
+    assert college_only["leagues"] == [] and college_only["days"]["2026-12-27"]["mine"]
+    assert "break" not in {m["key"] for m in college_only["moments"]}

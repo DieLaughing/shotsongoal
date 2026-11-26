@@ -61,11 +61,19 @@ def moments(month: str, nhl_days: dict[str, int] | None) -> list[dict]:
     return sorted(out, key=lambda m: m["from"])
 
 
-def build(month: str, games: list[dict], favorites: list[str], today: str, leagues: list[str]) -> dict:
-    """The page's data for one month. `games`: every game the shown leagues have this season (each with `league`)."""
+def build(month: str, games: list[dict], favorites: list[str], today: str, leagues: list[str],
+          own: list[dict] = ()) -> dict:
+    """The page's data for one month. `games`: every game the shown leagues have this season (each with `league`);
+    they make the counts and the showcase badges. `own`: your teams' games from leagues that aren't shown (a PWHL or
+    college favourite with the NHL on): your teams are always on the calendar, whatever the league switch says."""
     days = {d.isoformat(): {"n": 0, "mine": [], "events": []} for d in month_days(month)}
-    fav = set(favorites)
-    seen = set()
+    rank = {abbr: i for i, abbr in enumerate(favorites)}   # your first team colours a day two of them play
+    seen, mine_seen = set(), set()
+
+    def add_mine(g, key):
+        if key not in mine_seen and (g["away"].get("abbr") in rank or g["home"].get("abbr") in rank):
+            mine_seen.add(key)
+            days[g["date"]]["mine"].append(_slim(g))
     for g in games:
         key = (g.get("league", "nhl"), g["id"])
         if key in seen or g.get("date") not in days:
@@ -73,13 +81,16 @@ def build(month: str, games: list[dict], favorites: list[str], today: str, leagu
         seen.add(key)
         day = days[g["date"]]
         day["n"] += 1
-        if g["away"].get("abbr") in fav or g["home"].get("abbr") in fav:
-            day["mine"].append(_slim(g))
+        add_mine(g, key)
         if g.get("event"):
             day["events"].append(_slim(g))
+    for g in own:
+        if g.get("date") in days:
+            add_mine(g, (g.get("league", "nhl"), g["id"]))
+    best = lambda g: min(rank.get(g["away"]["abbr"], 99), rank.get(g["home"]["abbr"], 99))
     for day in days.values():
-        day["mine"].sort(key=lambda g: g.get("start") or "")
-    dates = sorted(g["date"] for g in games if g.get("date"))
+        day["mine"].sort(key=lambda g: (best(g), g.get("start") or ""))
+    dates = sorted(g["date"] for g in [*games, *own] if g.get("date"))
     nhl_days = {d: sum(1 for g in games if g.get("league", "nhl") == "nhl" and g.get("date") == d) for d in days} \
         if "nhl" in leagues else None
     return {"month": month, "today": today, "leagues": leagues, "days": days, "moments": moments(month, nhl_days),

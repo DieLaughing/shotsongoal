@@ -1095,8 +1095,7 @@ function calRange(a, b) {
 async function calendarView(month, mode, quiet = false) {
   setNav(mode === "picks" ? "picks" : "calendar");
   if (!quiet) showLoading("Loading the calendar…");
-  const lgs = shownLeagues().filter(lg => lg === "nhl" || lg === "pwhl");
-  const path = `/api/month?${new URLSearchParams({ ...(month ? { month } : {}), leagues: (lgs.length ? lgs : ["nhl"]).join(",") })}`;
+  const path = `/api/month?${new URLSearchParams({ ...(month ? { month } : {}), leagues: shownLeagues().join(",") })}`;
   let d;
   try { d = await fast(path, () => calendarView(month, mode, true)); }
   catch (e) { view.innerHTML = failed(e); return; }
@@ -1152,7 +1151,8 @@ async function calendarView(month, mode, quiet = false) {
       <i class="mo-${x.key}" aria-hidden="true"></i></a>` })),
   ].sort((a, b) => a.at.localeCompare(b.at));
   const mine = Object.values(d.days).reduce((n, day) => n + day.mine.length, 0), all = Object.values(d.days).reduce((n, day) => n + day.n, 0);
-  const sum = [fav.size ? `${mine} game${mine === 1 ? "" : "s"} for your teams` : "", `${all} in all`].filter(Boolean).join(`<span aria-hidden="true">·</span>`);
+  const counted = d.leagues.map(lg => LEAGUE_SHORT[lg] || lg.toUpperCase()).join(" and ");
+  const sum = [fav.size ? `${mine} game${mine === 1 ? "" : "s"} for your teams` : "", counted ? `${all} ${counted} in all` : ""].filter(Boolean).join(`<span aria-hidden="true">·</span>`);
   const arrow = (to, name, glyph) => to ? `<a href="#/calendar/${to}${suffix}" aria-label="${name}">${glyph}</a>` : `<span></span>`;
   const back = d.month !== d.today.slice(0, 7) ? `<a class="btn small" href="#/calendar/${d.today.slice(0, 7)}${suffix}">This month</a>` : "";
   paint(`<div class="dayhead"><div class="dh-top"><div class="dh-k">${y}${mode === "picks" ? " · Pick'em" : ""}</div>
@@ -1160,7 +1160,7 @@ async function calendarView(month, mode, quiet = false) {
     <h1>${esc(monthName)}.</h1><div class="dh-sum">${sum}</div></div>
     <div class="cal">${grid}</div>
     ${items.length ? `<h2>In ${esc(monthName)}</h2><div class="card cal-list">${items.map(i => i.html).join("")}</div>` : ""}
-    <div class="cal-foot">${back}<p class="help">Tap a day to open ${mode === "picks" ? "its Pick'em" : "its games"}. ${lgs.includes("pwhl") ? "NHL and PWHL games" : "NHL games"}; your teams' days are in their colours.</p></div>`, quiet);
+    <div class="cal-foot">${back}<p class="help">Tap a day to open ${mode === "picks" ? "its Pick'em" : "its games"}. Your teams' days are in their colours, from every league you follow${counted ? `; the bars and counts are ${counted} games (the league switch in the menu picks)` : ""}.</p></div>`, quiet);
 }
 
 async function tonightView(date, quiet = false) {
