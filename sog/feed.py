@@ -213,6 +213,17 @@ class Feed:
         self._events = (now, found)
         return found
 
+    def season_games(self) -> list[dict]:
+        """Every NHL game this season, from the saved team schedules (peeks only, for the Calendar), each with its
+        showcase event where it has one."""
+        found, events = {}, self.events()
+        for abbr in NHL_TEAMS:
+            hit = self.store.get(f"team:{abbr}:schedule")
+            for g in hit["data"] if hit else []:
+                if g["id"] not in found:
+                    found[g["id"]] = {**g, "league": "nhl", "event": events.get(g["id"]) or g.get("event")}
+        return list(found.values())
+
     def with_events(self, games: list[dict]) -> list[dict]:
         """Adds g["event"] to scoreboard games that are showcase games (in place; pass copies)."""
         found = self.events()

@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS page_view (
 """
 
 KEEP_DAYS = 180
-ROUTES = frozenset({"tonight", "day/:date", "game/:id", "pgame/:id", "picks", "picks/:date", "wire", "league",
+ROUTES = frozenset({"tonight", "day/:date", "calendar", "calendar/:month", "game/:id", "pgame/:id", "picks", "picks/:date", "wire", "league",
                     "team/:team", "settings", "app", "new", "report", "player/:id", "pplayer/:id", "leaders", "search", "compare"})   # what countView() in web/app.js sends
 MAX_ROUTES = 30      # per batch
 MAX_VIEWS = 200      # per route per batch

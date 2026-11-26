@@ -21,6 +21,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import access, bugs, alerts, changes, glance, home, ics, moneypuck, ncaa, nhl, odds, picks, pwhl, slow, social, spoilers, teams, usage, watch, wire
+from . import calendar as cal_month
 from .db import Store, parse_iso
 from .feed import PWHL_TEAM_IDS, Feed, eastern_today
 from . import images as images_mod
@@ -735,6 +736,26 @@ async def college_logos_css():
     if not path:
         return IMG_MISS
     return FileResponse(path, media_type="text/css", headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+MONTH = re.compile(r"^\d{4}-\d{2}$")
+
+
+@app.get("/api/month")
+async def calendar_month(request: Request, month: str | None = None, leagues: str = "nhl"):
+    """The Calendar page: a month of games (NHL and PWHL) from saved schedules, your teams' games, showcase games and
+    the season's moments. College isn't on it (hundreds of schools); a college-only pill shows the NHL."""
+    if month and not MONTH.match(month):
+        raise HTTPException(400)
+    lgs = [lg for lg in ("nhl", "pwhl") if lg in leagues.split(",")] or ["nhl"]
+    today = feed.opening_day()
+    games = feed.season_games() if "nhl" in lgs else []
+    if "pwhl" in lgs:
+        try:
+            games += [dict(g, league="pwhl") for g in await feed.pwhl_games()]
+        except Exception:
+            pass
+    return cal_month.build(month or today[:7], games, _settings(request)["favorites"], today, lgs)
 
 
 @app.get("/api/myteams")

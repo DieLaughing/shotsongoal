@@ -25,7 +25,7 @@ from perfcheck import start_server
 # ---- this app ----------------------------------------------------------------------------------------------------
 PAGES = ["#/", "#/picks", "#/wire", "#/league", "#/leaders", "#/search", "#/settings", "#/new", "#/report", "#/app",
          "#/admin", "#/team/TBL", "#/player/8478402", "#/game/2026020084", "#/compare/BOS/TOR", "#/compare/BOS",
-         "#/compare/p8478402/p8477956"]
+         "#/compare/p8478402/p8477956", "#/calendar", "#/calendar/2026-10/picks"]
 # (page, what to tap, anchors that must not move). Taps are plain JS clicks: a real finger can only tap what's on
 # screen, and Playwright's own click would scroll the target into view first (a jump the app didn't make).
 STILL = [
@@ -35,6 +35,7 @@ STILL = [
     ("#/wire", '#view .seg button[data-kind="news"]', ["#view h1", "#view .seg"]),
     ("#/team/TBL", '[data-ttab="players"]', ["#view .seg"]),
     ("#/player/8478402", '[data-ptab="career"]', ["#view .seg"]),
+    ("#/calendar/2026-09", '#view .dh-arrows a[aria-label="Next month"]', ["#view h1", "#view .dh-arrows"]),
 ]
 # Shared-element page changes (View Transitions): (page, card to tap, address it must land on, transition name).
 MORPH = [("#/", "#view a.body", "#/game/", "matchup")]

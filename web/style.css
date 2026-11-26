@@ -451,6 +451,49 @@ h2 { font-size: 17px; line-height: 1.15; letter-spacing: .03em; color: var(--mut
   text-transform: uppercase; letter-spacing: .04em; }
 .evband .evwx { font-size: 12.5px; opacity: .88; }
 
+/* Calendar (app.js calendarView): a month grid, Sunday first. Each day is a tile: your team's game days in its colour
+   (like Tonight's tiles), showcase games in the night sky, a thin bar along the bottom for how busy the day is, and the
+   season's moments as stripes just above it. The list under the grid explains the stripes. */
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 14px; }
+.cal-grid > span { text-align: center; font-size: 11px; font-weight: 750; letter-spacing: .1em; color: var(--muted); padding-bottom: 2px; }
+.cal-day { position: relative; overflow: hidden; isolation: isolate; aspect-ratio: 1 / 1.12; border-radius: 12px; padding: 5px 6px;
+  background: var(--surface); border: 1px solid var(--border); color: var(--text); text-decoration: none; display: block; min-width: 0; }
+.cal-day:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cal-n { font: 800 15px/1 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.cal-day.none { background: transparent; }
+.cal-day.none .cal-n { opacity: .4; }
+.cal-day.past:not(.mine) .cal-n { opacity: .55; }
+.cal-day.today { box-shadow: inset 0 0 0 2px var(--accent); border-color: var(--accent); }
+.cal-day.mine { --ink: #fff; color: var(--ink); border-color: transparent;
+  background: linear-gradient(160deg, var(--c), color-mix(in srgb, var(--c) 70%, #000)); }
+.cal-day.mine.light { --ink: #111; background: linear-gradient(160deg, var(--c), color-mix(in srgb, var(--c) 85%, #000)); }
+.cal-day.ev-sky { --ink: #fff; color: #fff; border-color: transparent; background: linear-gradient(165deg, var(--sky-hi), var(--sky-lo)); }
+.cal-day.ev-outdoor::after { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--snow); opacity: .8; pointer-events: none; }
+.cal-day.today.mine, .cal-day.today.ev-sky { box-shadow: inset 0 0 0 2px var(--ink); }
+.cal-opp { position: absolute; left: 5px; bottom: 9px; display: flex; align-items: center; gap: 2px; }
+.cal-opp i { font-style: normal; font-size: 9px; font-weight: 700; opacity: .85; }
+.cal-day .mark { width: 22px; height: 16px; font-size: 7px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .5); }
+.cal-res { position: absolute; top: 4px; right: 6px; font: 800 14px/1 Score, system-ui, sans-serif; }
+.cal-more { position: absolute; right: 5px; bottom: 10px; font-size: 9px; font-weight: 800; opacity: .9; }
+.cal-ev { position: absolute; top: 3px; right: 4px; font-size: 12px; line-height: 1; }
+.cal-res ~ .cal-ev { top: auto; bottom: 9px; right: 5px; }
+.cal-busy { position: absolute; left: 0; bottom: 0; height: 3px; width: calc(var(--n) * 100%); background: currentColor; opacity: .35; }
+.cal-mo { position: absolute; left: 5px; right: 5px; bottom: 5px; display: flex; gap: 2px; }
+.cal-mo i { flex: 1; height: 3px; border-radius: 2px; }
+.mo-freeze { background: #7cc7ff; }
+.mo-wjc { background: #f5b83d; }
+.mo-break { background: #3fbf6f; }
+.cal-list { display: grid; }
+.cal-item { display: grid; grid-template-columns: 5.2rem minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 11px 14px;
+  border-top: 1px solid var(--border); color: var(--text); text-decoration: none; }
+.cal-item:first-child { border-top: 0; }
+.cal-when { font: 800 14px/1.15 Score, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.cal-what { min-width: 0; font-size: 13px; color: var(--muted); }
+.cal-what b { display: block; color: var(--text); font-size: 14px; }
+.cal-item > i { width: 16px; height: 4px; border-radius: 2px; }
+.cal-foot { display: grid; justify-items: start; gap: 8px; margin-top: 14px; }
+.cal-foot .help { margin: 0; }
+
 /* where to watch */
 .watch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
 .watch .app { font-weight: 650; color: var(--text); }

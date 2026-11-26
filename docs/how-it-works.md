@@ -166,6 +166,16 @@ How the app moves (what animates, what must hold still, timings, rules for new U
     re-ranks them (division, conference, league, wild card); standingsBody() draws any list of rows, so the real table
     and the pretend one share a renderer. Ties go points, fewer games, regulation wins, wins, goal difference: close to
     the NHL's order, not exact. Nothing is saved; picks stay in memory across mode switches until Close.
+- Calendar (#/calendar/<YYYY-MM>, /picks at the end when opened from Pick'em; GET /api/month, sog/calendar.py): a month
+  grid, Sunday first, reached from the calendar button beside the day arrows (dayHead) and the menu. Built from saved
+  data only: Feed.season_games() (every NHL game in the saved team schedules, with events) and the PWHL season feed;
+  college isn't on it. Each day: game count (a bar along the bottom), your teams' games (the day painted in the team's
+  colour, opponent's mark, W/L once final unless spoiler-free hides it) and showcase games (badge; night sky and snow
+  as on cards). Moments (calendar.MOMENTS, every season): the holiday roster freeze (Dec 20-27) and the World Juniors
+  (Dec 26-Jan 5), plus the Christmas break read from the schedule as the run of NHL-free days around Dec 25 (Dec 23-25
+  in 2026-27). They're stripes under their days and listed under the grid with the month's showcase games. A day opens
+  Tonight (or Pick'em) for that date. The month arrows are data-swaps (in-page: the page holds still, checked by
+  tools/motioncheck.py). The endpoint is /api/month because /api/calendar is the calendar-feed link.
 - Showcase games (Winter Classic, Heritage Classic, Stadium Series, Global Series): nhl.parse_event reads the NHL's
   `specialEvent` into g.event {name, kind outdoor|stadium|global|event, city}; a name that isn't one of those kinds counts
   only at a neutral site, which leaves out marketing tags on ordinary home games (Original 6 Series). The scoreboard

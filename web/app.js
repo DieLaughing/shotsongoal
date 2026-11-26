@@ -1068,9 +1068,89 @@ function dayHead(day, games, { base = "#/day/", label = "", line = null } = {}) 
       !live && !done && first ? `First at ${esc(time(first))}` : ""].filter(Boolean).join(`<span aria-hidden="true">·</span>`);
   }
   const arrow = (to, name, glyph) => to ? `<a href="${base}${to}" aria-label="${name}">${glyph}</a>` : `<span></span>`;
+  const cal = day.date ? `<a href="${calHref(day.date, base === "#/picks/" ? "picks" : "")}" aria-label="Calendar" class="dh-cal">${CAL_ICON}</a>` : "";
   return `<div class="dayhead"><div class="dh-top"><div class="dh-k">${esc(kick)}</div>
-      <div class="dh-arrows">${arrow(day.prev, "Previous day", "←")}${arrow(day.next, "Next day", "→")}</div></div>
+      <div class="dh-arrows">${cal}${arrow(day.prev, "Previous day", "←")}${arrow(day.next, "Next day", "→")}</div></div>
     <h1>${esc(word)}${day.date ? "." : ""}</h1>${sum ? `<div class="dh-sum">${sum}</div>` : ""}</div>`;
+}
+
+// ---- Calendar (#/calendar/<YYYY-MM>[/picks]): the month at a glance, from sog/calendar.py ----------------------------
+// Your teams' game days are painted in the team's colour with the opponent's mark and, once final, W or L (never for a
+// spoiler-free game). Showcase games carry their badge; outdoor and stadium ones the night sky (and still snow). A
+// thin bar under each day says how busy it is; the season's moments run as stripes under their days and are listed
+// under the grid. A day opens Tonight for that date (Pick'em when the calendar came from Pick'em). The month arrows
+// are an in-page switch (data-swaps): the page holds still and the grid cross-fades.
+const CAL_ICON = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>`;
+const MOMENT_ICON = { freeze: "🧊", wjc: "🏆", break: "🎄" };
+const calHref = (date, mode) => `#/calendar/${(date || isoDay()).slice(0, 7)}${mode === "picks" ? "/picks" : ""}`;
+const fmtDay = (iso, opts = { month: "short", day: "numeric" }) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, opts); };
+function calRange(a, b) {
+  if (a === b) return fmtDay(a);
+  return a.slice(0, 7) === b.slice(0, 7) ? `${fmtDay(a)}–${+b.slice(8)}` : `${fmtDay(a)} – ${fmtDay(b)}`;
+}
+async function calendarView(month, mode, quiet = false) {
+  setNav(mode === "picks" ? "picks" : "calendar");
+  if (!quiet) showLoading("Loading the calendar…");
+  const lgs = shownLeagues().filter(lg => lg === "nhl" || lg === "pwhl");
+  const path = `/api/month?${new URLSearchParams({ ...(month ? { month } : {}), leagues: (lgs.length ? lgs : ["nhl"]).join(",") })}`;
+  let d;
+  try { d = await fast(path, () => calendarView(month, mode, true)); }
+  catch (e) { view.innerHTML = failed(e); return; }
+  const [y, m] = d.month.split("-").map(Number), first = new Date(y, m - 1, 1);
+  const monthName = first.toLocaleDateString(undefined, { month: "long" });
+  const base = mode === "picks" ? "#/picks/" : "#/day/", fav = favs(), suffix = mode === "picks" ? "/picks" : "";
+  const moms = date => d.moments.filter(x => x.from <= date && date <= x.to);
+  const cell = date => {
+    const day = d.days[date], g = day.mine[0], ev = day.events[0]?.event;
+    let cls = "cal-day", style = "", inner = "";
+    const label = [fmtDay(date, { weekday: "long", month: "long", day: "numeric" }), day.n ? `${day.n} game${day.n > 1 ? "s" : ""}` : "no games"];
+    if (date === d.today) cls += " today";
+    if (date < d.today) cls += " past";
+    if (!day.n) cls += " none";
+    if (g) {
+      const us = fav.has(g.home.abbr) ? g.home : g.away, them = us === g.home ? g.away : g.home, t = TEAMS[us.abbr] || {};
+      const res = g.state === "final" && !spoilerHidden(g) && us.score != null && them.score != null ? (us.score > them.score ? "W" : "L") : "";
+      cls += ` mine${t.light ? " light" : ""}`;
+      style = `--c:${esc(t.color || "#3a3f47")}`;
+      inner = `<span class="cal-opp"><i>${us === g.home ? "vs" : "@"}</i>${mark(them.abbr)}</span>${res ? `<b class="cal-res">${res}</b>` : ""}${day.mine.length > 1 ? `<span class="cal-more">+${day.mine.length - 1}</span>` : ""}`;
+      label.push(`${teamName(us.abbr)} ${us === g.home ? "vs" : "at"} ${teamName(them.abbr)}${res ? `, ${res === "W" ? "won" : "lost"}` : ""}`);
+    }
+    if (ev) {
+      cls += ` ev ev-${ev.kind}${evSky({ event: ev }) ? " ev-sky" : ""}`;
+      inner += `<span class="cal-ev" aria-hidden="true">${EV_ICON[ev.kind] || "★"}</span>`;
+      label.push(ev.name);
+    }
+    const ms = moms(date);
+    label.push(...ms.map(x => x.name));
+    return `<a class="${cls}" href="${base}${date}" style="${style}" aria-label="${esc(label.join(", "))}">
+      <span class="cal-n">${+date.slice(8)}</span>${inner}
+      ${day.n ? `<i class="cal-busy" style="--n:${Math.min(day.n, 16) / 16}"></i>` : ""}
+      ${ms.length ? `<span class="cal-mo">${ms.map(x => `<i class="mo-${x.key}"></i>`).join("")}</span>` : ""}</a>`;
+  };
+  const sun = new Date(2026, 10, 1);   // a Sunday: the week starts on Sunday, as on a North American wall calendar
+  const heads = [...Array(7)].map((_, i) => `<span>${new Date(sun.getFullYear(), sun.getMonth(), i + 1).toLocaleDateString(undefined, { weekday: "narrow" })}</span>`).join("");
+  const blanks = `<span class="cal-blank"></span>`.repeat(first.getDay());
+  const grid = `<div class="cal-grid">${heads}${blanks}${Object.keys(d.days).map(cell).join("")}</div>`;
+
+  // Under the grid: the month's showcase games and moments, in date order, each opening its day.
+  const items = [
+    ...Object.values(d.days).flatMap(day => day.events).map(g => ({ at: g.date, html: `<a class="cal-item" href="${base}${g.date}">
+      <span class="cal-when">${esc(fmtDay(g.date))}</span><span class="cal-what"><b><span aria-hidden="true">${EV_ICON[g.event.kind] || "★"}</span> ${esc(g.event.name)}</b>
+      ${esc(teamName(g.away.abbr))} at ${esc(teamName(g.home.abbr))}${g.venue ? ` · ${esc(g.venue)}` : ""}${g.event.city ? `, ${esc(g.event.city)}` : ""}</span></a>` })),
+    ...d.moments.map(x => ({ at: x.from, html: `<a class="cal-item" href="${base}${x.from < `${d.month}-01` ? `${d.month}-01` : x.from}">
+      <span class="cal-when">${esc(calRange(x.from, x.to))}</span><span class="cal-what"><b><span aria-hidden="true">${MOMENT_ICON[x.key] || "•"}</span> ${esc(x.name)}</b>${esc(x.line)}</span>
+      <i class="mo-${x.key}" aria-hidden="true"></i></a>` })),
+  ].sort((a, b) => a.at.localeCompare(b.at));
+  const mine = Object.values(d.days).reduce((n, day) => n + day.mine.length, 0), all = Object.values(d.days).reduce((n, day) => n + day.n, 0);
+  const sum = [fav.size ? `${mine} game${mine === 1 ? "" : "s"} for your teams` : "", `${all} in all`].filter(Boolean).join(`<span aria-hidden="true">·</span>`);
+  const arrow = (to, name, glyph) => to ? `<a href="#/calendar/${to}${suffix}" aria-label="${name}">${glyph}</a>` : `<span></span>`;
+  const back = d.month !== d.today.slice(0, 7) ? `<a class="btn small" href="#/calendar/${d.today.slice(0, 7)}${suffix}">This month</a>` : "";
+  paint(`<div class="dayhead"><div class="dh-top"><div class="dh-k">${y}${mode === "picks" ? " · Pick'em" : ""}</div>
+      <div class="dh-arrows" data-swaps>${arrow(d.prev, "Previous month", "←")}${arrow(d.next, "Next month", "→")}</div></div>
+    <h1>${esc(monthName)}.</h1><div class="dh-sum">${sum}</div></div>
+    <div class="cal">${grid}</div>
+    ${items.length ? `<h2>In ${esc(monthName)}</h2><div class="card cal-list">${items.map(i => i.html).join("")}</div>` : ""}
+    <div class="cal-foot">${back}<p class="help">Tap a day to open ${mode === "picks" ? "its Pick'em" : "its games"}. ${lgs.includes("pwhl") ? "NHL and PWHL games" : "NHL games"}; your teams' days are in their colours.</p></div>`, quiet);
 }
 
 async function tonightView(date, quiet = false) {
@@ -3086,7 +3166,7 @@ async function adminView() {
 // from their side of the tab bar, game and team pages from the right, going back from the left. It plays only once
 // the new page's content is on screen, never for live refreshes or the same page re-shown; off with Settings >
 // Display or the phone's Reduce Motion.
-const NAV_ORDER = { "": 0, day: 0, picks: 1, wire: 2, league: 3, standings: 3, teams: 3, settings: 4, new: 5, app: 5, report: 5, admin: 5 };
+const NAV_ORDER = { "": 0, day: 0, calendar: 0, picks: 1, wire: 2, league: 3, standings: 3, teams: 3, settings: 4, new: 5, app: 5, report: 5, admin: 5 };
 const DETAIL = new Set(["game", "pgame", "team", "compare"]);
 let lastHash = null, lastPage = null, pendingShot = 0, cameFromApp = false;   // pendingShot: +1 from the right, -1 from the left
 // Switches between sibling addresses (League's Standings | Leaders, marked data-swaps) feel like one page: the tap
@@ -3117,10 +3197,10 @@ const VIEWS = {};
 // Same checks as renderRoute: a page whose argument it rejects is counted as what it shows instead.
 const VIEW_PAGE = { standings: "league", teams: "league" };
 const TEAM_KEY = /^((PW-)?[A-Z]{2,3}|C[MW]-\d{1,7})$/;
-const VIEW_ARG = { day: ["date", /^\d{4}-\d{2}-\d{2}$/], picks: ["date", /^\d{4}-\d{2}-\d{2}$/], game: ["id", /^\d+$/],
+const VIEW_ARG = { day: ["date", /^\d{4}-\d{2}-\d{2}$/], calendar: ["month", /^\d{4}-\d{2}$/], picks: ["date", /^\d{4}-\d{2}-\d{2}$/], game: ["id", /^\d+$/],
   pgame: ["id", /^\d+$/], cgame: ["league", /^ncaa[mw]$/], team: ["team", TEAM_KEY], player: ["id", /^\d+$/], pplayer: ["id", /^\d+$/] };
-const VIEW_PLAIN = new Set(["picks", "wire", "league", "settings", "app", "new", "report", "leaders", "search", "compare"]);   // fine without an argument
-const VIEW_NAME = { tonight: "Tonight", "day/:date": "Another day", "game/:id": "NHL game", "pgame/:id": "PWHL game", "cgame/:league": "College game",
+const VIEW_PLAIN = new Set(["calendar", "picks", "wire", "league", "settings", "app", "new", "report", "leaders", "search", "compare"]);   // fine without an argument
+const VIEW_NAME = { tonight: "Tonight", "day/:date": "Another day", calendar: "Calendar", "calendar/:month": "Calendar, another month", "game/:id": "NHL game", "pgame/:id": "PWHL game", "cgame/:league": "College game",
   picks: "Pick'em", "picks/:date": "Pick'em, another day", wire: "Wire", league: "League", "team/:team": "Team page",
   settings: "Settings", app: "Get the app", new: "What's new", report: "Report a problem",
   "player/:id": "NHL player", "pplayer/:id": "PWHL player", leaders: "Leaders", search: "Search", compare: "Compare" };
@@ -3268,6 +3348,7 @@ function renderRoute() {
   if (!keepScroll) window.scrollTo(0, 0);
   keepScroll = false;
   if (page === "day" && /^\d{4}-\d{2}-\d{2}$/.test(arg || "")) return tonightView(arg);
+  if (page === "calendar") return calendarView(/^\d{4}-\d{2}$/.test(arg || "") ? arg : undefined, arg2 === "picks" ? "picks" : "");
   if (page === "game" && /^\d+$/.test(arg || "")) return gameView(arg);
   if (page === "pgame" && /^\d+$/.test(arg || "")) return gameView(arg, false, "pwhl");
   if (page === "cgame" && isCollege(arg) && /^\d+$/.test(arg2 || "")) return gameView(arg2, false, arg);
