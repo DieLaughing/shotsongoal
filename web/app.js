@@ -325,6 +325,8 @@ function spoilCover(games, what, verb = "includes") {
 // Showcase games (sog/nhl.py parse_event): a ribbon naming the event and where it's played. Outdoor and stadium games
 // also trade the team colour for a night sky (.ev-sky); outdoor ones get still snow (.ev-outdoor). Nothing moves.
 const EV_ICON = { outdoor: "❄", stadium: "🏟", global: "🌍" };
+// What the NHL's names mean, for people who don't follow its marketing ("Global Series" says nothing on its own).
+const EV_ABOUT = { global: "NHL games played overseas", stadium: "Played in a football stadium" };
 const evSky = g => ["outdoor", "stadium"].includes(g?.event?.kind);
 const evClass = g => g?.event ? ` ev ev-${g.event.kind}${evSky(g) ? " ev-sky" : ""}` : "";
 // Abroad, the city says more than the arena (Düsseldorf, not PSD Bank Dome); outdoors, the stadium is the story.
@@ -333,6 +335,8 @@ const evWhere = g => g.event.kind === "global" ? g.event.city || g.venue : g.ven
 function evRibbon(g) {
   const ev = g?.event;
   if (!ev) return "";
+  // Abroad, where it's played is the story: "In Düsseldorf" says what "Global Series" doesn't.
+  if (ev.kind === "global" && ev.city) return `<div class="evline"><span aria-hidden="true">${EV_ICON.global}</span> In ${esc(ev.city)}<span class="evwhere"> · ${esc(ev.name)}</span></div>`;
   const where = evWhere(g);
   return `<div class="evline"><span aria-hidden="true">${EV_ICON[ev.kind] || "★"}</span> ${esc(ev.name)}${where ? `<span class="evwhere"> · ${esc(where)}</span>` : ""}</div>`;
 }
@@ -1136,7 +1140,7 @@ async function calendarView(month, mode, quiet = false) {
   const items = [
     ...Object.values(d.days).flatMap(day => day.events).map(g => ({ at: g.date, html: `<a class="cal-item" href="${base}${g.date}">
       <span class="cal-when">${esc(fmtDay(g.date))}</span><span class="cal-what"><b><span aria-hidden="true">${EV_ICON[g.event.kind] || "★"}</span> ${esc(g.event.name)}</b>
-      ${esc(teamName(g.away.abbr))} at ${esc(teamName(g.home.abbr))}${g.venue ? ` · ${esc(g.venue)}` : ""}${g.event.city ? `, ${esc(g.event.city)}` : ""}</span></a>` })),
+      ${EV_ABOUT[g.event.kind] ? `${esc(EV_ABOUT[g.event.kind])}: ` : ""}${esc(teamName(g.away.abbr))} at ${esc(teamName(g.home.abbr))}${g.venue ? ` · ${esc(g.venue)}` : ""}${g.event.city ? `, ${esc(g.event.city)}` : ""}</span></a>` })),
     ...d.moments.map(x => ({ at: x.from, html: `<a class="cal-item" href="${base}${x.from < `${d.month}-01` ? `${d.month}-01` : x.from}">
       <span class="cal-when">${esc(calRange(x.from, x.to))}</span><span class="cal-what"><b><span aria-hidden="true">${MOMENT_ICON[x.key] || "•"}</span> ${esc(x.name)}</b>${esc(x.line)}</span>
       <i class="mo-${x.key}" aria-hidden="true"></i></a>` })),
@@ -1678,7 +1682,7 @@ async function gameView(id, quiet = false, league = "nhl") {
   const big = showScore ? `<b data-sc="a">${g.away.score ?? 0}</b><i>–</i><b data-sc="h">${g.home.score ?? 0}</b>` : g.start && g.state === "pre" ? esc(time(g.start)) : "vs";
   const wx = weatherLine(d.weather);
   // Game page: the event's name over the jumbotron; under it the venue, the city, and outdoors the weather at puck drop.
-  const ev = g.event, evLine = ev && [g.venue, ev.kind === "outdoor" ? `Outdoors${ev.city ? ` in ${ev.city}` : ""}` : ev.city]
+  const ev = g.event, evLine = ev && [EV_ABOUT[ev.kind], g.venue, ev.kind === "outdoor" ? `Outdoors${ev.city ? ` in ${ev.city}` : ""}` : ev.city]
     .filter(Boolean).map(esc).join(" · ");
   const band = ev ? `<div class="evband${evClass(g)}"><div class="evname"><span aria-hidden="true">${EV_ICON[ev.kind] || "★"}</span>${esc(ev.name)}</div>
     ${evLine || wx ? `<div class="evwx">${[evLine, wx].filter(Boolean).join(" · ")}</div>` : ""}</div>` : "";

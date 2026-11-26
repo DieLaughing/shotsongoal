@@ -167,7 +167,7 @@ How the app moves (what animates, what must hold still, timings, rules for new U
     and the pretend one share a renderer. Ties go points, fewer games, regulation wins, wins, goal difference: close to
     the NHL's order, not exact. Nothing is saved; picks stay in memory across mode switches until Close.
 - Calendar (#/calendar/<YYYY-MM>, /picks at the end when opened from Pick'em; GET /api/month, sog/calendar.py): a month
-  grid, Sunday first, reached from the calendar button beside the day arrows (dayHead) and the menu. Built from saved
+  grid, Sunday first (each day a size container: its contents scale with it, cqi), reached from the calendar button beside the day arrows (dayHead) and the menu. Built from saved
   data only: Feed.season_games() (every NHL game in the saved team schedules, with events) and the PWHL season feed;
   college isn't on it. Each day: game count (a bar along the bottom), your teams' games (the day painted in the team's
   colour, opponent's mark, W/L once final unless spoiler-free hides it) and showcase games (badge; night sky and snow
@@ -183,7 +183,8 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   rebuilt every EVENTS_EVERY 10 min, peeks only); the schedules don't name the city either, so each event game's
   landing is read once in the background and the city kept 30 days (`evcity:<id>`). Game pages get it from the landing
   directly (GAME_SHAPE 4). UI (app.js evRibbon/evClass, style.css "Showcase games"): a ribbon on cards (tiles show the
-  name, the list adds the venue), the event in the team card's kicker, and a band over the jumbotron (name; venue and
+  name, the list adds the venue; a Global Series game reads "In <city>", since the NHL's name says nothing on its
+  own, and EV_ABOUT explains global and stadium games on the game page and the Calendar), the event in the team card's kicker, and a band over the jumbotron (name; venue and
   city). Outdoor and stadium games trade the team colour for a night sky (.ev-sky); outdoor games get still snow
   (.ev-outdoor, three tiled flake sizes) and nothing moves. Weather at puck drop for outdoor games (sog/weather.py,
   Open-Meteo, free, no key): the city geocoded once (`geo:<city>`, 30 days), the forecast hour nearest puck drop within
