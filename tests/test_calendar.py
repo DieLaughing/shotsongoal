@@ -57,3 +57,8 @@ def test_your_teams_from_every_league_whatever_the_switch_says():
     college_only = calendar.build("2026-12", [], ["CM-25"], "2026-12-20", [], own)
     assert college_only["leagues"] == [] and college_only["days"]["2026-12-27"]["mine"]
     assert "break" not in {m["key"] for m in college_only["moments"]}
+
+
+def test_no_christmas_break_until_every_schedule_is_saved():
+    d = calendar.build("2026-12", GAMES, [], "2026-12-20", ["nhl"], full=False)
+    assert "break" not in {m["key"] for m in d["moments"]}                   # empty days might just be unsaved

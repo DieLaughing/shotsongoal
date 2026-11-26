@@ -169,8 +169,9 @@ How the app moves (what animates, what must hold still, timings, rules for new U
 - Calendar (#/calendar/<YYYY-MM>, /picks at the end when opened from Pick'em; GET /api/month, sog/calendar.py): a month
   grid, Sunday first (each day a size container: its contents scale with it, cqi; three rows: date + badge, the
   opponent's mark, vs/@ or W/L with the score where there's room; phones make the days taller than wide), reached from the calendar button beside the day arrows (dayHead) and the menu. Built from saved
-  data only: Feed.season_games() (every NHL game in the saved team schedules, with events), the PWHL season feed, and
-  college favourites' saved schedules (Feed.ncaa_schedule, as on the team cards). The league pill picks what's counted
+  data only, never waiting on a league: Feed.season_games() (every NHL game in the saved team schedules, with events),
+  Feed.pwhl_games_peek() and Feed.ncaa_schedule_peek() for college favourites (saved copies, refreshed in the
+  background; with no PWHL copy yet the counts aren't labelled PWHL). The league pill picks what's counted
   (NHL and/or PWHL; college is never counted) and whose showcase games are marked; your teams' games are always on it
   from every league (calendar.build `own`). Two of your teams the same day: the day split on the jumbotron's slant
   (first-listed team top left, --c and --c2), both opponents' marks and "vs · @" / "W · L" on a dark chip; a third is "+1" (never more than two in a square).
@@ -179,7 +180,8 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   colour, opponent's mark, W/L once final unless spoiler-free hides it) and showcase games (badge; night sky and snow
   as on cards). A showcase badge goes on your team's day only when your team is in that game, never another game's. Moments (calendar.MOMENTS, every season): the holiday roster freeze (Dec 20-27) and the World Juniors
   (Dec 26-Jan 5), plus the Christmas break read from the schedule as the run of NHL-free days around Dec 25 (Dec 23-25
-  in 2026-27). They're stripes under their days and listed under the grid with the month's showcase games. A day opens
+  in 2026-27), only once all 32 team schedules are saved (Feed.schedules_saved; before that an empty day may just be
+  unsaved). Months outside 2000-2099/01-12 get a 400. They're stripes under their days and listed under the grid with the month's showcase games. A day opens
   Tonight (or Pick'em) for that date. The month arrows are data-swaps (in-page: the page holds still, checked by
   tools/motioncheck.py). The endpoint is /api/month because /api/calendar is the calendar-feed link.
 - Showcase games (Winter Classic, Heritage Classic, Stadium Series, Global Series): nhl.parse_event reads the NHL's
@@ -187,14 +189,14 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   only at a neutral site, which leaves out marketing tags on ordinary home games (Original 6 Series). The scoreboard
   feed leaves specialEvent out, so /api/games adds it from the saved team schedules (Feed.with_events / Feed.events,
   rebuilt every EVENTS_EVERY 10 min, peeks only); the schedules don't name the city either, so each event game's
-  landing is read once in the background and the city kept 30 days (`evcity:<id>`). Game pages get it from the landing
-  directly (GAME_SHAPE 4). UI (app.js evRibbon/evClass, style.css "Showcase games"): a ribbon on cards (tiles show the
+  landing is read once in the background and the city kept 30 days (`evcity:<id>`, "" when it names none, so it
+  isn't asked again). Game pages get it from the landing (GAME_SHAPE 4) and from Feed.with_events as on their card. UI (app.js evRibbon/evClass, style.css "Showcase games"): a ribbon on cards (tiles show the
   name, the list adds the venue; a Global Series game reads "In <city>", since the NHL's name says nothing on its
   own, and EV_ABOUT explains global and stadium games on the game page and the Calendar), the event in the team card's kicker, and a band over the jumbotron (name; venue and
   city). Outdoor and stadium games trade the team colour for a night sky (.ev-sky); outdoor games get still snow
   (.ev-outdoor, three tiled flake sizes) and nothing moves. Weather at puck drop for outdoor games (sog/weather.py,
-  Open-Meteo, free, no key): the city geocoded once (`geo:<city>`, 30 days), the forecast hour nearest puck drop within
-  7 days (`wx:<id>`, 1 h), read by Feed.weather_peek which never waits; °C for people in Canada, °F otherwise.
+  Open-Meteo, free, no key): the city geocoded once (`geo:<city>`, 30 days), the forecast hour nearest puck drop (rounded) within
+  7 days (`wx:<id>`, 1 h; a miss is kept an hour, an unknown city a day), read by Feed.weather_peek which never waits; °C for people in Canada, °F otherwise.
 - The live dock (web/dock.js, loaded 1.2 s after start): your teams' games on now, a rounded strip fixed at the bottom of the screen (above the menu bar when that's at the bottom; it drops into the bar's place while the bar is tucked away), outside #view so no page draw touches it. It also hands the live games to the menu bar's second line (ctx.onLive). GET /api/live (sog/glance.py) is one request whatever you follow: every LIVE_S (10 s) while one is on, else every IDLE_S (90 s), none while the app is hidden or with no favourites. A game leaves the strip on its own game page, when spoiler-free hides it, and fades while its own card is on screen on Tonight. A final stays KEEP_FINAL (5 min), only if this visit saw it live. draw() rebuilds only when the games change, otherwise it writes numbers, so a swipe and the lamp survive. celebrate() is the one place that decides a goal happened (a first look only records, and coming back to the app counts as one), for the lamp and the horn. Settings > Display > Show the live dock (settings.dock, per person, on by default) hides the strip. It keeps polling only if this device has the horn on, since the horn listens through it; with both off, dock.js isn't even downloaded (syncDock()).
 - Goal horn (web/horn.js, Settings > Display): per device, localStorage `horn`, off unless set. Three notes of Web Audio, no file, no league recording. Your teams' goals only, whichever page is open, with the dock showing or hidden. Phones only allow sound after a tap, so arm() waits for the next one, and a goal before that stays silent rather than going off at that tap.
 - This just happened (Tonight, default slate only): GET /api/happened?leagues= (sog/glance.py) reads saved copies only: today's and yesterday's slates, plus the saved game pages of your teams' games for goals with a clip and recaps. Other teams' pages aren't read (each is a parse). Asked for alongside the page's other requests, so it never shifts the page in late. spoilerHidden() filters tiles on the phone. Tiles play through openClip(id, list). A mouse can't swipe the row, so over it the wheel moves it sideways (hapWheel). So the row can't trap the page, a wheel still scrolling the page (within PAGE_WHEEL_MS) passes through, and so does one at either end of the row. A notch is only ~50 px, so WHEEL_GAIN makes it about a tile, and hapGlide() eases there on a timer. The first wheel turn sets `row-wheel` on <body>, which turns snapping off: it would pull every step back, and media queries can't be trusted to tell a mouse from a finger.

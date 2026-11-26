@@ -202,13 +202,12 @@ class Feed:
                 continue
             hit = self.store.get(f"evcity:{gid}")
             if hit:
-                ev["city"] = hit["data"]
+                ev["city"] = hit["data"] or None   # "" = the landing names no city: don't ask again for a month
                 continue
 
             async def fetch(gid=gid):
-                city = (nhl.parse_event(await nhl.get(f"gamecenter/{gid}/landing")) or {}).get("city")
-                if city:
-                    self.store.put(f"evcity:{gid}", city, timedelta(days=30))
+                landing = await nhl.get(f"gamecenter/{gid}/landing")
+                self.store.put(f"evcity:{gid}", nhl.venue_city(landing), timedelta(days=30))
             self.refresh_later(f"evcity:{gid}", fetch)
         self._events = (now, found)
         return found
@@ -223,6 +222,24 @@ class Feed:
                 if g["id"] not in found:
                     found[g["id"]] = {**g, "league": "nhl", "event": events.get(g["id"]) or g.get("event")}
         return list(found.values())
+
+    def schedules_saved(self) -> int:
+        """How many NHL team schedules are saved (the Calendar trusts empty days only when all of them are)."""
+        return sum(1 for abbr in NHL_TEAMS if self.store.get(f"team:{abbr}:schedule"))
+
+    def pwhl_games_peek(self) -> list[dict] | None:
+        """The saved PWHL season, refreshed in the background when it's old or missing. Never waits (Calendar)."""
+        hit = self.store.get("pwhl:games")
+        if not hit or not hit["fresh"]:
+            self.refresh_later("peek:pwhl:games", self.pwhl_games)
+        return hit["data"] if hit else None
+
+    def ncaa_schedule_peek(self, abbr: str) -> list[dict] | None:
+        """A college team's saved schedule, refreshed in the background. Never waits (Calendar)."""
+        hit = self.store.get(f"{ncaa.league_of(abbr)}:team:{abbr[3:]}:schedule")
+        if not hit or not hit["fresh"]:
+            self.refresh_later(f"peek:sched:{abbr}", lambda: self.ncaa_schedule(abbr))
+        return hit["data"] if hit else None
 
     def with_events(self, games: list[dict]) -> list[dict]:
         """Adds g["event"] to scoreboard games that are showcase games (in place; pass copies)."""
@@ -241,17 +258,15 @@ class Feed:
         if not hit or not hit["fresh"]:
             async def fetch():
                 geo = self.store.get(f"geo:{city}")
-                place = geo["data"] if geo else None
-                if not place:
-                    place = await weather.geocode(city)
-                    if not place:
-                        return
-                    self.store.put(f"geo:{city}", place, weather.GEO_TTL)
-                wx = await weather.forecast(place["lat"], place["lon"], g["start"])
-                if wx:
-                    self.store.put(key, wx, weather.TTL)
+                if geo and not geo["fresh"]:
+                    geo = None
+                place = geo["data"] if geo else await weather.geocode(city)
+                if not geo:   # a miss is kept too ({}), for a day, so an unknown city isn't looked up on every view
+                    self.store.put(f"geo:{city}", place or {}, weather.GEO_TTL if place else timedelta(days=1))
+                wx = await weather.forecast(place["lat"], place["lon"], g["start"]) if place else None
+                self.store.put(key, wx or {}, weather.TTL if wx else weather.MISS_TTL)
             self.refresh_later(key, fetch)
-        return hit["data"] if hit else None
+        return hit["data"] or None if hit else None
 
     def careers(self, abbr: str) -> dict | None:
         """The saved career totals for a team ({fetched, players}), or None. Pages only ever peek."""

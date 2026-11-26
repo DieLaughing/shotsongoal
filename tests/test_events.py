@@ -50,5 +50,15 @@ def test_forecast_is_the_hour_of_puck_drop(monkeypatch):
         return {"hourly": {"time": times, "temperature_2m": [float(h) - 10 for h in range(24)],
                            "weather_code": [71] * 24, "wind_speed_10m": [12.0] * 24}}
     monkeypatch.setattr(weather, "_get", fake_get)
-    wx = asyncio.run(weather.forecast(40.76, -111.85, "2026-12-31T23:30:00Z"))
+    wx = asyncio.run(weather.forecast(40.76, -111.85, "2026-12-31T22:50:00Z"))   # 10:50 pm: the 11 pm forecast
     assert wx == {"c": 13.0, "code": 71, "text": "light snow", "wind": 12.0}
+    assert asyncio.run(weather.forecast(40.76, -111.85, "2026-12-31T22:20:00Z"))["c"] == 12.0
+
+
+def test_a_city_the_landing_doesnt_name_is_not_asked_for_again(tmp_path):
+    feed = Feed(Store(tmp_path / "t.db"))
+    feed.store.put("team:CHI:schedule", [{"id": 9, "event": {"name": "Some Series", "kind": "event", "city": None}}],
+                   timedelta(minutes=30))
+    feed.store.put("evcity:9", "", timedelta(days=30))                      # looked up once: no city
+    assert feed.with_events([{"id": 9}])[0]["event"]["city"] is None
+    assert not any(k.startswith("evcity:") for k in feed.refreshing)          # and no new lookup

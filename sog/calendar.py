@@ -62,7 +62,7 @@ def moments(month: str, nhl_days: dict[str, int] | None) -> list[dict]:
 
 
 def build(month: str, games: list[dict], favorites: list[str], today: str, leagues: list[str],
-          own: list[dict] = ()) -> dict:
+          own: list[dict] = (), full: bool = True) -> dict:
     """The page's data for one month. `games`: every game the shown leagues have this season (each with `league`);
     they make the counts and the showcase badges. `own`: your teams' games from leagues that aren't shown (a PWHL or
     college favourite with the NHL on): your teams are always on the calendar, whatever the league switch says."""
@@ -91,8 +91,9 @@ def build(month: str, games: list[dict], favorites: list[str], today: str, leagu
     for day in days.values():
         day["mine"].sort(key=lambda g: (best(g), g.get("start") or ""))
     dates = sorted(g["date"] for g in [*games, *own] if g.get("date"))
+    # `full`: every team's schedule is saved. Until then an empty day may only be unsaved, so no Christmas break.
     nhl_days = {d: sum(1 for g in games if g.get("league", "nhl") == "nhl" and g.get("date") == d) for d in days} \
-        if "nhl" in leagues else None
+        if "nhl" in leagues and full else None
     return {"month": month, "today": today, "leagues": leagues, "days": days, "moments": moments(month, nhl_days),
             # Months you can step to: as far as the seasons shown have games.
             "prev": shift(month, -1) if dates and dates[0][:7] < month else None,

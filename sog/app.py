@@ -518,7 +518,7 @@ def _freshen(g: dict) -> dict:
 @app.get("/api/game/{game_id}")
 async def game(game_id: int, request: Request):
     detail = await _upstream(feed.game(game_id))
-    detail = {**detail, "game": _freshen(dict(detail["game"]))}
+    detail = {**detail, "game": feed.with_events([_freshen(dict(detail["game"]))])[0]}   # as on its card
     if wx := feed.weather_peek(detail["game"]):   # outdoor games only, within a week of puck drop
         detail["weather"] = wx
     _with_watch([detail["game"]], _settings(request))
@@ -738,7 +738,7 @@ async def college_logos_css():
     return FileResponse(path, media_type="text/css", headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
-MONTH = re.compile(r"^\d{4}-\d{2}$")
+MONTH = re.compile(r"^20\d{2}-(0[1-9]|1[0-2])$")
 
 
 @app.get("/api/month")
@@ -752,20 +752,22 @@ async def calendar_month(request: Request, month: str | None = None, leagues: st
     lgs = [lg for lg in ("nhl", "pwhl") if lg in asked] or (["nhl"] if not any(lg in ncaa.LEAGUES for lg in asked) else [])
     today = feed.opening_day()
     favorites = [a for a in _settings(request)["favorites"] if a in teams.ALL]
+    # Saved copies only (peeks), refreshed in the background: the Calendar never waits on a league.
     nhl = feed.season_games() if "nhl" in lgs or any(teams.league_of(a) == "nhl" for a in favorites) else []
     pwhl: list[dict] = []
     if "pwhl" in lgs or any(teams.league_of(a) == "pwhl" for a in favorites):
-        try:
-            pwhl = [dict(g, league="pwhl") for g in await feed.pwhl_games()]
-        except Exception:
-            pass
+        saved = feed.pwhl_games_peek()
+        if saved is None:
+            log.info("calendar: no saved PWHL season yet (fetching in the background)")
+            lgs = [lg for lg in lgs if lg != "pwhl"]   # don't label counts "PWHL" without its games
+        pwhl = [dict(g, league="pwhl") for g in saved or []]
     shown = (nhl if "nhl" in lgs else []) + (pwhl if "pwhl" in lgs else [])
     own = (nhl if "nhl" not in lgs else []) + (pwhl if "pwhl" not in lgs else [])
-    college = [a for a in favorites if teams.league_of(a) in ncaa.LEAGUES]   # their saved schedules, as on the team cards
-    for found in await asyncio.gather(*[feed.ncaa_schedule(a) for a in college], return_exceptions=True):
-        if not isinstance(found, Exception):
-            own += [dict(g, league=g.get("league") or ncaa.league_of(g["home"]["abbr"])) for g in found]
-    return cal_month.build(month or today[:7], shown, favorites, today, lgs, own)
+    for abbr in [a for a in favorites if teams.league_of(a) in ncaa.LEAGUES]:   # their saved schedules, as on the team cards
+        own += [dict(g, league=g.get("league") or ncaa.league_of(abbr)) for g in feed.ncaa_schedule_peek(abbr) or []]
+    # Empty days mean "no games" (the Christmas break) only once every team's schedule is saved.
+    full = "nhl" in lgs and feed.schedules_saved() == len(teams.TEAMS)
+    return cal_month.build(month or today[:7], shown, favorites, today, lgs, own, full=full)
 
 
 @app.get("/api/myteams")

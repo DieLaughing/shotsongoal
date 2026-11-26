@@ -732,3 +732,11 @@ def test_a_slow_league_cant_hold_up_pickem(client, monkeypatch):
     took, me = _pickem_with_old_pick(client, monkeypatch, delay=5)
     assert took < 2   # it used to wait the whole 5 s (and up to 20 s a day, one day after another)
     assert me is None   # not scored yet: the table catches up on the next load
+
+
+def test_calendar_month_must_be_a_real_month(client, monkeypatch):
+    as_user(monkeypatch, "owner@x.com")
+    assert client.get("/api/month?month=2026-13").status_code == 400
+    assert client.get("/api/month?month=2026-00").status_code == 400
+    r = client.get("/api/month?month=2026-12")
+    assert r.status_code == 200 and len(r.json()["days"]) == 31

@@ -1086,6 +1086,7 @@ function dayHead(day, games, { base = "#/day/", label = "", line = null } = {}) 
 // are an in-page switch (data-swaps): the page holds still and the grid cross-fades.
 const CAL_ICON = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>`;
 const MOMENT_ICON = { freeze: "🧊", wjc: "🏆", break: "🎄" };
+const CAL_MONTH = /^20\d{2}-(0[1-9]|1[0-2])$/;
 const calHref = (date, mode) => `#/calendar/${(date || isoDay()).slice(0, 7)}${mode === "picks" ? "/picks" : ""}`;
 const fmtDay = (iso, opts = { month: "short", day: "numeric" }) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, opts); };
 function calRange(a, b) {
@@ -1107,10 +1108,8 @@ async function calendarView(month, mode, quiet = false) {
   let pick = "";
   try { pick = localStorage.getItem("calTeam") || ""; } catch { /* fine */ }
   if (!favList.includes(pick) || favList.length < 3) pick = "";
-  for (const day of Object.values(d.days)) {
-    day.allMine ??= day.mine;   // d is the cached copy: keep the full list for the next pick
-    day.mine = pick ? day.allMine.filter(x => x.home.abbr === pick || x.away.abbr === pick) : day.allMine;
-  }
+  // d is the phone's cached copy (fast() compares it with fresh data), so the pick filters into a local view of it.
+  const mineOf = day => pick ? day.mine.filter(x => x.home.abbr === pick || x.away.abbr === pick) : day.mine;
   const teamSwitch = favList.length >= 3 ? `<div class="seg cal-teams">${[["", "All your teams"], ...favList.map(a => [a, teamName(a)])]
     .map(([k, l]) => `<button data-calteam="${esc(k)}" class="${k === pick ? "on" : ""}">${esc(l)}</button>`).join("")}</div>` : "";
   const base = mode === "picks" ? "#/picks/" : "#/day/", fav = pick ? new Set([pick]) : favs(), suffix = mode === "picks" ? "/picks" : "";
@@ -1118,8 +1117,8 @@ async function calendarView(month, mode, quiet = false) {
   // A day is three rows: the date (and a showcase badge), who your team plays, then vs/@ before the game or W/L after.
   // A showcase game marks your day only when your team is in it; other teams' events show on days you don't play.
   const cell = date => {
-    const day = d.days[date], g = day.mine[0];
-    const evGame = g ? day.events.find(e => day.mine.some(m => m.id === e.id && m.league === e.league)) : day.events[0];
+    const day = d.days[date], mine = mineOf(day), g = mine[0];
+    const evGame = g ? day.events.find(e => mine.some(m => m.id === e.id && m.league === e.league)) : day.events[0];
     const ev = evGame?.event;
     let cls = "cal-day", style = "", mid = "", bot = "";
     const label = [fmtDay(date, { weekday: "long", month: "long", day: "numeric" }), day.n ? `${day.n} game${day.n > 1 ? "s" : ""}` : "no games"];
@@ -1130,7 +1129,7 @@ async function calendarView(month, mode, quiet = false) {
       // One game: the day in your team's colour. Two of your teams: the day split on the jumbotron's slant, your
       // first team top left, the second bottom right, both opponents and both games on the bottom line.
       const side = x => { const us = fav.has(x.home.abbr) ? x.home : x.away, them = us === x.home ? x.away : x.home; return { x, us, them }; };
-      const shown = day.mine.slice(0, 2).map(side);
+      const shown = mine.slice(0, 2).map(side);
       const short = ({ x, us, them }) => {
         // College games can end tied: T.
         const res = x.state === "final" && !spoilerHidden(x) && us.score != null && them.score != null ? (us.score > them.score ? "W" : us.score < them.score ? "L" : "T") : "";
@@ -1141,8 +1140,8 @@ async function calendarView(month, mode, quiet = false) {
       style = `--c:${esc(t1.color || "#3a3f47")}${t2 ? `;--c2:${esc(t2.color || "#3a3f47")}` : ""}`;
       mid = shown.map(({ them }) => mark(them.abbr)).join("");
       bot = shown.map(short).join(`<span class="cal-sep" aria-hidden="true">·</span>`);
-      if (day.mine.length > 2) bot += `<span class="cal-more">+${day.mine.length - 2}</span>`;
-      for (const { x, us, them } of day.mine.map(side)) {
+      if (mine.length > 2) bot += `<span class="cal-more">+${mine.length - 2}</span>`;
+      for (const { x, us, them } of mine.map(side)) {
         const res = x.state === "final" && !spoilerHidden(x) && us.score != null && them.score != null ? (us.score > them.score ? "won" : us.score < them.score ? "lost" : "tied") : "";
         label.push(`${teamName(us.abbr)} ${us === x.home ? "vs" : "at"} ${teamName(them.abbr)}${res ? `, ${res} ${us.score}–${them.score}` : ""}`);
       }
@@ -1173,9 +1172,9 @@ async function calendarView(month, mode, quiet = false) {
       <span class="cal-when">${esc(calRange(x.from, x.to))}</span><span class="cal-what"><b><span aria-hidden="true">${MOMENT_ICON[x.key] || "•"}</span> ${esc(x.name)}</b>${esc(x.line)}</span>
       <i class="mo-${x.key}" aria-hidden="true"></i></a>` })),
   ].sort((a, b) => a.at.localeCompare(b.at));
-  const mine = Object.values(d.days).reduce((n, day) => n + day.mine.length, 0), all = Object.values(d.days).reduce((n, day) => n + day.n, 0);
+  const mineN = Object.values(d.days).reduce((n, day) => n + mineOf(day).length, 0), all = Object.values(d.days).reduce((n, day) => n + day.n, 0);
   const counted = d.leagues.map(lg => LEAGUE_SHORT[lg] || lg.toUpperCase()).join(" and ");
-  const sum = [fav.size ? `${mine} game${mine === 1 ? "" : "s"} ${pick ? `for the ${teamName(pick)}` : "for your teams"}` : "", counted ? `${all} ${counted} in all` : ""].filter(Boolean).join(`<span aria-hidden="true">·</span>`);
+  const sum = [fav.size ? `${mineN} game${mineN === 1 ? "" : "s"} ${pick ? `for the ${teamName(pick)}` : "for your teams"}` : "", counted ? `${all} ${counted} in all` : ""].filter(Boolean).join(`<span aria-hidden="true">·</span>`);
   const arrow = (to, name, glyph) => to ? `<a href="#/calendar/${to}${suffix}" aria-label="${name}">${glyph}</a>` : `<span></span>`;
   const back = d.month !== d.today.slice(0, 7) ? `<a class="btn small" href="#/calendar/${d.today.slice(0, 7)}${suffix}">This month</a>` : "";
   paint(`<div class="dayhead"><div class="dh-top"><div class="dh-k">${y}${mode === "picks" ? " · Pick'em" : ""}</div>
@@ -3236,7 +3235,7 @@ const VIEWS = {};
 // Same checks as renderRoute: a page whose argument it rejects is counted as what it shows instead.
 const VIEW_PAGE = { standings: "league", teams: "league" };
 const TEAM_KEY = /^((PW-)?[A-Z]{2,3}|C[MW]-\d{1,7})$/;
-const VIEW_ARG = { day: ["date", /^\d{4}-\d{2}-\d{2}$/], calendar: ["month", /^\d{4}-\d{2}$/], picks: ["date", /^\d{4}-\d{2}-\d{2}$/], game: ["id", /^\d+$/],
+const VIEW_ARG = { day: ["date", /^\d{4}-\d{2}-\d{2}$/], calendar: ["month", /^20\d{2}-(0[1-9]|1[0-2])$/], picks: ["date", /^\d{4}-\d{2}-\d{2}$/], game: ["id", /^\d+$/],
   pgame: ["id", /^\d+$/], cgame: ["league", /^ncaa[mw]$/], team: ["team", TEAM_KEY], player: ["id", /^\d+$/], pplayer: ["id", /^\d+$/] };
 const VIEW_PLAIN = new Set(["calendar", "picks", "wire", "league", "settings", "app", "new", "report", "leaders", "search", "compare"]);   // fine without an argument
 const VIEW_NAME = { tonight: "Tonight", "day/:date": "Another day", calendar: "Calendar", "calendar/:month": "Calendar, another month", "game/:id": "NHL game", "pgame/:id": "PWHL game", "cgame/:league": "College game",
@@ -3387,7 +3386,7 @@ function renderRoute() {
   if (!keepScroll) window.scrollTo(0, 0);
   keepScroll = false;
   if (page === "day" && /^\d{4}-\d{2}-\d{2}$/.test(arg || "")) return tonightView(arg);
-  if (page === "calendar") return calendarView(/^\d{4}-\d{2}$/.test(arg || "") ? arg : undefined, arg2 === "picks" ? "picks" : "");
+  if (page === "calendar") return calendarView(CAL_MONTH.test(arg || "") ? arg : undefined, arg2 === "picks" ? "picks" : "");
   if (page === "game" && /^\d+$/.test(arg || "")) return gameView(arg);
   if (page === "pgame" && /^\d+$/.test(arg || "")) return gameView(arg, false, "pwhl");
   if (page === "cgame" && isCollege(arg) && /^\d+$/.test(arg2 || "")) return gameView(arg2, false, arg);

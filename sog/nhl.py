@@ -133,6 +133,11 @@ def parse_event(g: dict) -> dict | None:
     return {"name": name, "kind": kind, "city": _t(g.get("venueLocation")) or None}
 
 
+def venue_city(g: dict) -> str:
+    """The city a game page (landing) names for its venue, or "" when it names none."""
+    return _t(g.get("venueLocation"))
+
+
 def parse_game(g: dict, odds_partner: int | None = None) -> dict:
     clock = g.get("clock") or {}
     pd = g.get("periodDescriptor") or {}

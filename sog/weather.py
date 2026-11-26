@@ -15,6 +15,7 @@ FORECAST = "https://api.open-meteo.com/v1/forecast"
 FORECAST_DAYS = 7
 TTL = timedelta(hours=1)
 GEO_TTL = timedelta(days=30)
+MISS_TTL = timedelta(hours=1)   # nothing found: ask again in an hour (a city: in a day), not on every view
 
 # WMO weather codes (Open-Meteo's weather_code) -> a few words.
 WORDS = {0: "clear", 1: "mostly clear", 2: "partly cloudy", 3: "overcast", 45: "fog", 48: "freezing fog",
@@ -60,7 +61,8 @@ async def forecast(lat: float, lon: float, start: str) -> dict | None:
     times = hourly.get("time") or []
     if not times:
         return None
-    t0 = datetime.fromisoformat(start.replace("Z", "+00:00")).replace(minute=0, second=0, microsecond=0)
+    # The hour nearest puck drop: 7:50 reads the 8:00 forecast.
+    t0 = (datetime.fromisoformat(start.replace("Z", "+00:00")) + timedelta(minutes=30)).replace(minute=0, second=0, microsecond=0)
     want = t0.strftime("%Y-%m-%dT%H:%M")
     i = times.index(want) if want in times else None
     if i is None:
