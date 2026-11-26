@@ -1101,7 +1101,19 @@ async function calendarView(month, mode, quiet = false) {
   catch (e) { view.innerHTML = failed(e); return; }
   const [y, m] = d.month.split("-").map(Number), first = new Date(y, m - 1, 1);
   const monthName = first.toLocaleDateString(undefined, { month: "long" });
-  const base = mode === "picks" ? "#/picks/" : "#/day/", fav = favs(), suffix = mode === "picks" ? "/picks" : "";
+  // Following three or more teams: a switch picks whose games paint the calendar (All, or one team), per device.
+  // A square shows at most two of your teams either way; more are "+N" and the day itself lists them all.
+  const favList = (ME.settings.favorites || []).filter(a => TEAMS[a]);
+  let pick = "";
+  try { pick = localStorage.getItem("calTeam") || ""; } catch { /* fine */ }
+  if (!favList.includes(pick) || favList.length < 3) pick = "";
+  for (const day of Object.values(d.days)) {
+    day.allMine ??= day.mine;   // d is the cached copy: keep the full list for the next pick
+    day.mine = pick ? day.allMine.filter(x => x.home.abbr === pick || x.away.abbr === pick) : day.allMine;
+  }
+  const teamSwitch = favList.length >= 3 ? `<div class="seg cal-teams">${[["", "All your teams"], ...favList.map(a => [a, teamName(a)])]
+    .map(([k, l]) => `<button data-calteam="${esc(k)}" class="${k === pick ? "on" : ""}">${esc(l)}</button>`).join("")}</div>` : "";
+  const base = mode === "picks" ? "#/picks/" : "#/day/", fav = pick ? new Set([pick]) : favs(), suffix = mode === "picks" ? "/picks" : "";
   const moms = date => d.moments.filter(x => x.from <= date && date <= x.to);
   // A day is three rows: the date (and a showcase badge), who your team plays, then vs/@ before the game or W/L after.
   // A showcase game marks your day only when your team is in it; other teams' events show on days you don't play.
@@ -1163,15 +1175,21 @@ async function calendarView(month, mode, quiet = false) {
   ].sort((a, b) => a.at.localeCompare(b.at));
   const mine = Object.values(d.days).reduce((n, day) => n + day.mine.length, 0), all = Object.values(d.days).reduce((n, day) => n + day.n, 0);
   const counted = d.leagues.map(lg => LEAGUE_SHORT[lg] || lg.toUpperCase()).join(" and ");
-  const sum = [fav.size ? `${mine} game${mine === 1 ? "" : "s"} for your teams` : "", counted ? `${all} ${counted} in all` : ""].filter(Boolean).join(`<span aria-hidden="true">·</span>`);
+  const sum = [fav.size ? `${mine} game${mine === 1 ? "" : "s"} ${pick ? `for the ${teamName(pick)}` : "for your teams"}` : "", counted ? `${all} ${counted} in all` : ""].filter(Boolean).join(`<span aria-hidden="true">·</span>`);
   const arrow = (to, name, glyph) => to ? `<a href="#/calendar/${to}${suffix}" aria-label="${name}">${glyph}</a>` : `<span></span>`;
   const back = d.month !== d.today.slice(0, 7) ? `<a class="btn small" href="#/calendar/${d.today.slice(0, 7)}${suffix}">This month</a>` : "";
   paint(`<div class="dayhead"><div class="dh-top"><div class="dh-k">${y}${mode === "picks" ? " · Pick'em" : ""}</div>
       <div class="dh-arrows" data-swaps>${arrow(d.prev, "Previous month", "←")}${arrow(d.next, "Next month", "→")}</div></div>
     <h1>${esc(monthName)}.</h1><div class="dh-sum">${sum}</div></div>
-    <div class="cal">${grid}</div>
+    ${teamSwitch}<div class="cal">${grid}</div>
     ${items.length ? `<h2>In ${esc(monthName)}</h2><div class="card cal-list">${items.map(i => i.html).join("")}</div>` : ""}
     <div class="cal-foot">${back}<p class="help">Tap a day to open ${mode === "picks" ? "its Pick'em" : "its games"}. Your teams' days are in their colours, from every league you follow${counted ? `; the bars and counts are ${counted} games (the league switch in the menu picks)` : ""}.</p></div>`, quiet);
+  view.addEventListener("click", e => {
+    const b = e.target.closest("[data-calteam]");
+    if (!b || b.classList.contains("on")) return;
+    try { localStorage.setItem("calTeam", b.dataset.calteam); } catch { /* fine */ }
+    calendarView(month, mode, true);   // in place: the page holds still
+  }, listen());
 }
 
 async function tonightView(date, quiet = false) {

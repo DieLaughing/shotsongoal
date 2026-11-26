@@ -454,6 +454,9 @@ h2 { font-size: 17px; line-height: 1.15; letter-spacing: .03em; color: var(--mut
 /* Calendar (app.js calendarView): a month grid, Sunday first. Each day is a tile: your team's game days in its colour
    (like Tonight's tiles), showcase games in the night sky, a thin bar along the bottom for how busy the day is, and the
    season's moments as stripes just above it. The list under the grid explains the stripes. */
+.cal-teams { margin-top: 12px; overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap; }
+.cal-teams::-webkit-scrollbar { display: none; }
+.cal-teams button { white-space: nowrap; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 14px; }
 .cal-grid > span { text-align: center; font-size: 11px; font-weight: 750; letter-spacing: .1em; color: var(--muted); padding-bottom: 2px; }
 /* Each day is a size container: what's inside scales with it (cqi = the day's inside width, ~34 px on a phone, ~70 px
