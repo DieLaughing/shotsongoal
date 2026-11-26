@@ -172,7 +172,8 @@ How the app moves (what animates, what must hold still, timings, rules for new U
   data only: Feed.season_games() (every NHL game in the saved team schedules, with events), the PWHL season feed, and
   college favourites' saved schedules (Feed.ncaa_schedule, as on the team cards). The league pill picks what's counted
   (NHL and/or PWHL; college is never counted) and whose showcase games are marked; your teams' games are always on it
-  from every league (calendar.build `own`), the day coloured by your first-listed team that plays. Each day: game count (a bar along the bottom), your teams' games (the day painted in the team's
+  from every league (calendar.build `own`). Two of your teams the same day: the day split on the jumbotron's slant
+  (first-listed team top left, --c and --c2), both opponents' marks and "vs · @" / "W · L" on a dark chip; a third is "+1". Each day: game count (a bar along the bottom), your teams' games (the day painted in the team's
   colour, opponent's mark, W/L once final unless spoiler-free hides it) and showcase games (badge; night sky and snow
   as on cards). A showcase badge goes on your team's day only when your team is in that game, never another game's. Moments (calendar.MOMENTS, every season): the holiday roster freeze (Dec 20-27) and the World Juniors
   (Dec 26-Jan 5), plus the Christmas break read from the schedule as the run of NHL-free days around Dec 25 (Dec 23-25

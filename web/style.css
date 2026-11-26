@@ -485,6 +485,15 @@ h2 { font-size: 17px; line-height: 1.15; letter-spacing: .03em; color: var(--mut
 .cal-day.mine { --ink: #fff; color: var(--ink); border-color: transparent;
   background: linear-gradient(160deg, var(--c), color-mix(in srgb, var(--c) 70%, #000)); }
 .cal-day.mine.light { --ink: #111; background: linear-gradient(160deg, var(--c), color-mix(in srgb, var(--c) 85%, #000)); }
+/* Two of your teams that day: split on the slant, logos side by side, the bottom line on a dark chip so it reads on
+   either colour. */
+.cal-day.mine.two { --ink: #fff; color: #fff; background: linear-gradient(135deg, var(--c) 0 50%, var(--c2) 50% 100%); }
+.cal-day.mine.two .cal-n { text-shadow: 0 1px 3px rgba(0, 0, 0, .45); }
+.cal-day.two .cal-mid { display: flex; justify-content: center; align-items: center; gap: 3px; }
+.cal-day.two .cal-mid .mark { width: clamp(16px, 40cqi, 46px); height: clamp(12px, 29cqi, 33px); }
+.cal-day.two .cal-bot { justify-self: center; padding: 1px 5px; border-radius: 6px; background: rgba(0, 0, 0, .38); }
+.cal-sep { opacity: .7; }
+.cal-day.two .cal-score { display: none; }   /* two results with scores don't fit: "W · L" (the scores are a tap away) */
 .cal-day.ev-sky { --ink: #fff; color: #fff; border-color: transparent; background: linear-gradient(165deg, var(--sky-hi), var(--sky-lo)); }
 .cal-day.ev-outdoor::after { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--snow); opacity: .8; pointer-events: none; }
 .cal-day.today.mine, .cal-day.today.ev-sky { box-shadow: inset 0 0 0 2px var(--ink); }

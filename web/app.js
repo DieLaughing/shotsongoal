@@ -1115,14 +1115,25 @@ async function calendarView(month, mode, quiet = false) {
     if (date < d.today) cls += " past";
     if (!day.n) cls += " none";
     if (g) {
-      const us = fav.has(g.home.abbr) ? g.home : g.away, them = us === g.home ? g.away : g.home, t = TEAMS[us.abbr] || {};
-      const res = g.state === "final" && !spoilerHidden(g) && us.score != null && them.score != null ? (us.score > them.score ? "W" : "L") : "";
-      cls += ` mine${t.light ? " light" : ""}`;
-      style = `--c:${esc(t.color || "#3a3f47")}`;
-      mid = mark(them.abbr);
-      bot = res ? `<b class="cal-res${res === "L" ? " lost" : ""}">${res}<span class="cal-score"> ${us.score}–${them.score}</span></b>` : `<i>${us === g.home ? "vs" : "@"}</i>`;
-      if (day.mine.length > 1) bot += `<span class="cal-more">+${day.mine.length - 1}</span>`;
-      label.push(`${teamName(us.abbr)} ${us === g.home ? "vs" : "at"} ${teamName(them.abbr)}${res ? `, ${res === "W" ? "won" : "lost"} ${us.score}–${them.score}` : ""}`);
+      // One game: the day in your team's colour. Two of your teams: the day split on the jumbotron's slant, your
+      // first team top left, the second bottom right, both opponents and both games on the bottom line.
+      const side = x => { const us = fav.has(x.home.abbr) ? x.home : x.away, them = us === x.home ? x.away : x.home; return { x, us, them }; };
+      const shown = day.mine.slice(0, 2).map(side);
+      const short = ({ x, us, them }) => {
+        // College games can end tied: T.
+        const res = x.state === "final" && !spoilerHidden(x) && us.score != null && them.score != null ? (us.score > them.score ? "W" : us.score < them.score ? "L" : "T") : "";
+        return res ? `<b class="cal-res${res === "L" ? " lost" : ""}">${res}<span class="cal-score"> ${us.score}–${them.score}</span></b>` : `<i>${us === x.home ? "vs" : "@"}</i>`;
+      };
+      const t1 = TEAMS[shown[0].us.abbr] || {}, t2 = shown[1] && (TEAMS[shown[1].us.abbr] || {});
+      cls += ` mine${t1.light ? " light" : ""}${t2 ? " two" : ""}`;
+      style = `--c:${esc(t1.color || "#3a3f47")}${t2 ? `;--c2:${esc(t2.color || "#3a3f47")}` : ""}`;
+      mid = shown.map(({ them }) => mark(them.abbr)).join("");
+      bot = shown.map(short).join(`<span class="cal-sep" aria-hidden="true">·</span>`);
+      if (day.mine.length > 2) bot += `<span class="cal-more">+${day.mine.length - 2}</span>`;
+      for (const { x, us, them } of day.mine.map(side)) {
+        const res = x.state === "final" && !spoilerHidden(x) && us.score != null && them.score != null ? (us.score > them.score ? "won" : us.score < them.score ? "lost" : "tied") : "";
+        label.push(`${teamName(us.abbr)} ${us === x.home ? "vs" : "at"} ${teamName(them.abbr)}${res ? `, ${res} ${us.score}–${them.score}` : ""}`);
+      }
     }
     if (ev) {
       cls += ` ev ev-${ev.kind}${evSky({ event: ev }) ? " ev-sky" : ""}`;
