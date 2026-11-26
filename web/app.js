@@ -1104,9 +1104,13 @@ async function calendarView(month, mode, quiet = false) {
   const monthName = first.toLocaleDateString(undefined, { month: "long" });
   const base = mode === "picks" ? "#/picks/" : "#/day/", fav = favs(), suffix = mode === "picks" ? "/picks" : "";
   const moms = date => d.moments.filter(x => x.from <= date && date <= x.to);
+  // A day is three rows: the date (and a showcase badge), who your team plays, then vs/@ before the game or W/L after.
+  // A showcase game marks your day only when your team is in it; other teams' events show on days you don't play.
   const cell = date => {
-    const day = d.days[date], g = day.mine[0], ev = day.events[0]?.event;
-    let cls = "cal-day", style = "", inner = "";
+    const day = d.days[date], g = day.mine[0];
+    const evGame = g ? day.events.find(e => day.mine.some(m => m.id === e.id && m.league === e.league)) : day.events[0];
+    const ev = evGame?.event;
+    let cls = "cal-day", style = "", mid = "", bot = "";
     const label = [fmtDay(date, { weekday: "long", month: "long", day: "numeric" }), day.n ? `${day.n} game${day.n > 1 ? "s" : ""}` : "no games"];
     if (date === d.today) cls += " today";
     if (date < d.today) cls += " past";
@@ -1116,18 +1120,20 @@ async function calendarView(month, mode, quiet = false) {
       const res = g.state === "final" && !spoilerHidden(g) && us.score != null && them.score != null ? (us.score > them.score ? "W" : "L") : "";
       cls += ` mine${t.light ? " light" : ""}`;
       style = `--c:${esc(t.color || "#3a3f47")}`;
-      inner = `<span class="cal-opp"><i>${us === g.home ? "vs" : "@"}</i>${mark(them.abbr)}</span>${res ? `<b class="cal-res">${res}</b>` : ""}${day.mine.length > 1 ? `<span class="cal-more">+${day.mine.length - 1}</span>` : ""}`;
-      label.push(`${teamName(us.abbr)} ${us === g.home ? "vs" : "at"} ${teamName(them.abbr)}${res ? `, ${res === "W" ? "won" : "lost"}` : ""}`);
+      mid = mark(them.abbr);
+      bot = res ? `<b class="cal-res${res === "L" ? " lost" : ""}">${res}<span class="cal-score"> ${us.score}–${them.score}</span></b>` : `<i>${us === g.home ? "vs" : "@"}</i>`;
+      if (day.mine.length > 1) bot += `<span class="cal-more">+${day.mine.length - 1}</span>`;
+      label.push(`${teamName(us.abbr)} ${us === g.home ? "vs" : "at"} ${teamName(them.abbr)}${res ? `, ${res === "W" ? "won" : "lost"} ${us.score}–${them.score}` : ""}`);
     }
     if (ev) {
       cls += ` ev ev-${ev.kind}${evSky({ event: ev }) ? " ev-sky" : ""}`;
-      inner += `<span class="cal-ev" aria-hidden="true">${EV_ICON[ev.kind] || "★"}</span>`;
       label.push(ev.name);
     }
     const ms = moms(date);
     label.push(...ms.map(x => x.name));
     return `<a class="${cls}" href="${base}${date}" style="${style}" aria-label="${esc(label.join(", "))}">
-      <span class="cal-n">${+date.slice(8)}</span>${inner}
+      <span class="cal-top"><span class="cal-n">${+date.slice(8)}</span>${ev ? `<span class="cal-ev" aria-hidden="true">${EV_ICON[ev.kind] || "★"}</span>` : ""}</span>
+      <span class="cal-mid">${mid}</span><span class="cal-bot">${bot}</span>
       ${day.n ? `<i class="cal-busy" style="--n:${Math.min(day.n, 16) / 16}"></i>` : ""}
       ${ms.length ? `<span class="cal-mo">${ms.map(x => `<i class="mo-${x.key}"></i>`).join("")}</span>` : ""}</a>`;
   };

@@ -167,11 +167,12 @@ How the app moves (what animates, what must hold still, timings, rules for new U
     and the pretend one share a renderer. Ties go points, fewer games, regulation wins, wins, goal difference: close to
     the NHL's order, not exact. Nothing is saved; picks stay in memory across mode switches until Close.
 - Calendar (#/calendar/<YYYY-MM>, /picks at the end when opened from Pick'em; GET /api/month, sog/calendar.py): a month
-  grid, Sunday first (each day a size container: its contents scale with it, cqi), reached from the calendar button beside the day arrows (dayHead) and the menu. Built from saved
+  grid, Sunday first (each day a size container: its contents scale with it, cqi; three rows: date + badge, the
+  opponent's mark, vs/@ or W/L with the score where there's room; phones make the days taller than wide), reached from the calendar button beside the day arrows (dayHead) and the menu. Built from saved
   data only: Feed.season_games() (every NHL game in the saved team schedules, with events) and the PWHL season feed;
   college isn't on it. Each day: game count (a bar along the bottom), your teams' games (the day painted in the team's
   colour, opponent's mark, W/L once final unless spoiler-free hides it) and showcase games (badge; night sky and snow
-  as on cards). Moments (calendar.MOMENTS, every season): the holiday roster freeze (Dec 20-27) and the World Juniors
+  as on cards). A showcase badge goes on your team's day only when your team is in that game, never another game's. Moments (calendar.MOMENTS, every season): the holiday roster freeze (Dec 20-27) and the World Juniors
   (Dec 26-Jan 5), plus the Christmas break read from the schedule as the run of NHL-free days around Dec 25 (Dec 23-25
   in 2026-27). They're stripes under their days and listed under the grid with the month's showcase games. A day opens
   Tonight (or Pick'em) for that date. The month arrows are data-swaps (in-page: the page holds still, checked by
